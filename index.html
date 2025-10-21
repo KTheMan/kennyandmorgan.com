@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kenny & Morgan's Wedding</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <div class="logo">K & M</div>
+            <ul class="nav-links">
+                <li><a href="#home" class="nav-link active">Home</a></li>
+                <li><a href="#address" class="nav-link">Send Address</a></li>
+                <li><a href="#rsvp" class="nav-link">RSVP</a></li>
+                <li><a href="#theme" class="nav-link">Wedding Theme</a></li>
+                <li><a href="#registry" class="nav-link">Registry</a></li>
+            </ul>
+            <div class="burger">
+                <div class="line1"></div>
+                <div class="line2"></div>
+                <div class="line3"></div>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Home Section -->
+        <section id="home" class="page active">
+            <div class="hero">
+                <h1 class="couple-names">Kenny & Morgan</h1>
+                <div class="wedding-details">
+                    <div class="detail-card">
+                        <h2>Save the Date</h2>
+                        <p class="date">June 15, 2026</p>
+                    </div>
+                    <div class="detail-card">
+                        <h2>Location</h2>
+                        <p class="location">The Grand Ballroom</p>
+                        <p class="address">123 Celebration Lane<br>Wedding City, WC 12345</p>
+                    </div>
+                    <div class="detail-card">
+                        <h2>Ceremony</h2>
+                        <p class="time">4:00 PM</p>
+                    </div>
+                </div>
+                <div class="countdown" id="countdown">
+                    <div class="countdown-item">
+                        <span class="countdown-value" id="days">0</span>
+                        <span class="countdown-label">Days</span>
+                    </div>
+                    <div class="countdown-item">
+                        <span class="countdown-value" id="hours">0</span>
+                        <span class="countdown-label">Hours</span>
+                    </div>
+                    <div class="countdown-item">
+                        <span class="countdown-value" id="minutes">0</span>
+                        <span class="countdown-label">Minutes</span>
+                    </div>
+                    <div class="countdown-item">
+                        <span class="countdown-value" id="seconds">0</span>
+                        <span class="countdown-label">Seconds</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Address Section -->
+        <section id="address" class="page">
+            <div class="container">
+                <h1>Send Us Your Address</h1>
+                <p class="section-subtitle">Help us send you save the dates, invitations, and thank you cards!</p>
+                <form id="addressForm" class="form">
+                    <div class="form-group">
+                        <label for="fullName">Full Name *</label>
+                        <input type="text" id="fullName" name="fullName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email *</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="street">Street Address *</label>
+                        <input type="text" id="street" name="street" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="city">City *</label>
+                            <input type="text" id="city" name="city" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="state">State *</label>
+                            <input type="text" id="state" name="state" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="zip">ZIP Code *</label>
+                            <input type="text" id="zip" name="zip" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="country">Country</label>
+                        <input type="text" id="country" name="country" value="United States">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Submit Address</button>
+                </form>
+                <div id="addressMessage" class="message"></div>
+            </div>
+        </section>
+
+        <!-- RSVP Section -->
+        <section id="rsvp" class="page">
+            <div class="container">
+                <h1>RSVP</h1>
+                <p class="section-subtitle">We can't wait to celebrate with you!</p>
+                <form id="rsvpForm" class="form">
+                    <div class="form-group">
+                        <label for="rsvpName">Full Name *</label>
+                        <input type="text" id="rsvpName" name="rsvpName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="rsvpEmail">Email *</label>
+                        <input type="email" id="rsvpEmail" name="rsvpEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Will you be attending? *</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="attending" value="yes" required>
+                                <span>Joyfully Accepts</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="attending" value="no">
+                                <span>Regretfully Declines</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group" id="guestCountGroup" style="display: none;">
+                        <label for="guestCount">Number of Guests *</label>
+                        <input type="number" id="guestCount" name="guestCount" min="1" max="10" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="dietaryRestrictions">Dietary Restrictions or Allergies</label>
+                        <textarea id="dietaryRestrictions" name="dietaryRestrictions" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="songRequest">Song Request</label>
+                        <input type="text" id="songRequest" name="songRequest" placeholder="What song will get you on the dance floor?">
+                    </div>
+                    <div class="form-group">
+                        <label for="specialMessage">Special Message for the Couple</label>
+                        <textarea id="specialMessage" name="specialMessage" rows="4"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Submit RSVP</button>
+                </form>
+                <div id="rsvpMessage" class="message"></div>
+            </div>
+        </section>
+
+        <!-- Theme Section -->
+        <section id="theme" class="page">
+            <div class="container">
+                <h1>Wedding Theme</h1>
+                <p class="section-subtitle">Our color palette and wedding style</p>
+                <div class="theme-content">
+                    <div class="color-palette">
+                        <h2>Color Palette</h2>
+                        <div class="color-swatches">
+                            <div class="color-swatch" style="background-color: #D4A373;">
+                                <span class="color-name">Tan</span>
+                            </div>
+                            <div class="color-swatch" style="background-color: #8B4513;">
+                                <span class="color-name">Brown</span>
+                            </div>
+                            <div class="color-swatch" style="background-color: #2F4F4F;">
+                                <span class="color-name">Slate Gray</span>
+                            </div>
+                            <div class="color-swatch" style="background-color: #FAEBD7;">
+                                <span class="color-name">Antique White</span>
+                            </div>
+                            <div class="color-swatch" style="background-color: #556B2F;">
+                                <span class="color-name">Dark Olive Green</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="theme-details">
+                        <h2>Dress Code</h2>
+                        <p class="dress-code">Formal Attire</p>
+                        <p>We kindly request that our guests dress in formal attire. Think elegant evening gowns and sharp suits in our wedding colors.</p>
+                    </div>
+                    <div class="theme-details">
+                        <h2>Wedding Style</h2>
+                        <p>Rustic Elegance - Natural beauty meets sophisticated charm</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Registry Section -->
+        <section id="registry" class="page">
+            <div class="container">
+                <h1>Gift Registry</h1>
+                <p class="section-subtitle">Your presence is the greatest gift, but if you wish to honor us with a gift, we've registered at the following stores:</p>
+                
+                <div class="registry-links">
+                    <button class="registry-btn" data-registry="amazon">Amazon</button>
+                    <button class="registry-btn" data-registry="target">Target</button>
+                    <button class="registry-btn" data-registry="crateandbarrel">Crate & Barrel</button>
+                    <button class="registry-btn active" data-registry="all">View All</button>
+                </div>
+
+                <div id="registryLoading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Loading registry items...</p>
+                </div>
+
+                <div id="registryItems" class="registry-items">
+                    <!-- Registry items will be dynamically loaded here -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Kenny & Morgan. All rights reserved.</p>
+        <p>We can't wait to celebrate with you!</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
