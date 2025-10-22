@@ -25,8 +25,8 @@ class CrateAndBarrelScraper {
      */
     async getItems(registryId) {
         if (!registryId || registryId === 'your-crate-and-barrel-registry-id') {
-            console.warn('Crate & Barrel registry ID not configured, returning mock data');
-            return this.getMockData();
+            console.warn('Crate & Barrel registry ID not configured, returning empty array');
+            return [];
         }
 
         try {
@@ -69,8 +69,8 @@ class CrateAndBarrelScraper {
             return items;
         } catch (error) {
             console.error('Error scraping Crate & Barrel registry:', error.message);
-            // Return mock data as fallback
-            return this.getMockData();
+            // Return empty array on error
+            return [];
         }
     }
 

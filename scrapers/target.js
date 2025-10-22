@@ -25,8 +25,8 @@ class TargetScraper {
      */
     async getItems(registryId) {
         if (!registryId || registryId === 'your-target-registry-id') {
-            console.warn('Target registry ID not configured, returning mock data');
-            return this.getMockData();
+            console.warn('Target registry ID not configured, returning empty array');
+            return [];
         }
 
         try {
@@ -68,8 +68,8 @@ class TargetScraper {
             return items;
         } catch (error) {
             console.error('Error scraping Target registry:', error.message);
-            // Return mock data as fallback
-            return this.getMockData();
+            // Return empty array on error
+            return [];
         }
     }
 

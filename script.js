@@ -207,10 +207,9 @@ async function loadRegistryItems(filter) {
         }
     } catch (error) {
         console.error('Error loading registry items:', error);
-        // Fallback to mock data
-        const items = getRegistryItems(filter);
-        displayRegistryItems(items);
-        showRegistryError('Using sample data. Connect to backend API for live registry items.');
+        // Show error message - no fallback to mock data
+        displayRegistryItems([]);
+        showRegistryError('Unable to load registry items. Please ensure valid registry IDs are configured.');
     } finally {
         loadingEl.style.display = 'none';
     }
@@ -349,7 +348,7 @@ function displayRegistryItems(items) {
     const registryContainer = document.getElementById('registryItems');
     
     if (items.length === 0) {
-        registryContainer.innerHTML = '<p style="text-align: center; grid-column: 1/-1;">No items found in this registry.</p>';
+        registryContainer.innerHTML = '<p style="text-align: center; grid-column: 1/-1; padding: 40px 20px; color: var(--slate-gray);">No registry items available. Registry IDs must be configured to display items.</p>';
         return;
     }
     
