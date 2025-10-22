@@ -65,10 +65,59 @@ kennyandmorgan.com/
 
 ## How to Use
 
-### Basic Setup
+### Basic Setup (Static Site Only)
 1. Clone the repository
 2. Open `index.html` in a web browser
 3. No build process required!
+
+### Full Setup (With Registry API)
+
+#### Quick Start
+
+**Linux/Mac:**
+```bash
+./start-dev.sh
+```
+
+**Windows:**
+```batch
+start-dev.bat
+```
+
+This will:
+1. Install dependencies
+2. Create .env file from template (if not exists)
+3. Start backend API server on port 3000
+4. Start frontend server on port 8000
+
+#### Manual Setup
+
+1. **Install dependencies:**
+```bash
+npm install
+```
+
+2. **Configure environment:**
+```bash
+cp .env.example .env
+# Edit .env with your registry IDs
+```
+
+3. **Start backend server:**
+```bash
+npm start
+# Server runs on http://localhost:3000
+```
+
+4. **Start frontend server (in another terminal):**
+```bash
+python3 -m http.server 8000
+# Or use any other static file server
+# Frontend accessible at http://localhost:8000
+```
+
+See [API_README.md](API_README.md) for detailed API documentation.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for production deployment instructions.
 
 ### Customization
 
