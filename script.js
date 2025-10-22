@@ -177,7 +177,7 @@ function initRegistry() {
     loadRegistryItems('all');
 }
 
-function loadRegistryItems(filter) {
+async function loadRegistryItems(filter) {
     const registryContainer = document.getElementById('registryItems');
     const loadingEl = document.getElementById('registryLoading');
     
@@ -185,12 +185,55 @@ function loadRegistryItems(filter) {
     loadingEl.style.display = 'block';
     registryContainer.innerHTML = '';
     
-    // Simulate API call delay
-    setTimeout(() => {
+    try {
+        // Get API URL from environment or use default
+        const apiUrl = getApiUrl();
+        const endpoint = filter === 'all' 
+            ? `${apiUrl}/api/registry` 
+            : `${apiUrl}/api/registry/${filter}`;
+        
+        const response = await fetch(endpoint);
+        
+        if (!response.ok) {
+            throw new Error(`API request failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.items) {
+            displayRegistryItems(data.items);
+        } else {
+            throw new Error('Invalid response format');
+        }
+    } catch (error) {
+        console.error('Error loading registry items:', error);
+        // Fallback to mock data
         const items = getRegistryItems(filter);
         displayRegistryItems(items);
+        showRegistryError('Using sample data. Connect to backend API for live registry items.');
+    } finally {
         loadingEl.style.display = 'none';
-    }, 800);
+    }
+}
+
+function getApiUrl() {
+    // In production, this should be configured based on environment
+    // For local development, use localhost
+    // For GitHub Pages, use your deployed backend URL
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:3000';
+    }
+    // Replace with your actual backend URL when deployed
+    return process.env.API_URL || 'http://localhost:3000';
+}
+
+function showRegistryError(message) {
+    const registryContainer = document.getElementById('registryItems');
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'registry-error';
+    errorDiv.style.cssText = 'grid-column: 1/-1; text-align: center; padding: 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; color: #856404;';
+    errorDiv.textContent = message;
+    registryContainer.insertBefore(errorDiv, registryContainer.firstChild);
 }
 
 function getRegistryItems(filter) {
@@ -339,62 +382,60 @@ function capitalizeStore(store) {
 // actual scraping due to CORS and authentication requirements
 
 /**
- * Scrapes registry items from various stores
- * This is a placeholder - actual implementation would require:
- * 1. Backend service to handle CORS and API authentication
- * 2. Store-specific API integrations or web scraping
- * 3. Rate limiting and caching
+ * Scrapes registry items from various stores via backend API
+ * This function communicates with the backend server which handles
+ * actual scraping to avoid CORS and authentication issues
  */
 async function scrapeRegistry(store, registryId) {
-    // This would be implemented on the backend
-    // Example structure for each store:
-    
-    const scrapers = {
-        amazon: async (id) => {
-            // Would use Amazon Product Advertising API
-            // or parse Amazon registry pages
-            return [];
-        },
-        target: async (id) => {
-            // Would use Target's registry API if available
-            // or parse Target registry pages
-            return [];
-        },
-        crateandbarrel: async (id) => {
-            // Would parse Crate & Barrel registry pages
-            return [];
+    try {
+        const apiUrl = getApiUrl();
+        const endpoint = `${apiUrl}/api/registry/${store}`;
+        
+        const response = await fetch(endpoint);
+        
+        if (!response.ok) {
+            throw new Error(`API request failed: ${response.status}`);
         }
-    };
-    
-    if (scrapers[store]) {
-        try {
-            return await scrapers[store](registryId);
-        } catch (error) {
-            console.error(`Error scraping ${store}:`, error);
-            return [];
+        
+        const data = await response.json();
+        
+        if (data.success && data.items) {
+            return data.items;
         }
+        
+        return [];
+    } catch (error) {
+        console.error(`Error scraping ${store}:`, error);
+        return [];
     }
-    
-    return [];
 }
 
 /**
- * Aggregates items from multiple registries
+ * Aggregates items from multiple registries via backend API
  */
 async function aggregateRegistries(registries) {
-    const allItems = [];
-    
-    for (const registry of registries) {
-        const items = await scrapeRegistry(registry.store, registry.id);
-        allItems.push(...items);
+    try {
+        const apiUrl = getApiUrl();
+        const endpoint = `${apiUrl}/api/registry?store=all`;
+        
+        const response = await fetch(endpoint);
+        
+        if (!response.ok) {
+            throw new Error(`API request failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.items) {
+            // Sort by name
+            return data.items.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        
+        return [];
+    } catch (error) {
+        console.error('Error aggregating registries:', error);
+        return [];
     }
-    
-    // Remove duplicates and sort
-    const uniqueItems = Array.from(new Map(
-        allItems.map(item => [item.url, item])
-    ).values());
-    
-    return uniqueItems.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // For production use, you would call these functions with actual registry IDs:

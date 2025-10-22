@@ -65,10 +65,59 @@ kennyandmorgan.com/
 
 ## How to Use
 
-### Basic Setup
+### Basic Setup (Static Site Only)
 1. Clone the repository
 2. Open `index.html` in a web browser
 3. No build process required!
+
+### Full Setup (With Registry API)
+
+#### Quick Start
+
+**Linux/Mac:**
+```bash
+./start-dev.sh
+```
+
+**Windows:**
+```batch
+start-dev.bat
+```
+
+This will:
+1. Install dependencies
+2. Create .env file from template (if not exists)
+3. Start backend API server on port 3000
+4. Start frontend server on port 8000
+
+#### Manual Setup
+
+1. **Install dependencies:**
+```bash
+npm install
+```
+
+2. **Configure environment:**
+```bash
+cp .env.example .env
+# Edit .env with your registry IDs
+```
+
+3. **Start backend server:**
+```bash
+npm start
+# Server runs on http://localhost:3000
+```
+
+4. **Start frontend server (in another terminal):**
+```bash
+python3 -m http.server 8000
+# Or use any other static file server
+# Frontend accessible at http://localhost:8000
+```
+
+See [API_README.md](API_README.md) for detailed API documentation.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for production deployment instructions.
 
 ### Customization
 
@@ -120,21 +169,52 @@ async function handleAddressSubmit(form) {
 
 #### Implement Real Registry Scraping
 
-The registry section includes placeholder functions for scraping. To implement:
+The registry section now includes a working backend API for scraping. See [API_README.md](API_README.md) for detailed documentation.
 
-1. **Backend Service Required**: Due to CORS and authentication, you need a backend server
-2. **API Integration**: Use official APIs where available:
-   - Amazon: Product Advertising API
-   - Target: Registry API (if available)
-   - Crate & Barrel: May require web scraping
+**Quick Setup:**
 
-3. Update the scraper functions in `script.js` to call your backend endpoints
-
-Example backend endpoint structure:
-```javascript
-// GET /api/registry?store=amazon&id=YOUR_REGISTRY_ID
-// Returns: [{ name, price, image, url, ... }]
+1. **Install Dependencies:**
+```bash
+npm install
 ```
+
+2. **Configure Registry IDs:**
+```bash
+cp .env.example .env
+# Edit .env with your registry IDs
+```
+
+3. **Start the Backend Server:**
+```bash
+npm start
+```
+
+4. **Update Frontend Configuration:**
+   - For local development, the frontend automatically connects to `http://localhost:3000`
+   - For production, set the `API_URL` environment variable
+
+**Architecture:**
+
+- **Backend API** (`server.js`): Express server handling API requests
+- **Scraper Modules** (`scrapers/`): Store-specific scraping logic
+  - `amazon.js`: Amazon registry scraper
+  - `target.js`: Target registry scraper
+  - `crateandbarrel.js`: Crate & Barrel registry scraper
+- **Frontend Updates** (`script.js`): Updated to call backend API
+
+**Features:**
+
+- Real-time registry data fetching
+- Automatic fallback to mock data
+- Store filtering (Amazon, Target, Crate & Barrel, or All)
+- Error handling and graceful degradation
+- CORS-compliant API design
+
+**Note:** For production use, consider:
+- Using official APIs (e.g., Amazon Product Advertising API)
+- Implementing caching to reduce requests
+- Adding rate limiting
+- Reviewing each store's terms of service
 
 ## Deployment
 
