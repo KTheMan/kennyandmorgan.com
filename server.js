@@ -8,8 +8,19 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
 app.use(cors({
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
+    origin: function(origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        // Check if the origin is in the allowed list
+        if (allowedOrigins.indexOf(origin) === -1 && allowedOrigins[0] !== '*') {
+            const msg = 'The CORS policy for this site does not allow access from the specified origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
     methods: ['GET', 'POST'],
     credentials: true
 }));
@@ -102,10 +113,14 @@ app.get('/api/registry/:store', async (req, res) => {
             items: items
         });
     } catch (error) {
-        console.error(`Error fetching ${req.params.store} registry:`, error);
+        const storeName = req.params.store === 'amazon' ? 'Amazon' : 
+                         req.params.store === 'target' ? 'Target' :
+                         req.params.store === 'crateandbarrel' ? 'Crate & Barrel' :
+                         'registry';
+        console.error(`Error fetching ${storeName} registry:`, error);
         res.status(500).json({
             success: false,
-            error: `Failed to fetch ${req.params.store} registry`,
+            error: `Failed to fetch ${storeName} registry`,
             message: error.message
         });
     }
