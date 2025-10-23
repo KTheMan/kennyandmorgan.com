@@ -25,8 +25,8 @@ class AmazonScraper {
      */
     async getItems(registryId) {
         if (!registryId || registryId === 'your-amazon-registry-id') {
-            console.warn('Amazon registry ID not configured, returning mock data');
-            return this.getMockData();
+            console.warn('Amazon registry ID not configured, returning empty array');
+            return [];
         }
 
         try {
@@ -69,8 +69,8 @@ class AmazonScraper {
             return items;
         } catch (error) {
             console.error('Error scraping Amazon registry:', error.message);
-            // Return mock data as fallback
-            return this.getMockData();
+            // Return empty array on error
+            return [];
         }
     }
 
