@@ -3,8 +3,7 @@ const cheerio = require('cheerio');
 
 /**
  * Crate & Barrel Registry Scraper
- * Note: Crate & Barrel registries may require authentication or have anti-scraping
- * measures. This is a basic implementation.
+ * Improved implementation based on wedding-registry-scraper Ruby implementation
  */
 
 class CrateAndBarrelScraper {
@@ -40,28 +39,54 @@ class CrateAndBarrelScraper {
             const $ = cheerio.load(response.data);
             const items = [];
 
-            // Parse the registry page structure
-            // Note: Crate & Barrel's HTML structure may change, this is a basic example
-            $('.product-item, .registry-item').each((index, element) => {
+            // Parse the registry page structure based on Ruby implementation
+            // Look for .jsItemRow but exclude empty category rows
+            $('.jsItemRow:not(.emptyCategoryRow)').each((index, element) => {
                 const $item = $(element);
                 
                 // Extract item details
-                const name = $item.find('.product-name, h3, h4').text().trim();
-                const priceStr = $item.find('.product-price, .price').text().trim();
-                const price = this.parsePrice(priceStr);
-                const imageUrl = $item.find('img').first().attr('src') || 
-                               $item.find('img').first().attr('data-src') || '';
-                const productUrl = $item.find('a.product-link, a').first().attr('href');
+                const name = $item.find('.itemTitle').text().trim();
                 
-                if (name && productUrl) {
+                // Extract SKU
+                const skuText = $item.find('.skuNum').text().trim();
+                const skuMatch = skuText.match(/SKU\s+(\S+)/);
+                const sku = skuMatch ? skuMatch[1] : '';
+                
+                // Get price - check for sale price first, then regular price
+                let price = 0;
+                const salePriceText = $item.find('.salePrice').text().trim();
+                const regPriceText = $item.find('.regPrice').text().trim();
+                
+                if (salePriceText) {
+                    price = this.parsePrice(salePriceText);
+                } else if (regPriceText) {
+                    price = this.parsePrice(regPriceText);
+                }
+                
+                // Get image URL and enhance quality
+                let imageUrl = $item.find('img').first().attr('src') || '';
+                // Convert thumbnail to higher resolution popup zoom image
+                if (imageUrl && imageUrl.includes('$web_itembasket$')) {
+                    imageUrl = imageUrl.replace(/\$web_itembasket\$/, '&$web_popup_zoom$&wid=379&hei=379');
+                }
+                
+                // Extract quantity information from table cells
+                const cells = $item.find('td');
+                const desired = cells.eq(4) ? parseInt(cells.eq(4).find('.itemHas').text().trim()) || 0 : 0;
+                const fulfilled = cells.eq(5) ? parseInt(cells.eq(5).find('.itemHas').text().trim()) || 0 : 0;
+                const remaining = desired - fulfilled;
+                
+                if (name) {
                     items.push({
-                        id: `crateandbarrel-${index}`,
+                        id: `crateandbarrel-${sku || index}`,
                         name: name,
                         store: 'crateandbarrel',
                         price: price,
                         image: imageUrl.startsWith('http') ? imageUrl : `${this.baseUrl}${imageUrl}`,
-                        url: productUrl.startsWith('http') ? productUrl : `${this.baseUrl}${productUrl}`,
-                        available: true
+                        url: url, // Crate & Barrel uses modal pop-ups, so we link to the registry page
+                        available: remaining > 0,
+                        remaining: remaining,
+                        desired: desired
                     });
                 }
             });
@@ -95,7 +120,9 @@ class CrateAndBarrelScraper {
                 price: 129.99,
                 image: 'https://via.placeholder.com/300x300/2F4F4F/FFFFFF?text=Skillet+Set',
                 url: 'https://crateandbarrel.com',
-                available: true
+                available: true,
+                remaining: 1,
+                desired: 1
             },
             {
                 id: 'crateandbarrel-2',
@@ -104,7 +131,9 @@ class CrateAndBarrelScraper {
                 price: 79.99,
                 image: 'https://via.placeholder.com/300x300/D4A373/FFFFFF?text=Wine+Glasses',
                 url: 'https://crateandbarrel.com',
-                available: true
+                available: true,
+                remaining: 2,
+                desired: 4
             },
             {
                 id: 'crateandbarrel-3',
@@ -113,7 +142,9 @@ class CrateAndBarrelScraper {
                 price: 159.99,
                 image: 'https://via.placeholder.com/300x300/FAEBD7/333333?text=Dinner+Plates',
                 url: 'https://crateandbarrel.com',
-                available: true
+                available: true,
+                remaining: 6,
+                desired: 8
             },
             {
                 id: 'crateandbarrel-4',
@@ -122,7 +153,9 @@ class CrateAndBarrelScraper {
                 price: 99.99,
                 image: 'https://via.placeholder.com/300x300/8B4513/FFFFFF?text=Flatware+Set',
                 url: 'https://crateandbarrel.com',
-                available: true
+                available: false,
+                remaining: 0,
+                desired: 2
             }
         ];
     }
