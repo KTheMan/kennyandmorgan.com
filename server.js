@@ -30,6 +30,11 @@ app.use(express.json());
 const amazonScraper = require('./scrapers/amazon');
 const targetScraper = require('./scrapers/target');
 const crateAndBarrelScraper = require('./scrapers/crateandbarrel');
+const potteryBarnScraper = require('./scrapers/potterybarn');
+const williamsSonomaScraper = require('./scrapers/williamsonoma');
+const reiScraper = require('./scrapers/rei');
+const zolaScraper = require('./scrapers/zola');
+const heathCeramicsScraper = require('./scrapers/heathceramics');
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -45,15 +50,22 @@ app.get('/api/registry', async (req, res) => {
         
         if (!store || store === 'all') {
             // Fetch from all stores
-            const [amazonItems, targetItems, crateAndBarrelItems] = await Promise.allSettled([
+            const results = await Promise.allSettled([
                 amazonScraper.getItems(process.env.AMAZON_REGISTRY_ID),
                 targetScraper.getItems(process.env.TARGET_REGISTRY_ID),
-                crateAndBarrelScraper.getItems(process.env.CRATE_AND_BARREL_REGISTRY_ID)
+                crateAndBarrelScraper.getItems(process.env.CRATE_AND_BARREL_REGISTRY_ID),
+                potteryBarnScraper.getItems(process.env.POTTERY_BARN_REGISTRY_ID),
+                williamsSonomaScraper.getItems(process.env.WILLIAMS_SONOMA_REGISTRY_ID),
+                reiScraper.getItems(process.env.REI_REGISTRY_ID),
+                zolaScraper.getItems(process.env.ZOLA_REGISTRY_ID),
+                heathCeramicsScraper.getItems(process.env.HEATH_CERAMICS_REGISTRY_ID)
             ]);
             
-            if (amazonItems.status === 'fulfilled') items.push(...amazonItems.value);
-            if (targetItems.status === 'fulfilled') items.push(...targetItems.value);
-            if (crateAndBarrelItems.status === 'fulfilled') items.push(...crateAndBarrelItems.value);
+            results.forEach(result => {
+                if (result.status === 'fulfilled') {
+                    items.push(...result.value);
+                }
+            });
         } else {
             // Fetch from specific store
             switch(store.toLowerCase()) {
@@ -65,6 +77,21 @@ app.get('/api/registry', async (req, res) => {
                     break;
                 case 'crateandbarrel':
                     items = await crateAndBarrelScraper.getItems(process.env.CRATE_AND_BARREL_REGISTRY_ID);
+                    break;
+                case 'potterybarn':
+                    items = await potteryBarnScraper.getItems(process.env.POTTERY_BARN_REGISTRY_ID);
+                    break;
+                case 'williamsonoma':
+                    items = await williamsSonomaScraper.getItems(process.env.WILLIAMS_SONOMA_REGISTRY_ID);
+                    break;
+                case 'rei':
+                    items = await reiScraper.getItems(process.env.REI_REGISTRY_ID);
+                    break;
+                case 'zola':
+                    items = await zolaScraper.getItems(process.env.ZOLA_REGISTRY_ID);
+                    break;
+                case 'heathceramics':
+                    items = await heathCeramicsScraper.getItems(process.env.HEATH_CERAMICS_REGISTRY_ID);
                     break;
                 default:
                     return res.status(400).json({ error: 'Invalid store name' });
@@ -102,6 +129,21 @@ app.get('/api/registry/:store', async (req, res) => {
             case 'crateandbarrel':
                 items = await crateAndBarrelScraper.getItems(process.env.CRATE_AND_BARREL_REGISTRY_ID);
                 break;
+            case 'potterybarn':
+                items = await potteryBarnScraper.getItems(process.env.POTTERY_BARN_REGISTRY_ID);
+                break;
+            case 'williamsonoma':
+                items = await williamsSonomaScraper.getItems(process.env.WILLIAMS_SONOMA_REGISTRY_ID);
+                break;
+            case 'rei':
+                items = await reiScraper.getItems(process.env.REI_REGISTRY_ID);
+                break;
+            case 'zola':
+                items = await zolaScraper.getItems(process.env.ZOLA_REGISTRY_ID);
+                break;
+            case 'heathceramics':
+                items = await heathCeramicsScraper.getItems(process.env.HEATH_CERAMICS_REGISTRY_ID);
+                break;
             default:
                 return res.status(400).json({ error: 'Invalid store name' });
         }
@@ -113,10 +155,17 @@ app.get('/api/registry/:store', async (req, res) => {
             items: items
         });
     } catch (error) {
-        const storeName = req.params.store === 'amazon' ? 'Amazon' : 
-                         req.params.store === 'target' ? 'Target' :
-                         req.params.store === 'crateandbarrel' ? 'Crate & Barrel' :
-                         'registry';
+        const storeNames = {
+            'amazon': 'Amazon',
+            'target': 'Target',
+            'crateandbarrel': 'Crate & Barrel',
+            'potterybarn': 'Pottery Barn',
+            'williamsonoma': 'Williams-Sonoma',
+            'rei': 'REI',
+            'zola': 'Zola',
+            'heathceramics': 'Heath Ceramics'
+        };
+        const storeName = storeNames[req.params.store.toLowerCase()] || 'registry';
         console.error(`Error fetching ${storeName} registry:`, error);
         res.status(500).json({
             success: false,

@@ -371,7 +371,12 @@ function capitalizeStore(store) {
     const storeNames = {
         'amazon': 'Amazon',
         'target': 'Target',
-        'crateandbarrel': 'Crate & Barrel'
+        'crateandbarrel': 'Crate & Barrel',
+        'potterybarn': 'Pottery Barn',
+        'williamsonoma': 'Williams-Sonoma',
+        'rei': 'REI',
+        'zola': 'Zola',
+        'heathceramics': 'Heath Ceramics'
     };
     return storeNames[store] || store;
 }
