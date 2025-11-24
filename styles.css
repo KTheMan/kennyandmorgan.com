@@ -751,6 +751,11 @@ textarea {
     100% { transform: rotate(360deg); }
 }
 
+/* Hidden utility class */
+.hidden {
+    display: none;
+}
+
 /* Accommodation Section */
 .accommodation-section {
     margin-top: 100px;
@@ -869,8 +874,8 @@ textarea {
     margin-top: 2rem;
     padding-top: 1.5rem;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
-    color: var(--text-light) !important;
-    font-weight: 600 !important;
+    color: var(--text-light);
+    font-weight: 600;
     font-style: italic;
 }
 
