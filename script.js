@@ -46,7 +46,7 @@ function initNavigation() {
 
 // Countdown Timer
 function initCountdown() {
-    const weddingDate = new Date('2026-06-15T16:00:00').getTime();
+    const weddingDate = new Date('2026-09-12T15:00:00').getTime();
     
     function updateCountdown() {
         const now = new Date().getTime();
