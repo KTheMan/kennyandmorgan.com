@@ -1,3 +1,4 @@
+const Fuse = require('fuse.js');
 const { getDb } = require('./index');
 
 function searchGuestGroupsByName(name, options = {}) {
@@ -11,32 +12,53 @@ function searchGuestGroupsByName(name, options = {}) {
         return [];
     }
 
-    const firstName = parts[0];
     const lastName = parts.slice(1).join(' ');
-    const firstPattern = `${escapeForLike(firstName)}%`;
-    const lastPattern = `%${escapeForLike(lastName)}%`;
-
     const limit = Math.min(Math.max(parseInt(options.limit, 10) || 5, 1), 25);
     const db = getDb();
 
-    const groupStmt = db.prepare(`
-        SELECT DISTINCT group_id
+    const candidateStmt = db.prepare(`
+        SELECT id, full_name, email, group_id, is_primary, is_plus_one, notes, rsvp_status, meal_choice, dietary_notes,
+               address_line1, address_line2, city, state, postal_code
         FROM guests
-        WHERE LOWER(full_name) LIKE @first ESCAPE '\\'
-          AND LOWER(full_name) LIKE @last ESCAPE '\\'
-        LIMIT @limit
+        WHERE LOWER(full_name) LIKE @last ESCAPE '\\'
     `);
 
-    const groupMatches = groupStmt.all({
-        first: firstPattern,
-        last: lastPattern,
-        limit
+    const candidates = candidateStmt.all({
+        last: `%${escapeForLike(lastName)}%`
     });
-    if (!groupMatches.length) {
+
+    if (!candidates.length) {
         return [];
     }
 
-    const placeholders = groupMatches.map(() => '?').join(',');
+    const fuse = new Fuse(candidates, {
+        keys: ['full_name'],
+        threshold: 0.35,
+        distance: 75,
+        includeScore: true,
+        minMatchCharLength: 2,
+        ignoreLocation: true
+    });
+
+    const ranked = fuse.search(rawTerm, { limit: limit * 3 });
+    if (!ranked.length) {
+        return [];
+    }
+
+    const uniqueGroupIds = [];
+    ranked.forEach(result => {
+        const groupId = result.item.group_id;
+        if (!uniqueGroupIds.includes(groupId)) {
+            uniqueGroupIds.push(groupId);
+        }
+    });
+
+    const groupIds = uniqueGroupIds.slice(0, limit);
+    if (!groupIds.length) {
+        return [];
+    }
+
+    const placeholders = groupIds.map(() => '?').join(',');
     const membersStmt = db.prepare(`
          SELECT id, full_name, email, group_id, is_primary, is_plus_one, notes, rsvp_status, meal_choice, dietary_notes,
              address_line1, address_line2, city, state, postal_code
@@ -45,15 +67,15 @@ function searchGuestGroupsByName(name, options = {}) {
         ORDER BY is_primary DESC, full_name COLLATE NOCASE
     `);
 
-    const members = membersStmt.all(...groupMatches.map(match => match.group_id));
+    const members = membersStmt.all(...groupIds);
 
-    return groupMatches.map(match => {
+    return groupIds.map(groupId => {
         const guests = members
-            .filter(member => member.group_id === match.group_id)
+            .filter(member => member.group_id === groupId)
             .map(mapGuestRow);
 
         return {
-            groupId: match.group_id,
+            groupId,
             primaryGuest: guests.find(guest => guest.isPrimary)?.fullName || guests[0]?.fullName || '',
             guests
         };

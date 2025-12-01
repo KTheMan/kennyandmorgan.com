@@ -258,7 +258,7 @@ npm start
 
 ### Guest Lookup, RSVP Storage & Admin Tools (SQLite)
 
-The RSVP flow now talks directly to SQLite. Guests can locate their party, give every invited person an accept/decline response, pick meals for those attending, and even rename placeholder “Guest” entries before submitting. Dietary notes and song requests still travel with the party, and everything is saved via the Express API.
+The RSVP flow now talks directly to SQLite. Guests can locate their party (via a Fuse.js fuzzy search that still requires first+last name input), give every invited person an accept/decline response, pick meals for those attending, and even rename placeholder “Guest” entries before submitting. Dietary notes and song requests still travel with the party, and everything is saved via the Express API.
 
 1. **Install dependencies (already included):** `better-sqlite3`
 2. **Create or seed the guest database:**
