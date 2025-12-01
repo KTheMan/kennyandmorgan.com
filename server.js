@@ -16,6 +16,14 @@ const {
     getAdminPasswordHash,
     setAdminPasswordHash
 } = require('./db/guestDatabase');
+const {
+    upsertRegistryItems,
+    getRegistryItems: getCachedRegistryItems,
+    markItemForFastPoll,
+    getFastPollCandidates,
+    touchFastPollTimestamp,
+    getStoreState
+} = require('./db/registryCache');
 require('dotenv').config();
 
 const app = express();
@@ -23,6 +31,12 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_SESSION_TTL_MS = parseInt(process.env.ADMIN_SESSION_TTL_MS || `${1000 * 60 * 60}`, 10);
 const ADMIN_SALT_ROUNDS = parseInt(process.env.ADMIN_SALT_ROUNDS || '10', 10);
 const adminSessions = new Map();
+const REGISTRY_POLL_INTERVAL_MS = parseInt(process.env.REGISTRY_POLL_INTERVAL_MS || `${1000 * 60 * 60}`, 10);
+const REGISTRY_FAST_POLL_DURATION_MS = parseInt(process.env.REGISTRY_FAST_POLL_DURATION_MS || `${1000 * 60 * 30}`, 10);
+const REGISTRY_FAST_POLL_INTERVAL_MS = parseInt(process.env.REGISTRY_FAST_POLL_INTERVAL_MS || `${1000 * 120}`, 10);
+const REGISTRY_FAST_POLL_SWEEP_MS = parseInt(process.env.REGISTRY_FAST_POLL_SWEEP_MS || `${1000 * 30}`, 10);
+const REGISTRY_FAST_POLL_BATCH_LIMIT = parseInt(process.env.REGISTRY_FAST_POLL_BATCH_LIMIT || '5', 10);
+const activeStoreRefreshes = new Map();
 
 // Middleware
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
@@ -78,53 +92,79 @@ function cleanupExpiredSessions() {
 
 function createAdminSession() {
     cleanupExpiredSessions();
-    const token = crypto.randomBytes(32).toString('hex');
-    adminSessions.set(token, { createdAt: Date.now() });
-    return token;
+    // Get registry items (cached)
+    app.get('/api/registry', async (req, res) => {
+        try {
+            const storeParam = (req.query.store || 'all').toLowerCase();
+            const includeUnavailable = req.query.includeUnavailable === 'true';
+            const forceRefresh = req.query.forceRefresh === 'true';
+
+            if (storeParam !== 'all' && !isRegisteredStore(storeParam)) {
+                return res.status(400).json({ success: false, error: 'Invalid store name' });
+            }
+
+            if (forceRefresh) {
+                if (storeParam === 'all') {
+                    await refreshAllStores('api-force');
+                } else {
+                    await queueStoreRefresh(storeParam, { reason: 'api-force' });
+                }
+            } else {
+                if (storeParam === 'all') {
+                    registryStoreKeys.forEach(store => ensureStoreFreshness(store));
+                } else {
+                    ensureStoreFreshness(storeParam);
+                }
+            }
+
+            const items = getCachedRegistryItems({ store: storeParam, includeUnavailable });
+            res.json({ success: true, store: storeParam, count: items.length, items });
+        } catch (error) {
+            console.error('Error serving cached registry items:', error);
+            res.status(500).json({ success: false, error: 'Failed to load registry items', message: error.message });
+        }
+    });
+
+    // Get cached items from a specific store
+    app.get('/api/registry/:store', async (req, res) => {
+        try {
+            const store = (req.params.store || '').toLowerCase();
+            const includeUnavailable = req.query.includeUnavailable === 'true';
+            const forceRefresh = req.query.forceRefresh === 'true';
+
+            if (!isRegisteredStore(store)) {
+                return res.status(400).json({ success: false, error: 'Invalid store name' });
+            }
+
+            if (forceRefresh) {
+                await queueStoreRefresh(store, { reason: 'api-force' });
+            } else {
+                ensureStoreFreshness(store);
+            }
+
+            const items = getCachedRegistryItems({ store, includeUnavailable });
+            res.json({ success: true, store, count: items.length, items });
+        } catch (error) {
+            console.error('Error serving cached store registry:', error);
+            res.status(500).json({ success: false, error: 'Failed to load registry store', message: error.message });
+        }
+    });
+        const grouped = candidates.reduce((acc, row) => {
+            acc[row.store] = acc[row.store] || [];
+            acc[row.store].push(row);
+            return acc;
+        }, {});
+
+        await Promise.all(Object.entries(grouped).map(async ([store, rows]) => {
+            try {
+                await queueStoreRefresh(store, { reason: 'fast-poll' });
+                rows.forEach(row => touchFastPollTimestamp(row.id));
+            } catch (error) {
+                console.error(`[registry] Fast poll failed for ${store}:`, error.message);
+            }
+        }));
+    }, REGISTRY_FAST_POLL_SWEEP_MS);
 }
-
-function validateAdminSession(token) {
-    if (!token || !adminSessions.has(token)) {
-        return false;
-    }
-    const meta = adminSessions.get(token);
-    if (!meta?.createdAt || Date.now() - meta.createdAt > ADMIN_SESSION_TTL_MS) {
-        adminSessions.delete(token);
-        return false;
-    }
-    meta.createdAt = Date.now();
-    adminSessions.set(token, meta);
-    return true;
-}
-
-function extractAuthToken(req) {
-    const authHeader = req.headers.authorization || '';
-    if (authHeader.startsWith('Bearer ')) {
-        return authHeader.slice(7);
-    }
-    return null;
-}
-
-function requireAdminAuth(req, res, next) {
-    const token = extractAuthToken(req);
-    if (!validateAdminSession(token)) {
-        return res.status(401).json({ success: false, error: 'Unauthorized' });
-    }
-    req.adminToken = token;
-    return next();
-}
-
-ensureAdminPasswordHash();
-
-// Import scrapers
-const amazonScraper = require('./scrapers/amazon');
-const targetScraper = require('./scrapers/target');
-const crateAndBarrelScraper = require('./scrapers/crateandbarrel');
-const potteryBarnScraper = require('./scrapers/potterybarn');
-const williamsSonomaScraper = require('./scrapers/williamsonoma');
-const reiScraper = require('./scrapers/rei');
-const zolaScraper = require('./scrapers/zola');
-const heathCeramicsScraper = require('./scrapers/heathceramics');
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -474,6 +514,30 @@ app.get('/api/registry/:store', async (req, res) => {
     }
 });
 
+app.post('/api/registry/items/:id/fast-poll', async (req, res) => {
+    try {
+        const cacheId = parseInt(req.params.id, 10);
+        if (!cacheId) {
+            return res.status(400).json({ success: false, error: 'Invalid item id' });
+        }
+        const record = markItemForFastPoll(cacheId, REGISTRY_FAST_POLL_DURATION_MS);
+        if (!record) {
+            return res.status(404).json({ success: false, error: 'Registry item not found' });
+        }
+        queueStoreRefresh(record.store, { reason: 'user-fast-poll' }).catch(() => {});
+        res.json({
+            success: true,
+            cacheId,
+            store: record.store,
+            fastPollUntil: record.fast_poll_until,
+            fastPollActive: Boolean(record.fast_poll_until && new Date(record.fast_poll_until).getTime() > Date.now())
+        });
+    } catch (error) {
+        console.error('Failed to schedule fast poll:', error);
+        res.status(500).json({ success: false, error: 'Unable to schedule fast polling', message: error.message });
+    }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Unhandled error:', err);
@@ -483,6 +547,12 @@ app.use((err, req, res, next) => {
         message: err.message
     });
 });
+
+refreshAllStores('startup').catch(error => {
+    console.warn('[registry] Initial refresh failed:', error.message);
+});
+
+scheduleRegistryPolling();
 
 // Start server
 app.listen(PORT, () => {

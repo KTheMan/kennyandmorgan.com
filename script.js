@@ -18,6 +18,8 @@ let registryConfig = {
 };
 
 let latestGuestLookupResults = [];
+const registryFastPollClicks = new Map();
+const REGISTRY_FAST_POLL_CLICK_THROTTLE_MS = 60 * 1000;
 
 // Navigation
 function initNavigation() {
@@ -332,6 +334,7 @@ async function initRegistry() {
 
     // Load all items initially and build filter options
     await loadRegistryItems('all', { refreshFilters: true });
+    setupRegistryFastPollListener();
 }
 
 async function loadRegistryConfig() {
@@ -438,6 +441,23 @@ function updateRegistryFilterOptions(items) {
     registryFilter.disabled = registryFilter.options.length <= 1;
 }
 
+function setupRegistryFastPollListener() {
+    const registryContainer = document.getElementById('registryItems');
+    if (!registryContainer) {
+        return;
+    }
+    registryContainer.addEventListener('click', (event) => {
+        const link = event.target.closest('.registry-item-link');
+        if (!link) {
+            return;
+        }
+        const cacheId = link.dataset.cacheId;
+        if (cacheId) {
+            flagRegistryItemForFastPoll(cacheId);
+        }
+    });
+}
+
 function resetRegistryFilterOptions() {
     const registryFilter = document.getElementById('registryFilter');
     if (!registryFilter) {
@@ -466,19 +486,31 @@ function displayRegistryItems(items) {
         return;
     }
     
-    registryContainer.innerHTML = items.map(item => `
-        <div class="registry-item">
-            <img src="${item.image}" alt="${item.name}" class="registry-item-image">
+    registryContainer.innerHTML = items.map(item => {
+        const purchased = formatQuantityValue(item.purchasedQuantity);
+        const wanted = formatQuantityValue(item.wantedQuantity);
+        const refreshLabel = item.fastPollActive ? 'Live refresh (2 min)' : 'Hourly refresh';
+        const refreshClass = item.fastPollActive ? 'registry-item-refresh is-live' : 'registry-item-refresh';
+        const priceDisplay = formatRegistryPrice(item.price);
+        const cacheIdAttr = item.cacheId ? ` data-cache-id="${item.cacheId}"` : '';
+        const imageSrc = item.image || 'https://via.placeholder.com/300x300/D4A373/FFFFFF?text=Registry+Item';
+        return `
+        <div class="registry-item"${cacheIdAttr}>
+            <img src="${imageSrc}" alt="${item.name}" class="registry-item-image">
             <div class="registry-item-details">
                 <div class="registry-item-name">${item.name}</div>
                 <div class="registry-item-store">${capitalizeStore(item.store)}</div>
-                <div class="registry-item-price">$${item.price.toFixed(2)}</div>
-                <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="registry-item-link">
+                <div class="registry-item-price">${priceDisplay}</div>
+                <div class="registry-item-quantities">
+                    <span class="registry-item-qty">${purchased} / ${wanted} purchased</span>
+                    <span class="${refreshClass}">${refreshLabel}</span>
+                </div>
+                <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="registry-item-link"${cacheIdAttr}>
                     View on ${capitalizeStore(item.store)}
                 </a>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 function capitalizeStore(store) {
@@ -550,6 +582,35 @@ function getRegistryFetchOptions(filter) {
     });
 
     return { headers };
+}
+
+async function flagRegistryItemForFastPoll(cacheId) {
+    const now = Date.now();
+    const lastClick = registryFastPollClicks.get(cacheId);
+    if (lastClick && (now - lastClick) < REGISTRY_FAST_POLL_CLICK_THROTTLE_MS) {
+        return;
+    }
+    registryFastPollClicks.set(cacheId, now);
+    try {
+        const apiBase = resolveApiBaseUrl();
+        await fetch(`${apiBase}/api/registry/items/${cacheId}/fast-poll`, { method: 'POST' });
+    } catch (error) {
+        console.warn('Unable to schedule fast poll for item', cacheId, error);
+    }
+}
+
+function formatRegistryPrice(price) {
+    if (typeof price === 'number' && Number.isFinite(price)) {
+        return `$${price.toFixed(2)}`;
+    }
+    return '—';
+}
+
+function formatQuantityValue(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+    }
+    return '—';
 }
 
 // Accommodation map + interactions

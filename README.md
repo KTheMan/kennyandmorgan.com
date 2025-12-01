@@ -33,6 +33,8 @@ A beautiful, responsive wedding website built with vanilla JavaScript, HTML, and
 - Filter by store (Amazon, Target, Crate & Barrel)
 - Mock data with placeholder for real registry integration
 - Direct links to purchase items
+- Registry entries cached in SQLite with hourly refreshes
+- Wanted vs purchased quantities update faster when guests click an item
 
 ### 🔐 Admin Console
 - Password-protected dashboard at `admin.html`
@@ -272,6 +274,17 @@ Set `GUEST_DB_PATH` in `.env` if you want the SQLite file somewhere other than `
 - `admin.html` uses `/api/admin/*` routes for authentication, CRUD, and CSV import/export workflows.
 
 Use `admin.html` after logging in with `ADMIN_PASSWORD` to oversee RSVP statuses, edit guests, or bulk import CSV data (the importer accepts headers such as `fullName`, `groupId`, `isPrimary`, `mealChoice`, `dietaryNotes`, etc.).
+
+### Registry Cache & Fast Polling
+
+- Registry scrapers still power the data, but their results are written to SQLite via `db/registryCache.js`.
+- `REGISTRY_POLL_INTERVAL_MS` controls the slow cadence (defaults to 1 hour) for refreshing each store.
+- Every item tracks wanted and purchased quantities; if the upstream site omits them we retain the previously cached value.
+- When a guest clicks “View on …” we hit `POST /api/registry/items/:cacheId/fast-poll`, which:
+    1. Flags that item for accelerated polling for 30 minutes (`REGISTRY_FAST_POLL_DURATION_MS`).
+    2. The fast-poll worker re-fetches the store every `REGISTRY_FAST_POLL_INTERVAL_MS` (default 120s) while the flag is active.
+    3. The UI shows “Live refresh” for items currently in the fast lane.
+- Extra knobs: `REGISTRY_FAST_POLL_SWEEP_MS` (how often we look for candidates) and `REGISTRY_FAST_POLL_BATCH_LIMIT` (how many stores/items to refresh per sweep).
 
 ## Deployment
 

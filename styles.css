@@ -890,6 +890,31 @@ textarea {
     margin-bottom: 1.5rem;
 }
 
+.registry-item-quantities {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.85rem;
+    margin-bottom: 1.5rem;
+    color: var(--muted-sage);
+}
+
+.registry-item-qty {
+    font-weight: 600;
+    color: var(--deep-charcoal);
+}
+
+.registry-item-refresh {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+}
+
+.registry-item-refresh.is-live {
+    color: var(--deep-green);
+}
+
 .registry-item-link {
     display: inline-block;
     margin-top: auto;
