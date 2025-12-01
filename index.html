@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -70,34 +71,62 @@
                 <div class="accommodation-section">
                     <h2>Accommodations</h2>
                     <p class="section-subtitle">We have compiled a list of nearby hotels for your convenience:</p>
-                    <div class="accommodation-list">
-                        <div class="accommodation-item">
-                            <span class="accommodation-name">Chaminade Resort</span>
-                            <span class="accommodation-phone">831.475.5600</span>
+                    <div class="accommodation-layout">
+                        <div class="accommodation-list">
+                            <div class="accommodation-item" data-accommodation-id="chaminade" data-lat="36.999382" data-lng="-121.980736" tabindex="0">
+                                <div class="accommodation-meta">
+                                    <a class="accommodation-name" href="https://www.chaminade.com" target="_blank" rel="noopener noreferrer">Chaminade Resort &amp; Spa</a>
+                                    <span class="accommodation-address">1 Chaminade Ln, Santa Cruz, CA 95065</span>
+                                </div>
+                                <a class="accommodation-phone" href="tel:18314755600">831.475.5600</a>
+                            </div>
+                            <div class="accommodation-item" data-accommodation-id="dream-inn" data-lat="36.959019" data-lng="-122.025625" tabindex="0">
+                                <div class="accommodation-meta">
+                                    <a class="accommodation-name" href="https://www.dreaminnsantacruz.com" target="_blank" rel="noopener noreferrer">Dream Inn Santa Cruz</a>
+                                    <span class="accommodation-address">175 W Cliff Dr, Santa Cruz, CA 95060</span>
+                                </div>
+                                <a class="accommodation-phone" href="tel:18445101746">844.510.1746</a>
+                            </div>
+                            <div class="accommodation-item" data-accommodation-id="four-points" data-lat="37.050524" data-lng="-122.014877" tabindex="0">
+                                <div class="accommodation-meta">
+                                    <a class="accommodation-name" href="https://www.marriott.com/en-us/hotels/sjcfv-four-points-santa-cruz-scotts-valley/overview/" target="_blank" rel="noopener noreferrer">Four Points by Sheraton Scotts Valley</a>
+                                    <span class="accommodation-address">5030 Scotts Valley Dr, Scotts Valley, CA 95066</span>
+                                </div>
+                                <a class="accommodation-phone" href="tel:18314381500">831.438.1500</a>
+                            </div>
+                            <div class="accommodation-item" data-accommodation-id="holiday-inn" data-lat="36.98976" data-lng="-122.01621" tabindex="0">
+                                <div class="accommodation-meta">
+                                    <a class="accommodation-name" href="https://www.ihg.com/holidayinnexpress/hotels/us/en/santa-cruz/srues/hoteldetail" target="_blank" rel="noopener noreferrer">Holiday Inn Express &amp; Suites Santa Cruz</a>
+                                    <span class="accommodation-address">1410 Ocean St, Santa Cruz, CA 95060</span>
+                                </div>
+                                <a class="accommodation-phone" href="tel:18314069331">831.406.9331</a>
+                            </div>
+                            <div class="accommodation-item" data-accommodation-id="hotel-paradox" data-lat="36.973898" data-lng="-122.025302" tabindex="0">
+                                <div class="accommodation-meta">
+                                    <a class="accommodation-name" href="https://www.hotelparadox.com" target="_blank" rel="noopener noreferrer">Hotel Paradox</a>
+                                    <span class="accommodation-address">611 Ocean St, Santa Cruz, CA 95060</span>
+                                </div>
+                                <a class="accommodation-phone" href="tel:18314257100">831.425.7100</a>
+                            </div>
+                            <div class="accommodation-item" data-accommodation-id="inn-pasatiempo" data-lat="36.993391" data-lng="-122.023094" tabindex="0">
+                                <div class="accommodation-meta">
+                                    <a class="accommodation-name" href="https://www.innatpasatiempo.com" target="_blank" rel="noopener noreferrer">Inn at Pasatiempo</a>
+                                    <span class="accommodation-address">555 CA-17, Santa Cruz, CA 95060</span>
+                                </div>
+                                <a class="accommodation-phone" href="tel:18314235000">831.423.5000</a>
+                            </div>
+                            <div class="accommodation-item" data-accommodation-id="hilton-scotts-valley" data-lat="37.019905" data-lng="-122.022361" tabindex="0">
+                                <div class="accommodation-meta">
+                                    <a class="accommodation-name" href="https://www.hilton.com/en/hotels/sjcschf-hilton-santa-cruz-scotts-valley" target="_blank" rel="noopener noreferrer">Hilton Santa Cruz / Scotts Valley</a>
+                                    <span class="accommodation-address">6001 La Madrona Dr, Santa Cruz, CA 95060</span>
+                                </div>
+                                <a class="accommodation-phone" href="tel:18314401000">831.440.1000</a>
+                            </div>
                         </div>
-                        <div class="accommodation-item">
-                            <span class="accommodation-name">Dream Inn</span>
-                            <span class="accommodation-phone">844.510.1746</span>
-                        </div>
-                        <div class="accommodation-item">
-                            <span class="accommodation-name">Four Points by Sheraton</span>
-                            <span class="accommodation-phone">831.438.1500</span>
-                        </div>
-                        <div class="accommodation-item">
-                            <span class="accommodation-name">Holiday Inn Express</span>
-                            <span class="accommodation-phone">831.406.9331</span>
-                        </div>
-                        <div class="accommodation-item">
-                            <span class="accommodation-name">Hotel Paradox</span>
-                            <span class="accommodation-phone">831.425.7100</span>
-                        </div>
-                        <div class="accommodation-item">
-                            <span class="accommodation-name">Inn at Pasatiempo</span>
-                            <span class="accommodation-phone">831.423.5000</span>
-                        </div>
-                        <div class="accommodation-item">
-                            <span class="accommodation-name">Scotts Valley Hilton</span>
-                            <span class="accommodation-phone">831.440.1000</span>
+                        <div class="accommodation-map-card">
+                            <h3>Explore on the Map</h3>
+                            <p>Hover over a card or pin to highlight the matching spot.</p>
+                            <div id="accommodationMap" aria-label="Map of recommended accommodations"></div>
                         </div>
                     </div>
                 </div>
@@ -197,7 +226,7 @@
                             </label>
                         </div>
                     </div>
-                    <div class="form-group" id="guestCountGroup" style="display: none;">
+                    <div class="form-group hidden" id="guestCountGroup">
                         <label for="guestCount">Number of Guests *</label>
                         <input type="number" id="guestCount" name="guestCount" min="1" max="10" value="1">
                     </div>
@@ -228,19 +257,19 @@
                     <div class="color-palette">
                         <h2>Color Palette</h2>
                         <div class="color-swatches">
-                            <div class="color-swatch" style="background-color: #D4A373;">
+                            <div class="color-swatch color-tan">
                                 <span class="color-name">Tan</span>
                             </div>
-                            <div class="color-swatch" style="background-color: #8B4513;">
+                            <div class="color-swatch color-brown">
                                 <span class="color-name">Brown</span>
                             </div>
-                            <div class="color-swatch" style="background-color: #2F4F4F;">
+                            <div class="color-swatch color-slate">
                                 <span class="color-name">Slate Gray</span>
                             </div>
-                            <div class="color-swatch" style="background-color: #FAEBD7;">
+                            <div class="color-swatch color-antique">
                                 <span class="color-name">Antique White</span>
                             </div>
-                            <div class="color-swatch" style="background-color: #556B2F;">
+                            <div class="color-swatch color-olive">
                                 <span class="color-name">Dark Olive Green</span>
                             </div>
                         </div>
@@ -276,7 +305,7 @@
                     <button class="registry-btn active" data-registry="all">View All</button>
                 </div>
 
-                <div id="registryLoading" class="loading" style="display: none;">
+                <div id="registryLoading" class="loading">
                     <div class="spinner"></div>
                     <p>Loading registry items...</p>
                 </div>
@@ -293,6 +322,7 @@
         <p>We can't wait to celebrate with you!</p>
     </footer>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9m0QNXFZC50Q2F5v5nE=" crossorigin=""></script>
     <script src="script.js"></script>
 </body>
 </html>

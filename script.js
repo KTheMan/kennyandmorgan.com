@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initCountdown();
     initForms();
     initRegistry();
+    initAccommodationsMap();
 });
 
 // Navigation
@@ -379,6 +380,143 @@ function capitalizeStore(store) {
         'heathceramics': 'Heath Ceramics'
     };
     return storeNames[store] || store;
+}
+
+// Accommodation map + interactions
+function initAccommodationsMap() {
+    const mapContainer = document.getElementById('accommodationMap');
+    if (!mapContainer || typeof L === 'undefined') {
+        return;
+    }
+
+    const accommodations = Array.from(document.querySelectorAll('.accommodation-item')).map((element, index) => {
+        const lat = parseFloat(element.dataset.lat);
+        const lng = parseFloat(element.dataset.lng);
+
+        if (Number.isNaN(lat) || Number.isNaN(lng)) {
+            return null;
+        }
+
+        return {
+            id: element.dataset.accommodationId || `accommodation-${index}`,
+            name: element.querySelector('.accommodation-name')?.textContent.trim() || 'Accommodation',
+            address: element.querySelector('.accommodation-address')?.textContent.trim() || '',
+            lat,
+            lng,
+            element
+        };
+    }).filter(Boolean);
+
+    if (!accommodations.length) {
+        mapContainer.innerHTML = '<p class="map-empty">Map data is unavailable at the moment.</p>';
+        return;
+    }
+
+    const averageLat = accommodations.reduce((sum, acc) => sum + acc.lat, 0) / accommodations.length;
+    const averageLng = accommodations.reduce((sum, acc) => sum + acc.lng, 0) / accommodations.length;
+
+    const map = L.map(mapContainer, { scrollWheelZoom: false }).setView([averageLat, averageLng], 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    map.scrollWheelZoom.disable();
+    mapContainer.addEventListener('mouseenter', () => map.scrollWheelZoom.enable());
+    mapContainer.addEventListener('mouseleave', () => map.scrollWheelZoom.disable());
+
+    const defaultStyle = {
+        radius: 8,
+        color: '#C9A961',
+        weight: 2,
+        fillColor: '#C9A961',
+        fillOpacity: 0.85
+    };
+    const activeStyle = {
+        ...defaultStyle,
+        radius: 11,
+        color: '#FFFFFF',
+        weight: 3,
+        fillOpacity: 1
+    };
+
+    const markers = {};
+    let activeId = null;
+    const bounds = [];
+
+    const setActive = (id) => {
+        if (activeId === id) return;
+        activeId = id;
+
+        accommodations.forEach((acc) => {
+            const isActive = acc.id === id;
+            acc.element.classList.toggle('active', isActive);
+            const marker = markers[acc.id];
+            if (marker && marker.setStyle) {
+                marker.setStyle(isActive ? activeStyle : defaultStyle);
+            }
+            if (!isActive && marker) {
+                marker.closePopup();
+            }
+        });
+    };
+
+    const clearActive = () => {
+        activeId = null;
+        accommodations.forEach((acc) => acc.element.classList.remove('active'));
+        Object.values(markers).forEach((marker) => {
+            marker.setStyle(defaultStyle);
+            marker.closePopup();
+        });
+    };
+
+    const focusCard = (element) => {
+        if (!element) return;
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.focus({ preventScroll: true });
+    };
+
+    accommodations.forEach((acc) => {
+        const marker = L.circleMarker([acc.lat, acc.lng], defaultStyle).addTo(map);
+        marker.bindPopup(`<strong>${acc.name}</strong><br>${acc.address}`);
+        marker.bindTooltip(acc.name, { direction: 'top', offset: [0, -8] });
+        markers[acc.id] = marker;
+        bounds.push([acc.lat, acc.lng]);
+
+        marker.on('mouseover', () => setActive(acc.id));
+        marker.on('mouseout', () => {
+            if (activeId === acc.id) {
+                clearActive();
+            }
+        });
+        marker.on('click', () => {
+            setActive(acc.id);
+            marker.openPopup();
+            focusCard(acc.element);
+        });
+
+        acc.element.addEventListener('mouseenter', () => {
+            setActive(acc.id);
+        });
+
+        acc.element.addEventListener('mouseleave', () => {
+            if (activeId === acc.id) {
+                clearActive();
+            }
+        });
+
+        acc.element.addEventListener('focus', () => setActive(acc.id));
+        acc.element.addEventListener('blur', () => {
+            if (activeId === acc.id) {
+                clearActive();
+            }
+        });
+    });
+
+    if (bounds.length > 1) {
+        map.fitBounds(bounds, { padding: [30, 30] });
+    }
 }
 
 // Registry Scraping Functions (for real implementation)

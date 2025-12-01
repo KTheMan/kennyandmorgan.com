@@ -583,6 +583,26 @@ textarea {
     transition: var(--transition);
 }
 
+.color-swatch.color-tan {
+    background-color: #D4A373;
+}
+
+.color-swatch.color-brown {
+    background-color: #8B4513;
+}
+
+.color-swatch.color-slate {
+    background-color: #2F4F4F;
+}
+
+.color-swatch.color-antique {
+    background-color: #FAEBD7;
+}
+
+.color-swatch.color-olive {
+    background-color: #556B2F;
+}
+
 .color-swatch:hover {
     transform: scale(1.02);
 }
@@ -736,6 +756,10 @@ textarea {
     padding: 4rem;
 }
 
+#registryLoading {
+    display: none;
+}
+
 .spinner {
     border: 3px solid #E0E0E0;
     border-top: 3px solid var(--deep-charcoal);
@@ -763,6 +787,14 @@ textarea {
     border-top: 2px solid var(--accent-gold);
 }
 
+.accommodation-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+    gap: 2.5rem;
+    align-items: stretch;
+    margin-top: 3rem;
+}
+
 .accommodation-section h2 {
     font-family: 'Montserrat', sans-serif;
     font-size: 1.5rem;
@@ -780,20 +812,21 @@ textarea {
 }
 
 .accommodation-list {
-    max-width: 800px;
-    margin: 0 auto;
+    width: 100%;
     display: grid;
-    gap: 1.5rem;
+    gap: 1.25rem;
 }
 
 .accommodation-item {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    gap: 1rem;
     padding: 1.5rem;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     transition: var(--transition);
+    border-left: 3px solid transparent;
 }
 
 .accommodation-item:hover {
@@ -801,11 +834,36 @@ textarea {
     transform: translateX(5px);
 }
 
+.accommodation-item.active {
+    background: rgba(255, 255, 255, 0.12);
+    border-left-color: var(--accent-gold);
+}
+
+.accommodation-item:focus-visible {
+    outline: 2px solid var(--accent-gold);
+    outline-offset: 4px;
+}
+
+.accommodation-meta {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
 .accommodation-name {
     font-family: 'Montserrat', sans-serif;
     font-size: 1rem;
     font-weight: 400;
     color: var(--text-light);
+    text-decoration: none;
+}
+
+.accommodation-address {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: var(--muted-sage);
 }
 
 .accommodation-phone {
@@ -814,6 +872,43 @@ textarea {
     font-weight: 600;
     color: var(--accent-gold);
     letter-spacing: 0.05em;
+    text-decoration: none;
+}
+
+.accommodation-map-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.accommodation-map-card h3 {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent-gold);
+}
+
+.accommodation-map-card p {
+    font-size: 0.9rem;
+    color: var(--muted-sage);
+}
+
+#accommodationMap {
+    width: 100%;
+    height: 420px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+}
+
+.map-empty {
+    color: var(--muted-sage);
+    text-align: center;
+    padding: 2rem 1rem;
 }
 
 /* Directions Section */
@@ -994,6 +1089,14 @@ footer p {
         flex-direction: column;
         align-items: flex-start;
         gap: 0.75rem;
+    }
+
+    .accommodation-layout {
+        grid-template-columns: 1fr;
+    }
+
+    #accommodationMap {
+        height: 320px;
     }
 }
 
