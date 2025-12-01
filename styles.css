@@ -743,6 +743,118 @@ main {
     color: var(--deep-green);
 }
 
+.guest-response-section {
+    margin-top: 2.5rem;
+    padding: 2rem;
+    border: 1px solid var(--deep-charcoal);
+    background: var(--soft-white);
+}
+
+.guest-response-title {
+    font-size: 1.5rem;
+    font-family: 'Playfair Display', serif;
+    margin-bottom: 1rem;
+}
+
+.guest-response-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.guest-response-card {
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    background: #fff;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.05);
+}
+
+.guest-response-card.is-guest-placeholder {
+    border-style: dashed;
+}
+
+.guest-response-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+}
+
+.guest-response-name {
+    font-size: 1.15rem;
+    font-weight: 600;
+}
+
+.guest-response-tag {
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-sage);
+}
+
+.guest-response-status {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.guest-response-status label {
+    flex: 1;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 999px;
+    padding: 0.5rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    font-weight: 600;
+}
+
+.guest-response-status input[type="radio"] {
+    display: none;
+}
+
+.guest-response-status input[type="radio"]:checked + span {
+    background: var(--deep-charcoal);
+    color: var(--soft-white);
+}
+
+.guest-response-status span {
+    display: block;
+}
+
+.guest-response-meal {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.guest-response-meal select,
+.guest-response-name-input input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+}
+
+.guest-response-meal.hidden {
+    display: none;
+}
+
+.guest-response-name-input {
+    margin-top: 0.5rem;
+}
+
+.guest-response-message {
+    margin-top: 1rem;
+    font-weight: 600;
+    color: #B00020;
+}
+
+.guest-response-message.is-success {
+    color: var(--deep-green);
+}
+
 .guest-lookup-message.is-error {
     color: #C62828;
 }

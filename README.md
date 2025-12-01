@@ -258,7 +258,7 @@ npm start
 
 ### Guest Lookup, RSVP Storage & Admin Tools (SQLite)
 
-The RSVP flow now talks directly to SQLite. Guests can locate their party, submit responses (including meal selections and dietary notes), and the data is saved via the Express API.
+The RSVP flow now talks directly to SQLite. Guests can locate their party, give every invited person an accept/decline response, pick meals for those attending, and even rename placeholder “Guest” entries before submitting. Dietary notes and song requests still travel with the party, and everything is saved via the Express API.
 
 1. **Install dependencies (already included):** `better-sqlite3`
 2. **Create or seed the guest database:**
@@ -288,10 +288,10 @@ Set `GUEST_DB_PATH` in `.env` if you want the SQLite file somewhere other than `
 4. **Run the API:** `npm start`
 
 - `GET /api/guests/search?name=` powers the "Find My Party" button.
-- `POST /api/rsvp` records the RSVP, meal choice, dietary notes, and song request, while updating every guest in the selected party.
+- `POST /api/rsvp` records each guest’s RSVP status, meal choice, and optional plus-one name while also storing party-level dietary notes and song requests.
 - `admin.html` uses `/api/admin/*` routes for authentication, CRUD, and CSV import/export workflows.
 
-Use `admin.html` after logging in with `ADMIN_PASSWORD` to oversee RSVP statuses, edit guests, or bulk import CSV data (the importer accepts headers such as `fullName`, `groupId`, `isPrimary`, `mealChoice`, `dietaryNotes`, `addressLine1`, `addressLine2`, `city`, `state`, `postalCode`, etc.).
+Use `admin.html` after logging in with `ADMIN_PASSWORD` to oversee RSVP statuses, edit guests, or bulk import CSV data. The importer now natively reads The Knot exports (`First Name`, `Last Name`, `Party`, `Street Address 1/2`, `Wedding Day - RSVP`, etc.) in addition to our legacy headers (`fullName`, `groupId`, `isPrimary`, `mealChoice`, `dietaryNotes`, `addressLine1`, `addressLine2`, `city`, `state`, `postalCode`, …).
 
 ### Registry Cache & Fast Polling
 

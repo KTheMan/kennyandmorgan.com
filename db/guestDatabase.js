@@ -1,23 +1,37 @@
 const { getDb } = require('./index');
 
 function searchGuestGroupsByName(name, options = {}) {
-    const searchTerm = (name || '').trim();
-    if (!searchTerm) {
+    const rawTerm = (name || '').trim().replace(/\s+/g, ' ');
+    if (!rawTerm) {
         return [];
     }
 
+    const parts = rawTerm.toLowerCase().split(' ').filter(Boolean);
+    if (parts.length < 2) {
+        return [];
+    }
+
+    const firstName = parts[0];
+    const lastName = parts.slice(1).join(' ');
+    const firstPattern = `${escapeForLike(firstName)}%`;
+    const lastPattern = `%${escapeForLike(lastName)}%`;
+
     const limit = Math.min(Math.max(parseInt(options.limit, 10) || 5, 1), 25);
     const db = getDb();
-    const normalizedTerm = `%${searchTerm.toLowerCase()}%`;
 
     const groupStmt = db.prepare(`
         SELECT DISTINCT group_id
         FROM guests
-        WHERE LOWER(full_name) LIKE ?
-        LIMIT ?
+        WHERE LOWER(full_name) LIKE @first ESCAPE '\\'
+          AND LOWER(full_name) LIKE @last ESCAPE '\\'
+        LIMIT @limit
     `);
 
-    const groupMatches = groupStmt.all(normalizedTerm, limit);
+    const groupMatches = groupStmt.all({
+        first: firstPattern,
+        last: lastPattern,
+        limit
+    });
     if (!groupMatches.length) {
         return [];
     }
@@ -63,6 +77,10 @@ function mapGuestRow(row) {
         state: row.state || null,
         postalCode: row.postal_code || null
     };
+}
+
+function escapeForLike(value) {
+    return (value || '').replace(/[\\%_]/g, match => `\\${match}`);
 }
 
 function replaceGuestRoster(guestList = []) {
@@ -271,6 +289,7 @@ function setSecretValue(key, value) {
 function recordRsvpSubmission(data) {
     const db = getDb();
     const status = data.attending ? 'accepted' : 'declined';
+    const guestResponses = Array.isArray(data.guestResponses) ? data.guestResponses : [];
 
     const insertStmt = db.prepare(`
         INSERT INTO rsvp_submissions (group_id, submitter_name, submitter_email, attending, guest_count, meal_choice, dietary_notes, special_message, song_request)
@@ -289,24 +308,66 @@ function recordRsvpSubmission(data) {
         songRequest: data.songRequest || null
     });
 
-    if (data.guestGroupId) {
+    if (guestResponses.length) {
+        const updateStmt = db.prepare(`
+            UPDATE guests
+            SET rsvp_status = @status,
+                meal_choice = CASE WHEN @meal_choice IS NULL OR @meal_choice = '' THEN meal_choice ELSE @meal_choice END,
+                full_name = CASE WHEN @full_name IS NULL OR @full_name = '' THEN full_name ELSE @full_name END,
+                last_rsvp_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = @guest_id AND (@group_id IS NULL OR group_id = @group_id)
+        `);
+
+        guestResponses.forEach(response => {
+            const normalizedStatus = normalizeGuestResponseStatus(response.status);
+            if (!normalizedStatus) {
+                return;
+            }
+            updateStmt.run({
+                status: normalizedStatus,
+                meal_choice: response.mealChoice || null,
+                full_name: response.name || null,
+                guest_id: response.guestId,
+                group_id: data.guestGroupId || null
+            });
+        });
+    } else if (data.guestGroupId) {
         db.prepare(`
             UPDATE guests
             SET rsvp_status = @status,
                 meal_choice = COALESCE(@meal_choice, meal_choice),
-                dietary_notes = COALESCE(@dietary_notes, dietary_notes),
                 last_rsvp_at = CURRENT_TIMESTAMP,
                 updated_at = CURRENT_TIMESTAMP
             WHERE group_id = @group_id
         `).run({
             status,
             meal_choice: data.mealChoice || null,
-            dietary_notes: data.dietaryRestrictions || null,
+            group_id: data.guestGroupId
+        });
+    }
+
+    if (data.guestGroupId && data.dietaryRestrictions) {
+        db.prepare(`
+            UPDATE guests
+            SET dietary_notes = COALESCE(@dietary_notes, dietary_notes),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE group_id = @group_id
+        `).run({
+            dietary_notes: data.dietaryRestrictions,
             group_id: data.guestGroupId
         });
     }
 
     return status;
+}
+
+function normalizeGuestResponseStatus(value) {
+    const normalized = (value || '').toString().trim().toLowerCase();
+    if (normalized === 'accepted' || normalized === 'declined') {
+        return normalized;
+    }
+    return null;
 }
 
 module.exports = {

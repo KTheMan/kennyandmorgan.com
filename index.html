@@ -288,36 +288,15 @@
                         <div id="guestLookupMessage" class="guest-lookup-message" role="status" aria-live="polite"></div>
                         <div id="guestLookupResults" class="guest-lookup-results" aria-live="polite"></div>
                     </div>
+                    <div id="guestResponseSection" class="guest-response-section hidden" aria-live="polite">
+                        <h2 class="guest-response-title">Party RSVP</h2>
+                        <p class="form-hint">Confirm each guest's attendance and meal preference. Plus-ones can add their name before submitting.</p>
+                        <div id="guestResponseList" class="guest-response-list"></div>
+                        <div id="guestResponseMessage" class="guest-response-message" role="alert"></div>
+                    </div>
                     <div class="form-group">
                         <label for="rsvpEmail">Email *</label>
                         <input type="email" id="rsvpEmail" name="rsvpEmail" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Will you be attending? *</label>
-                        <div class="radio-group">
-                            <label class="radio-label">
-                                <input type="radio" name="attending" value="yes" required>
-                                <span>Joyfully Accepts</span>
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="attending" value="no">
-                                <span>Regretfully Declines</span>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="form-group hidden" id="guestCountGroup">
-                        <label for="guestCount">Number of Guests *</label>
-                        <input type="number" id="guestCount" name="guestCount" min="1" max="10" value="1">
-                    </div>
-                    <div class="form-group">
-                        <label for="mealChoice">Meal Preference</label>
-                        <select id="mealChoice" name="mealChoice">
-                            <option value="">Select your meal</option>
-                            <option value="chicken">Chicken</option>
-                            <option value="steak">Steak</option>
-                            <option value="vegetarian">Vegetarian</option>
-                        </select>
-                        <p class="form-hint">Choose one option for your party. You can update this later if plans change.</p>
                     </div>
                     <div class="form-group">
                         <label for="dietaryRestrictions">Dietary Restrictions or Allergies</label>
@@ -389,8 +368,8 @@
                     </article>
                     <article class="party-briefing-card">
                         <h2>Rehearsal Dinner</h2>
-                        <p>Immediately following rehearsal at <strong>The Dream Inn Deck</strong>.</p>
-                        <p>Casual coastal chic attire. Parking validations are covered—just bring your smiles (and an appetite).</p>
+                        <p>Immediately following rehearsal, located at <strong>Shadowbrook</strong>.</p>
+                        <p>Casual attire. Just bring your smiles (and an appetite).</p>
                     </article>
                     <article class="party-briefing-card">
                         <h2>Day-Of Timeline</h2>
@@ -403,8 +382,8 @@
                     </article>
                     <article class="party-briefing-card">
                         <h2>Need Help?</h2>
-                        <p>Text our coordinator, Shay, at <a href="tel:14085551234">(408) 555-1234</a> for any day-of surprises.</p>
-                        <p>Rain plan? Covered veranda. Emergency coffee? Also handled.</p>
+                        <p>Text us - you have our numbers!</p>
+                        <p>And if you don't yet, you can catch Kenny at <a href="tel:+14086934383">(408) 693-4383</a> or Morgan at <a href="tel:+14088541944">(408) 854-1944</a></p>
                     </article>
                 </div>
                 <div id="weddingPartyGrid" class="wedding-party-grid" aria-live="polite"></div>

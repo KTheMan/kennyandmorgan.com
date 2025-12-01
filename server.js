@@ -211,18 +211,35 @@ app.post('/api/rsvp', (req, res) => {
             specialMessage,
             songRequest,
             guestGroupId,
-            mealChoice
+            mealChoice,
+            guestResponses
         } = req.body || {};
 
         const submitterName = (rsvpName || name || '').trim();
         const submitterEmail = (rsvpEmail || email || '').trim();
-        const attendingFlag = attending === true || attending === 'yes';
         const guests = parseInt(guestCount, 10) || 1;
         const normalizedMealChoice = (mealChoice || '').trim();
         const normalizedDietary = (dietaryRestrictions || '').trim();
         const normalizedMessage = (specialMessage || '').trim();
         const normalizedSongRequest = (songRequest || '').trim();
         const normalizedGroupId = (guestGroupId || '').trim();
+        const normalizedGuestResponses = Array.isArray(guestResponses)
+            ? guestResponses.map(response => ({
+                guestId: parseInt(response.guestId, 10),
+                status: (response.status || '').toLowerCase(),
+                mealChoice: (response.mealChoice || '').trim(),
+                name: (response.name || '').trim()
+            })).filter(response => Number.isInteger(response.guestId) && ['accepted', 'declined'].includes(response.status))
+            : [];
+
+        if (normalizedGuestResponses.length && !normalizedGroupId) {
+            return res.status(400).json({ success: false, error: 'guestGroupId is required when submitting per-guest responses.' });
+        }
+
+        const attendingFlag = normalizedGuestResponses.length
+            ? normalizedGuestResponses.some(response => response.status === 'accepted')
+            : (attending === true || attending === 'yes');
+        const acceptedCount = normalizedGuestResponses.filter(response => response.status === 'accepted').length;
 
         if (!submitterName) {
             return res.status(400).json({ success: false, error: 'RSVP name is required.' });
@@ -236,12 +253,13 @@ app.post('/api/rsvp', (req, res) => {
             name: submitterName,
             email: submitterEmail,
             attending: attendingFlag,
-            guestCount: guests,
+            guestCount: acceptedCount || guests,
             dietaryRestrictions: normalizedDietary || null,
             specialMessage: (normalizedMessage || normalizedSongRequest) || null,
             songRequest: normalizedSongRequest || null,
             mealChoice: normalizedMealChoice || null,
-            guestGroupId: normalizedGroupId || null
+            guestGroupId: normalizedGroupId || null,
+            guestResponses: normalizedGuestResponses
         });
 
         return res.json({
@@ -349,26 +367,35 @@ app.post('/api/admin/guests/import', requireAccessLevel(ACCESS_LEVELS.ADMIN), (r
             trim: true
         });
 
-        const normalized = rows.map(row => ({
-            fullName: row.fullName || row.full_name || row.name,
-            email: row.email,
-            groupId: row.groupId || row.group_id,
-            isPrimary: row.isPrimary === 'true' || row.isPrimary === true || row.isPrimary === '1' || row.is_primary === '1',
-            isPlusOne: row.isPlusOne === 'true' || row.isPlusOne === true || row.isPlusOne === '1' || row.is_plus_one === '1',
-            notes: row.notes || row.note,
-            rsvpStatus: row.rsvpStatus || row.rsvp_status,
-            mealChoice: row.mealChoice || row.meal_choice,
-            dietaryNotes: row.dietaryNotes || row.dietary_notes,
-            addressLine1: row.addressLine1 || row.address_line1,
-            addressLine2: row.addressLine2 || row.address_line2,
-            city: row.city,
-            state: row.state,
-            postalCode: row.postalCode || row.postal_code || row.zip
-        })).filter(row => row.fullName && row.groupId);
+        const normalized = rows
+            .map(normalizeGuestImportRow)
+            .filter(row => row && row.fullName && row.groupId);
 
         if (!normalized.length) {
-            return res.status(400).json({ success: false, error: 'CSV must contain fullName and groupId columns.' });
+            return res.status(400).json({ success: false, error: 'CSV must contain recognizable name and party/group columns.' });
         }
+
+        const primaryTracker = new Set();
+        normalized.forEach(row => {
+            if (typeof row.isPrimary !== 'boolean') {
+                const key = row.groupId.toLowerCase();
+                if (!primaryTracker.has(key)) {
+                    row.isPrimary = true;
+                    primaryTracker.add(key);
+                } else {
+                    row.isPrimary = false;
+                }
+            } else if (row.isPrimary) {
+                primaryTracker.add(row.groupId.toLowerCase());
+            }
+
+            if (typeof row.isPlusOne !== 'boolean') {
+                const normalizedName = (row.fullName || '').toLowerCase();
+                row.isPlusOne = normalizedName.includes('guest');
+            }
+
+            row.notes = row.notes || null;
+        });
 
         const inserted = importGuests(normalized);
         res.json({ success: true, inserted });
@@ -377,6 +404,140 @@ app.post('/api/admin/guests/import', requireAccessLevel(ACCESS_LEVELS.ADMIN), (r
         res.status(500).json({ success: false, error: 'Unable to import CSV data.' });
     }
 });
+
+function normalizeGuestImportRow(row = {}) {
+    const get = buildCsvAccessor(row);
+
+    const firstName = get('first name', 'firstname', 'given name');
+    const lastName = get('last name', 'lastname', 'surname');
+    let fullName = get('full name', 'fullname', 'name');
+    if (!fullName) {
+        fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+    }
+
+    const groupId = get('group id', 'groupid', 'party', 'household', 'family');
+    if (!fullName || !groupId) {
+        return null;
+    }
+
+    const rawRsvp = get('rsvp', 'rsvp status', 'wedding day - rsvp');
+    const normalizedRsvp = normalizeRsvpStatus(rawRsvp);
+    const phone = get('phone', 'phone number', 'mobile');
+    const myNotes = get('my notes');
+    const thankYou = get('wedding day - thank you sent', 'thank you sent');
+    const giftReceived = get('wedding day - gift received', 'gift received');
+    const coupleNote = get('send a note to the couple?', 'note to couple');
+    const country = get('country');
+
+    const labeledNotes = [
+        myNotes || '',
+        phone ? `Phone: ${phone}` : '',
+        country && country.toLowerCase() !== 'united states' ? `Country: ${country}` : '',
+        thankYou ? `Thank you sent: ${thankYou}` : '',
+        giftReceived ? `Gift received: ${giftReceived}` : '',
+        coupleNote ? `Couple note: ${coupleNote}` : '',
+        !normalizedRsvp && rawRsvp ? `RSVP (original): ${rawRsvp}` : ''
+    ].filter(Boolean).join(' | ');
+
+    const isPrimaryFlag = parseBoolean(get('is primary', 'isprimary', 'primary'));
+    const isPlusOneFlag = parseBoolean(get('is plus one', 'isplusone', 'plus one'));
+
+    return {
+        fullName,
+        email: get('email') || undefined,
+        groupId,
+        isPrimary: typeof isPrimaryFlag === 'boolean' ? isPrimaryFlag : undefined,
+        isPlusOne: typeof isPlusOneFlag === 'boolean' ? isPlusOneFlag : undefined,
+        notes: labeledNotes || undefined,
+        rsvpStatus: normalizedRsvp,
+        mealChoice: get('meal choice', 'mealchoice') || undefined,
+        dietaryNotes: get('dietary notes', 'dietarynotes') || undefined,
+        addressLine1: get('street address 1', 'address line 1', 'address1', 'street') || undefined,
+        addressLine2: get('street address 2', 'address line 2', 'address2', 'street2') || undefined,
+        city: get('city') || undefined,
+        state: get('state', 'state/province', 'province') || undefined,
+        postalCode: get('zip', 'postal code', 'zip/postal code', 'zipcode', 'zip code') || undefined
+    };
+}
+
+function buildCsvAccessor(row = {}) {
+    const lookup = {};
+    Object.entries(row).forEach(([key, value]) => {
+        const normalizedKey = normalizeHeaderKey(key);
+        if (normalizedKey) {
+            lookup[normalizedKey] = value;
+        }
+    });
+
+    return (...candidates) => {
+        for (const candidate of candidates) {
+            const normalizedCandidate = normalizeHeaderKey(candidate);
+            if (!normalizedCandidate) {
+                continue;
+            }
+            if (Object.prototype.hasOwnProperty.call(lookup, normalizedCandidate)) {
+                const raw = lookup[normalizedCandidate];
+                if (raw === undefined || raw === null) {
+                    continue;
+                }
+                const value = typeof raw === 'string' ? raw.trim() : raw;
+                if (value === '') {
+                    continue;
+                }
+                return value;
+            }
+        }
+        return '';
+    };
+}
+
+function normalizeHeaderKey(key) {
+    return (key || '').toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function parseBoolean(value) {
+    if (typeof value === 'boolean') {
+        return value;
+    }
+    const normalized = (value || '').toString().trim().toLowerCase();
+    if (!normalized) {
+        return null;
+    }
+    if (['yes', 'true', '1', 'y'].includes(normalized)) {
+        return true;
+    }
+    if (['no', 'false', '0', 'n'].includes(normalized)) {
+        return false;
+    }
+    return null;
+}
+
+function normalizeRsvpStatus(value) {
+    if (!value) {
+        return undefined;
+    }
+    const normalized = value.toString().trim().toLowerCase();
+    if (!normalized) {
+        return undefined;
+    }
+
+    const acceptedMatches = ['attending', 'accepted', 'accepts', 'yes', 'will attend', 'going', 'confirmed'];
+    if (acceptedMatches.some(match => normalized === match || normalized.includes(match))) {
+        return 'accepted';
+    }
+
+    const pendingMatches = ['no response', 'pending', 'tbd', 'awaiting', 'unknown'];
+    if (pendingMatches.some(match => normalized === match || normalized.includes(match))) {
+        return 'pending';
+    }
+
+    const declinedMatches = ['declined', 'decline', 'not attending', 'cannot attend', "can't attend", 'won\'t attend', 'will not attend', 'regretfully declines'];
+    if (declinedMatches.some(match => normalized === match || normalized.includes(match))) {
+        return 'declined';
+    }
+
+    return undefined;
+}
 
 app.get('/api/registry', async (req, res) => {
     try {

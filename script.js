@@ -22,6 +22,8 @@ let registryConfig = {
 };
 
 let latestGuestLookupResults = [];
+let activeGuestParty = null;
+const guestResponseState = new Map();
 const registryFastPollClicks = new Map();
 const REGISTRY_FAST_POLL_CLICK_THROTTLE_MS = 60 * 1000;
 const ACCESS_LEVELS = {
@@ -35,6 +37,12 @@ const ACCESS_TOKEN_STORAGE_KEY = 'km_access_token';
 let currentAccessLevel = ACCESS_LEVELS.locked;
 let hasUnlockedOnce = false;
 const ACCESS_ORDER = [ACCESS_LEVELS.locked, ACCESS_LEVELS.family, ACCESS_LEVELS.party, ACCESS_LEVELS.admin];
+const MEAL_OPTIONS = [
+    { value: '', label: 'Select a meal' },
+    { value: 'chicken', label: 'Chicken' },
+    { value: 'steak', label: 'Steak' },
+    { value: 'vegetarian', label: 'Vegetarian' }
+];
 
 const weddingPartyMembers = [
     {
@@ -547,31 +555,15 @@ function initForms() {
     });
 
     setupGuestLookup();
-
-    // Show/hide guest count based on attendance
-    const attendingRadios = document.querySelectorAll('input[name="attending"]');
-    attendingRadios.forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            const guestCountGroup = document.getElementById('guestCountGroup');
-            if (e.target.value === 'yes') {
-                guestCountGroup.style.display = 'block';
-                document.getElementById('guestCount').required = true;
-            } else {
-                guestCountGroup.style.display = 'none';
-                document.getElementById('guestCount').required = false;
-            }
-        });
-    });
 }
 
 function setupGuestLookup() {
     const lookupButton = document.getElementById('guestLookupButton');
     const nameInput = document.getElementById('rsvpName');
-    const guestCountGroup = document.getElementById('guestCountGroup');
-    const guestCountInput = document.getElementById('guestCount');
     const hiddenGroupInput = document.getElementById('guestGroupId');
     const resultsContainer = document.getElementById('guestLookupResults');
     const messageElement = document.getElementById('guestLookupMessage');
+    const guestResponseList = document.getElementById('guestResponseList');
 
     if (!lookupButton || !nameInput || !resultsContainer || !messageElement) {
         return;
@@ -588,6 +580,7 @@ function setupGuestLookup() {
         if (hiddenGroupInput) {
             hiddenGroupInput.value = '';
         }
+        resetGuestResponseSection();
     };
 
     lookupButton.addEventListener('click', async () => {
@@ -596,6 +589,12 @@ function setupGuestLookup() {
 
         if (!query) {
             setLookupState('Please enter your full name first.', 'error');
+            return;
+        }
+
+        const nameParts = query.split(/\s+/).filter(Boolean);
+        if (nameParts.length < 2) {
+            setLookupState('Please enter your first and last name to continue.', 'error');
             return;
         }
 
@@ -646,17 +645,17 @@ function setupGuestLookup() {
             hiddenGroupInput.value = selectedGroup.groupId;
         }
 
-        if (guestCountGroup && guestCountInput && selectedGroup.guests?.length) {
-            guestCountGroup.classList.remove('hidden');
-            guestCountInput.value = selectedGroup.guests.length;
-        }
-
         if (selectedGroup.guests?.length) {
             nameInput.value = selectedGroup.primaryGuest || selectedGroup.guests[0].fullName;
         }
 
+        setActiveGuestParty(selectedGroup);
+        setGuestResponseMessage('');
         setLookupState(`Loaded guests for ${selectedGroup.primaryGuest || 'your party'}.`, 'success');
     });
+
+    guestResponseList?.addEventListener('change', handleGuestResponseListInput);
+    guestResponseList?.addEventListener('input', handleGuestResponseListInput);
 }
 
 function renderGuestLookupResults(container, groups) {
@@ -680,6 +679,204 @@ function renderGuestLookupResults(container, groups) {
             </article>
         `;
     }).join('');
+}
+
+function resetGuestResponseSection() {
+    activeGuestParty = null;
+    guestResponseState.clear();
+    const section = document.getElementById('guestResponseSection');
+    const list = document.getElementById('guestResponseList');
+    setGuestResponseMessage('');
+    if (section) {
+        section.classList.add('hidden');
+    }
+    if (list) {
+        list.innerHTML = '';
+    }
+}
+
+function setActiveGuestParty(group) {
+    if (!group) {
+        resetGuestResponseSection();
+        return;
+    }
+    activeGuestParty = {
+        groupId: group.groupId,
+        guests: Array.isArray(group.guests) ? group.guests : []
+    };
+    guestResponseState.clear();
+    activeGuestParty.guests.forEach(guest => {
+        guestResponseState.set(guest.id, {
+            status: normalizeGuestStatus(guest.rsvpStatus),
+            mealChoice: guest.mealChoice || '',
+            nameOverride: '',
+            originalName: guest.fullName
+        });
+    });
+    renderGuestResponseSection();
+}
+
+function renderGuestResponseSection() {
+    const section = document.getElementById('guestResponseSection');
+    const list = document.getElementById('guestResponseList');
+    if (!section || !list) {
+        return;
+    }
+    if (!activeGuestParty) {
+        section.classList.add('hidden');
+        list.innerHTML = '';
+        return;
+    }
+    section.classList.remove('hidden');
+
+    list.innerHTML = activeGuestParty.guests.map(guest => {
+        const state = guestResponseState.get(guest.id) || {};
+        const displayName = (state.nameOverride && state.nameOverride.trim()) || guest.fullName;
+        const requiresNameField = guest.fullName.toLowerCase().includes('guest');
+        const mealWrapperClass = state.status === 'accepted' ? 'guest-response-meal' : 'guest-response-meal hidden';
+        const guestRole = guest.isPlusOne ? 'Plus One' : (guest.isPrimary ? 'Primary Guest' : 'Guest');
+        return `
+            <div class="guest-response-card${requiresNameField ? ' is-guest-placeholder' : ''}" data-guest-card="${guest.id}">
+                <div class="guest-response-header">
+                    <p class="guest-response-name">${escapeHtml(displayName)}</p>
+                    <p class="guest-response-tag">${guestRole}</p>
+                </div>
+                <div class="guest-response-status">
+                    ${renderGuestStatusOption(guest.id, 'accepted', 'Joyfully Accepts', state.status === 'accepted')}
+                    ${renderGuestStatusOption(guest.id, 'declined', 'Regretfully Declines', state.status === 'declined')}
+                </div>
+                <div class="${mealWrapperClass}" data-guest-meal-wrapper="${guest.id}">
+                    <label>
+                        Meal Preference
+                        <select data-guest-meal="${guest.id}">
+                            ${renderMealOptions(state.mealChoice)}
+                        </select>
+                    </label>
+                </div>
+                ${requiresNameField ? renderGuestNameInput(guest.id, state.nameOverride) : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+function renderGuestStatusOption(guestId, value, label, isChecked) {
+    return `
+        <label>
+            <input type="radio" name="guest-status-${guestId}" value="${value}" data-guest-status="${guestId}" ${isChecked ? 'checked' : ''}>
+            <span>${label}</span>
+        </label>
+    `;
+}
+
+function renderMealOptions(selectedValue) {
+    return MEAL_OPTIONS.map(option => `
+        <option value="${option.value}" ${option.value === selectedValue ? 'selected' : ''}>${option.label}</option>
+    `).join('');
+}
+
+function renderGuestNameInput(guestId, currentValue = '') {
+    return `
+        <div class="guest-response-name-input">
+            <label>
+                Guest Name (optional)
+                <input type="text" placeholder="Add their name" data-guest-name="${guestId}" value="${escapeHtmlAttr(currentValue || '')}">
+            </label>
+        </div>
+    `;
+}
+
+function handleGuestResponseListInput(event) {
+    const target = event.target;
+    if (!activeGuestParty || !target) {
+        return;
+    }
+
+    if (target.matches('[data-guest-status]')) {
+        const guestId = Number(target.dataset.guestStatus);
+        const state = guestResponseState.get(guestId) || {};
+        state.status = target.value;
+        guestResponseState.set(guestId, state);
+        setGuestResponseMessage('');
+        const mealWrapper = document.querySelector(`[data-guest-meal-wrapper="${guestId}"]`);
+        if (mealWrapper) {
+            mealWrapper.classList.toggle('hidden', state.status !== 'accepted');
+        }
+    } else if (target.matches('[data-guest-meal]')) {
+        const guestId = Number(target.dataset.guestMeal);
+        const state = guestResponseState.get(guestId) || {};
+        state.mealChoice = target.value;
+        guestResponseState.set(guestId, state);
+    } else if (target.matches('[data-guest-name]')) {
+        const guestId = Number(target.dataset.guestName);
+        const state = guestResponseState.get(guestId) || {};
+        state.nameOverride = target.value;
+        guestResponseState.set(guestId, state);
+        const card = target.closest('[data-guest-card]');
+        const nameEl = card?.querySelector('.guest-response-name');
+        if (nameEl) {
+            nameEl.textContent = target.value.trim() || state.originalName || nameEl.textContent;
+        }
+    }
+}
+
+function getGuestDisplayName(guestId) {
+    const guest = activeGuestParty?.guests?.find(item => item.id === guestId);
+    const state = guestResponseState.get(guestId);
+    const override = state?.nameOverride?.trim();
+    return override || guest?.fullName || 'this guest';
+}
+
+function validateGuestResponses(responses) {
+    if (!activeGuestParty || !responses.length) {
+        return { valid: false, message: 'Please look up your party and respond for each guest.' };
+    }
+
+    const incomplete = responses.find(response => !response.status);
+    if (incomplete) {
+        return { valid: false, message: `Please choose accept or decline for ${getGuestDisplayName(incomplete.guestId)}.` };
+    }
+
+    const missingMeal = responses.find(response => response.status === 'accepted' && !response.mealChoice);
+    if (missingMeal) {
+        return { valid: false, message: `Select a meal for ${getGuestDisplayName(missingMeal.guestId)}.` };
+    }
+
+    return { valid: true };
+}
+
+function buildGuestResponsesPayload() {
+    if (!activeGuestParty) {
+        return [];
+    }
+    return activeGuestParty.guests.map(guest => {
+        const state = guestResponseState.get(guest.id) || {};
+        return {
+            guestId: guest.id,
+            status: state.status || null,
+            mealChoice: state.status === 'accepted' ? (state.mealChoice || '') : '',
+            name: state.nameOverride?.trim() || undefined
+        };
+    });
+}
+
+function setGuestResponseMessage(message = '', variant = 'error') {
+    const element = document.getElementById('guestResponseMessage');
+    if (!element) {
+        return;
+    }
+    element.textContent = message || '';
+    element.classList.remove('is-success');
+    if (message && variant === 'success') {
+        element.classList.add('is-success');
+    }
+}
+
+function normalizeGuestStatus(value) {
+    const normalized = (value || '').toLowerCase();
+    if (['accepted', 'declined', 'pending'].includes(normalized)) {
+        return normalized === 'pending' ? null : normalized;
+    }
+    return null;
 }
 
 function handleAddressSubmit(form) {
@@ -710,14 +907,32 @@ async function handleRSVPSubmit(form) {
     const payload = {
         name: data.rsvpName,
         email: data.rsvpEmail,
-        attending: data.attending === 'yes',
-        guestCount: data.guestCount ? Number(data.guestCount) : undefined,
         dietaryRestrictions: data.dietaryRestrictions || '',
         specialMessage: data.specialMessage || data.songRequest || '',
         songRequest: data.songRequest || '',
-        guestGroupId: data.guestGroupId || '',
-        mealChoice: data.mealChoice || ''
+        guestGroupId: data.guestGroupId || ''
     };
+
+    if (!payload.guestGroupId) {
+        setGuestResponseMessage('Please find your party first.');
+        showMessage('rsvpMessage', 'Please look up your party before submitting your RSVP.', 'error');
+        return;
+    }
+
+    const guestResponses = buildGuestResponsesPayload();
+    const validation = validateGuestResponses(guestResponses);
+    if (!validation.valid) {
+        setGuestResponseMessage(validation.message || 'Please complete the RSVP for each guest.');
+        showMessage('rsvpMessage', validation.message || 'Please complete the RSVP for each guest.', 'error');
+        return;
+    }
+
+    payload.guestResponses = guestResponses;
+    payload.attending = guestResponses.some(response => response.status === 'accepted');
+    const attendingCount = guestResponses.filter(response => response.status === 'accepted').length;
+    if (attendingCount > 0) {
+        payload.guestCount = attendingCount;
+    }
 
     const apiBase = resolveApiBaseUrl();
     submitButton?.setAttribute('disabled', 'disabled');
@@ -737,7 +952,7 @@ async function handleRSVPSubmit(form) {
 
         showMessage('rsvpMessage', result.message || 'Thank you for your RSVP!', 'success');
         form.reset();
-        document.getElementById('guestCountGroup').style.display = 'none';
+        resetGuestResponseSection();
     } catch (error) {
         console.error('Unable to submit RSVP:', error);
         showMessage('rsvpMessage', 'We could not save your RSVP. Please try again or contact us directly.', 'error');
@@ -1439,4 +1654,15 @@ function resolveApiBaseUrl() {
 
 function getApiUrl() {
     return resolveApiBaseUrl();
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function escapeHtmlAttr(value) {
+    return escapeHtml(value).replace(/"/g, '&quot;');
 }

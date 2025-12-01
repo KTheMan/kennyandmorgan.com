@@ -41,15 +41,17 @@ The server will start on port 3000 by default (configurable via PORT environment
 
 ### Admin Guest CSV Columns
 
-When calling `/api/admin/guests/import`, each row can now include optional address fields. Supported headers (case-insensitive, snake_case or camelCase) include:
+When calling `/api/admin/guests/import`, each row can now include optional address fields. Supported headers (case-insensitive, snake_case or camelCase) include the original internal columns **and** The Knot export format. Common aliases:
 
-```
-fullName, email, groupId, isPrimary, isPlusOne, notes,
-rsvpStatus, mealChoice, dietaryNotes,
-addressLine1, addressLine2, city, state, postalCode
-```
+- Names: `fullName`, or `First Name`/`Last Name`
+- Party/Group: `groupId`, `Party`, `Household`, `Family`
+- Contact: `Email`, `Phone`
+- Address: `Street Address 1`, `Street Address 2`, `City`, `State/Province`, `Zip/Postal Code`, `Country`
+- RSVP meta: `Wedding Day - RSVP`, `My Notes`, `Wedding Day - Thank You Sent`, `Wedding Day - Gift Received`, `Send a note to the couple?`
+- Flags: `isPrimary`, `isPlusOne`
+- Extras: `mealChoice`, `dietaryNotes`
 
-Missing fields default to `null`, so you can migrate your address book incrementally.
+Importer defaults the first person in each party to `isPrimary` when not provided, flags any name containing “Guest” as a plus-one, and copies unused Knot columns into the guest `notes` field so nothing gets lost.
 
 ## API Endpoints
 
@@ -94,6 +96,31 @@ The site-wide overlay and the admin console both authenticate through these endp
 - Requires the same bearer token header and revokes the session immediately.
 
 > ℹ️ Only the admin-level password (defaults to `Binx123!` or `ACCESS_PASSWORD_ADMIN`) can access `/api/admin/*` routes. Family/party tiers stop at front-end content unlocks and will receive `403` responses if they hit privileged endpoints.
+
+### Submit RSVPs
+
+**POST** `/api/rsvp`
+
+Primary request body fields:
+
+- `name` / `rsvpName` – contact submitting the form
+- `email` / `rsvpEmail` – reply-to email
+- `guestGroupId` – required when sending per-guest responses
+- `dietaryRestrictions`, `songRequest`, `specialMessage` – optional party-level notes
+- `guestResponses` – array of guest-level responses (preferred)
+
+Each `guestResponses` entry supports:
+
+```json
+{
+  "guestId": 42,
+  "status": "accepted",           // accepted | declined
+  "mealChoice": "chicken",        // required when status === accepted
+  "name": "Morgan's college friend" // optional override for placeholder names
+}
+```
+
+If `guestResponses` is omitted, the legacy `attending` + `guestCount` fields are still honored and the status is applied to the entire group. When per-guest responses are provided, the server updates each guest’s `rsvp_status`, `meal_choice`, and (optionally) `full_name`, while also logging the submission in `rsvp_submissions`.
 
 ### Get All Registry Items
 
