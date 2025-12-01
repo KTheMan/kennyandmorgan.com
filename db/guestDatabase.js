@@ -1,89 +1,4 @@
-const path = require('path');
-const fs = require('fs');
-const Database = require('better-sqlite3');
-
-const DEFAULT_DB_PATH = process.env.GUEST_DB_PATH || path.join(__dirname, '..', 'data', 'guests.db');
-let dbInstance;
-
-function getDatabasePath() {
-    return process.env.GUEST_DB_PATH || DEFAULT_DB_PATH;
-}
-
-function getDb() {
-    if (dbInstance) {
-        return dbInstance;
-    }
-
-    const dbPath = getDatabasePath();
-    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-
-    dbInstance = new Database(dbPath, { fileMustExist: false });
-    dbInstance.pragma('journal_mode = WAL');
-
-    dbInstance.exec(`
-        CREATE TABLE IF NOT EXISTS guests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            full_name TEXT NOT NULL,
-            email TEXT,
-            group_id TEXT NOT NULL,
-            is_primary INTEGER DEFAULT 0,
-            is_plus_one INTEGER DEFAULT 0,
-            rsvp_status TEXT DEFAULT 'pending',
-            meal_choice TEXT,
-            dietary_notes TEXT,
-            last_rsvp_at TEXT,
-            notes TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS admin_settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS rsvp_submissions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            group_id TEXT,
-            submitter_name TEXT NOT NULL,
-            submitter_email TEXT,
-            attending INTEGER NOT NULL,
-            guest_count INTEGER NOT NULL,
-            meal_choice TEXT,
-            dietary_notes TEXT,
-            special_message TEXT,
-            song_request TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_guests_group ON guests(group_id);
-        CREATE INDEX IF NOT EXISTS idx_guests_name ON guests(full_name COLLATE NOCASE);
-        CREATE INDEX IF NOT EXISTS idx_rsvp_group ON rsvp_submissions(group_id);
-    `);
-
-    ensureGuestSchema(dbInstance);
-    ensureRsvpSchema(dbInstance);
-
-    return dbInstance;
-}
-
-function ensureTableColumn(db, table, columnName, columnDefinition) {
-    const columns = db.prepare(`PRAGMA table_info(${table})`).all();
-    if (!columns.some(column => column.name === columnName)) {
-        db.prepare(`ALTER TABLE ${table} ADD COLUMN ${columnDefinition}`).run();
-    }
-}
-
-function ensureGuestSchema(db) {
-    ensureTableColumn(db, 'guests', 'rsvp_status', "rsvp_status TEXT DEFAULT 'pending'");
-    ensureTableColumn(db, 'guests', 'meal_choice', 'meal_choice TEXT');
-    ensureTableColumn(db, 'guests', 'dietary_notes', 'dietary_notes TEXT');
-    ensureTableColumn(db, 'guests', 'last_rsvp_at', 'last_rsvp_at TEXT');
-}
-
-function ensureRsvpSchema(db) {
-    ensureTableColumn(db, 'rsvp_submissions', 'song_request', 'song_request TEXT');
-}
+const { getDb } = require('./index');
 
 function searchGuestGroupsByName(name, options = {}) {
     const searchTerm = (name || '').trim();
@@ -338,8 +253,6 @@ function recordRsvpSubmission(data) {
 }
 
 module.exports = {
-    getDatabasePath,
-    getDb,
     searchGuestGroupsByName,
     replaceGuestRoster,
     listGuests,

@@ -1,0 +1,52 @@
+const path = require('path');
+require('dotenv').config();
+
+const bool = (value, fallback = false) => {
+    if (value === undefined) return fallback;
+    if (typeof value === 'boolean') return value;
+    const normalized = value.toString().toLowerCase();
+    return normalized === 'true' || normalized === '1';
+};
+
+const numberFromEnv = (key, fallback) => {
+    const raw = process.env[key];
+    if (!raw) return fallback;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const listFromEnv = (value) => (value ? value.split(',').map(item => item.trim()).filter(Boolean) : []);
+
+const databasePath = process.env.DATABASE_PATH
+    || process.env.GUEST_DB_PATH
+    || path.join(__dirname, '..', 'data', 'guests.db');
+
+const config = {
+    env: process.env.NODE_ENV || 'development',
+    server: {
+        port: numberFromEnv('PORT', 3000)
+    },
+    cors: {
+        allowedOrigins: listFromEnv(process.env.ALLOWED_ORIGINS)
+    },
+    database: {
+        path: databasePath
+    },
+    admin: {
+        password: process.env.ADMIN_PASSWORD || '',
+        sessionTtlMs: numberFromEnv('ADMIN_SESSION_TTL_MS', 1000 * 60 * 60),
+        saltRounds: numberFromEnv('ADMIN_SALT_ROUNDS', 10)
+    },
+    registry: {
+        pollIntervalMs: numberFromEnv('REGISTRY_POLL_INTERVAL_MS', 1000 * 60 * 60),
+        fastPollIntervalMs: numberFromEnv('REGISTRY_FAST_POLL_INTERVAL_MS', 1000 * 120),
+        fastPollDurationMs: numberFromEnv('REGISTRY_FAST_POLL_DURATION_MS', 1000 * 60 * 30),
+        fastPollSweepMs: numberFromEnv('REGISTRY_FAST_POLL_SWEEP_MS', 1000 * 30),
+        fastPollBatchLimit: numberFromEnv('REGISTRY_FAST_POLL_BATCH_LIMIT', 5)
+    },
+    features: {
+        logRegistryDebug: bool(process.env.LOG_REGISTRY_DEBUG, false)
+    }
+};
+
+module.exports = config;

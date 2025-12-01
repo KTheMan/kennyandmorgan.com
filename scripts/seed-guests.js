@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 const fs = require('fs');
 const path = require('path');
-const { replaceGuestRoster, getDatabasePath } = require('../db/guestDatabase');
+const config = require('../config');
+const { replaceGuestRoster } = require('../db/guestDatabase');
 
 (async function seed() {
     try {
@@ -22,7 +23,7 @@ const { replaceGuestRoster, getDatabasePath } = require('../db/guestDatabase');
 
         replaceGuestRoster(payload);
         console.log(`Guest roster imported from ${sourcePath}`);
-        console.log(`SQLite database location: ${getDatabasePath()}`);
+        console.log(`SQLite database location: ${config.database.path}`);
     } catch (error) {
         console.error('Unable to seed guests:', error);
         process.exit(1);

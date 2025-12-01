@@ -1,46 +1,5 @@
 const crypto = require('crypto');
-const { getDb } = require('./guestDatabase');
-
-let initialized = false;
-
-function initTables() {
-    if (initialized) {
-        return;
-    }
-    const db = getDb();
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS registry_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            store TEXT NOT NULL,
-            external_id TEXT NOT NULL,
-            source_item_id TEXT,
-            name TEXT NOT NULL,
-            price REAL,
-            currency TEXT,
-            url TEXT,
-            image_url TEXT,
-            available INTEGER DEFAULT 1,
-            wanted_quantity INTEGER,
-            purchased_quantity INTEGER,
-            metadata_json TEXT,
-            last_polled_at TEXT,
-            fast_poll_until TEXT,
-            last_fast_poll_at TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(store, external_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS registry_store_state (
-            store TEXT PRIMARY KEY,
-            last_full_poll_at TEXT
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_registry_store ON registry_items(store);
-        CREATE INDEX IF NOT EXISTS idx_registry_fast_poll ON registry_items(fast_poll_until);
-    `);
-    initialized = true;
-}
+const { getDb } = require('./index');
 
 function normalizeStore(store) {
     return (store || '').toLowerCase();
@@ -105,7 +64,6 @@ function normalizeItem(store, item) {
 }
 
 function upsertRegistryItems(store, items = []) {
-    initTables();
     const db = getDb();
     const normalizedStore = normalizeStore(store);
     const normalizedItems = items
@@ -162,7 +120,6 @@ function upsertRegistryItems(store, items = []) {
 }
 
 function getRegistryItems(options = {}) {
-    initTables();
     const db = getDb();
     const store = normalizeStore(options.store);
     const includeUnavailable = Boolean(options.includeUnavailable);
@@ -209,13 +166,11 @@ function mapRegistryRow(row, nowIso = new Date().toISOString()) {
 }
 
 function getItemById(id) {
-    initTables();
     const db = getDb();
     return db.prepare('SELECT * FROM registry_items WHERE id = ?').get(id);
 }
 
 function markItemForFastPoll(id, durationMs) {
-    initTables();
     const db = getDb();
     const until = new Date(Date.now() + durationMs).toISOString();
     const result = db.prepare(`
@@ -233,7 +188,6 @@ function markItemForFastPoll(id, durationMs) {
 }
 
 function getFastPollCandidates(fastIntervalMs) {
-    initTables();
     const db = getDb();
     const nowIso = new Date().toISOString();
     const threshold = new Date(Date.now() - fastIntervalMs).toISOString();
@@ -248,7 +202,6 @@ function getFastPollCandidates(fastIntervalMs) {
 }
 
 function touchFastPollTimestamp(id) {
-    initTables();
     const db = getDb();
     db.prepare(`
         UPDATE registry_items
@@ -259,7 +212,6 @@ function touchFastPollTimestamp(id) {
 }
 
 function getStoreState(store) {
-    initTables();
     const db = getDb();
     return db.prepare('SELECT * FROM registry_store_state WHERE store = ?').get(normalizeStore(store));
 }
