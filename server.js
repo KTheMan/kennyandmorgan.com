@@ -1,10 +1,9 @@
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios');
-const cheerio = require('cheerio');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { parse: parseCsv } = require('csv-parse/sync');
+const config = require('./config');
 const {
     searchGuestGroupsByName,
     recordRsvpSubmission,
@@ -17,29 +16,24 @@ const {
     setAdminPasswordHash
 } = require('./db/guestDatabase');
 const {
-    upsertRegistryItems,
-    getRegistryItems: getCachedRegistryItems,
-    markItemForFastPoll,
-    getFastPollCandidates,
-    touchFastPollTimestamp,
-    getStoreState
-} = require('./db/registryCache');
-require('dotenv').config();
+    storeKeys,
+    isRegisteredStore,
+    queueStoreRefresh,
+    refreshAllStores,
+    ensureStoreFreshness,
+    startPolling,
+    getCachedItems,
+    scheduleFastPoll
+} = require('./services/registryService');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const ADMIN_SESSION_TTL_MS = parseInt(process.env.ADMIN_SESSION_TTL_MS || `${1000 * 60 * 60}`, 10);
-const ADMIN_SALT_ROUNDS = parseInt(process.env.ADMIN_SALT_ROUNDS || '10', 10);
+const PORT = config.server.port;
+const ADMIN_SESSION_TTL_MS = config.admin.sessionTtlMs;
+const ADMIN_SALT_ROUNDS = config.admin.saltRounds;
 const adminSessions = new Map();
-const REGISTRY_POLL_INTERVAL_MS = parseInt(process.env.REGISTRY_POLL_INTERVAL_MS || `${1000 * 60 * 60}`, 10);
-const REGISTRY_FAST_POLL_DURATION_MS = parseInt(process.env.REGISTRY_FAST_POLL_DURATION_MS || `${1000 * 60 * 30}`, 10);
-const REGISTRY_FAST_POLL_INTERVAL_MS = parseInt(process.env.REGISTRY_FAST_POLL_INTERVAL_MS || `${1000 * 120}`, 10);
-const REGISTRY_FAST_POLL_SWEEP_MS = parseInt(process.env.REGISTRY_FAST_POLL_SWEEP_MS || `${1000 * 30}`, 10);
-const REGISTRY_FAST_POLL_BATCH_LIMIT = parseInt(process.env.REGISTRY_FAST_POLL_BATCH_LIMIT || '5', 10);
-const activeStoreRefreshes = new Map();
+const allowedOrigins = config.cors.allowedOrigins || [];
 
 // Middleware
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
 app.use(cors({
     origin: function(origin, callback) {
         // Allow requests with no origin (like mobile apps or curl requests)
@@ -60,7 +54,7 @@ app.use(express.json({ limit: '1mb' }));
 function ensureAdminPasswordHash() {
     try {
         const storedHash = getAdminPasswordHash();
-        const envPassword = process.env.ADMIN_PASSWORD;
+        const envPassword = config.admin.password;
 
         if (!storedHash && envPassword) {
             const hash = bcrypt.hashSync(envPassword, ADMIN_SALT_ROUNDS);
@@ -92,79 +86,38 @@ function cleanupExpiredSessions() {
 
 function createAdminSession() {
     cleanupExpiredSessions();
-    // Get registry items (cached)
-    app.get('/api/registry', async (req, res) => {
-        try {
-            const storeParam = (req.query.store || 'all').toLowerCase();
-            const includeUnavailable = req.query.includeUnavailable === 'true';
-            const forceRefresh = req.query.forceRefresh === 'true';
-
-            if (storeParam !== 'all' && !isRegisteredStore(storeParam)) {
-                return res.status(400).json({ success: false, error: 'Invalid store name' });
-            }
-
-            if (forceRefresh) {
-                if (storeParam === 'all') {
-                    await refreshAllStores('api-force');
-                } else {
-                    await queueStoreRefresh(storeParam, { reason: 'api-force' });
-                }
-            } else {
-                if (storeParam === 'all') {
-                    registryStoreKeys.forEach(store => ensureStoreFreshness(store));
-                } else {
-                    ensureStoreFreshness(storeParam);
-                }
-            }
-
-            const items = getCachedRegistryItems({ store: storeParam, includeUnavailable });
-            res.json({ success: true, store: storeParam, count: items.length, items });
-        } catch (error) {
-            console.error('Error serving cached registry items:', error);
-            res.status(500).json({ success: false, error: 'Failed to load registry items', message: error.message });
-        }
-    });
-
-    // Get cached items from a specific store
-    app.get('/api/registry/:store', async (req, res) => {
-        try {
-            const store = (req.params.store || '').toLowerCase();
-            const includeUnavailable = req.query.includeUnavailable === 'true';
-            const forceRefresh = req.query.forceRefresh === 'true';
-
-            if (!isRegisteredStore(store)) {
-                return res.status(400).json({ success: false, error: 'Invalid store name' });
-            }
-
-            if (forceRefresh) {
-                await queueStoreRefresh(store, { reason: 'api-force' });
-            } else {
-                ensureStoreFreshness(store);
-            }
-
-            const items = getCachedRegistryItems({ store, includeUnavailable });
-            res.json({ success: true, store, count: items.length, items });
-        } catch (error) {
-            console.error('Error serving cached store registry:', error);
-            res.status(500).json({ success: false, error: 'Failed to load registry store', message: error.message });
-        }
-    });
-        const grouped = candidates.reduce((acc, row) => {
-            acc[row.store] = acc[row.store] || [];
-            acc[row.store].push(row);
-            return acc;
-        }, {});
-
-        await Promise.all(Object.entries(grouped).map(async ([store, rows]) => {
-            try {
-                await queueStoreRefresh(store, { reason: 'fast-poll' });
-                rows.forEach(row => touchFastPollTimestamp(row.id));
-            } catch (error) {
-                console.error(`[registry] Fast poll failed for ${store}:`, error.message);
-            }
-        }));
-    }, REGISTRY_FAST_POLL_SWEEP_MS);
+    const token = crypto.randomBytes(32).toString('hex');
+    adminSessions.set(token, { createdAt: Date.now() });
+    return token;
 }
+
+function extractAdminToken(req) {
+    const header = req.headers.authorization || '';
+    if (header.toLowerCase().startsWith('bearer ')) {
+        return header.slice(7).trim();
+    }
+    if (req.headers['x-admin-token']) {
+        return String(req.headers['x-admin-token']).trim();
+    }
+    if (req.query.token) {
+        return String(req.query.token).trim();
+    }
+    return null;
+}
+
+function requireAdminAuth(req, res, next) {
+    cleanupExpiredSessions();
+    const token = extractAdminToken(req);
+    if (!token || !adminSessions.has(token)) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+    req.adminToken = token;
+    req.adminSession = adminSessions.get(token);
+    req.adminSession.lastSeenAt = Date.now();
+    return next();
+}
+
+ensureAdminPasswordHash();
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -380,137 +333,57 @@ app.post('/api/admin/guests/import', requireAdminAuth, (req, res) => {
     }
 });
 
-// Get all registry items
 app.get('/api/registry', async (req, res) => {
     try {
-        const { store } = req.query;
-        
-        let items = [];
-        
-        if (!store || store === 'all') {
-            // Fetch from all stores
-            const results = await Promise.allSettled([
-                amazonScraper.getItems(process.env.AMAZON_REGISTRY_ID),
-                targetScraper.getItems(process.env.TARGET_REGISTRY_ID),
-                crateAndBarrelScraper.getItems(process.env.CRATE_AND_BARREL_REGISTRY_ID),
-                potteryBarnScraper.getItems(process.env.POTTERY_BARN_REGISTRY_ID),
-                williamsSonomaScraper.getItems(process.env.WILLIAMS_SONOMA_REGISTRY_ID),
-                reiScraper.getItems(process.env.REI_REGISTRY_ID),
-                zolaScraper.getItems(process.env.ZOLA_REGISTRY_ID),
-                heathCeramicsScraper.getItems(process.env.HEATH_CERAMICS_REGISTRY_ID)
-            ]);
-            
-            results.forEach(result => {
-                if (result.status === 'fulfilled') {
-                    items.push(...result.value);
-                }
-            });
-        } else {
-            // Fetch from specific store
-            switch(store.toLowerCase()) {
-                case 'amazon':
-                    items = await amazonScraper.getItems(process.env.AMAZON_REGISTRY_ID);
-                    break;
-                case 'target':
-                    items = await targetScraper.getItems(process.env.TARGET_REGISTRY_ID);
-                    break;
-                case 'crateandbarrel':
-                    items = await crateAndBarrelScraper.getItems(process.env.CRATE_AND_BARREL_REGISTRY_ID);
-                    break;
-                case 'potterybarn':
-                    items = await potteryBarnScraper.getItems(process.env.POTTERY_BARN_REGISTRY_ID);
-                    break;
-                case 'williamsonoma':
-                    items = await williamsSonomaScraper.getItems(process.env.WILLIAMS_SONOMA_REGISTRY_ID);
-                    break;
-                case 'rei':
-                    items = await reiScraper.getItems(process.env.REI_REGISTRY_ID);
-                    break;
-                case 'zola':
-                    items = await zolaScraper.getItems(process.env.ZOLA_REGISTRY_ID);
-                    break;
-                case 'heathceramics':
-                    items = await heathCeramicsScraper.getItems(process.env.HEATH_CERAMICS_REGISTRY_ID);
-                    break;
-                default:
-                    return res.status(400).json({ error: 'Invalid store name' });
-            }
+        const storeParam = (req.query.store || 'all').toLowerCase();
+        const includeUnavailable = req.query.includeUnavailable === 'true';
+        const forceRefresh = req.query.forceRefresh === 'true';
+
+        if (storeParam !== 'all' && !isRegisteredStore(storeParam)) {
+            return res.status(400).json({ success: false, error: 'Invalid store name' });
         }
-        
-        res.json({
-            success: true,
-            count: items.length,
-            items: items
-        });
+
+        if (forceRefresh) {
+            if (storeParam === 'all') {
+                await refreshAllStores('api-force');
+            } else {
+                await queueStoreRefresh(storeParam, { reason: 'api-force' });
+            }
+        } else if (storeParam === 'all') {
+            storeKeys.forEach(store => ensureStoreFreshness(store));
+        } else {
+            ensureStoreFreshness(storeParam);
+        }
+
+        const items = getCachedItems({ store: storeParam, includeUnavailable });
+        res.json({ success: true, store: storeParam, count: items.length, items });
     } catch (error) {
-        console.error('Error fetching registry items:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to fetch registry items',
-            message: error.message
-        });
+        console.error('Error serving cached registry items:', error);
+        res.status(500).json({ success: false, error: 'Failed to load registry items', message: error.message });
     }
 });
 
-// Get items from a specific store
 app.get('/api/registry/:store', async (req, res) => {
     try {
-        const { store } = req.params;
-        let items = [];
-        
-        switch(store.toLowerCase()) {
-            case 'amazon':
-                items = await amazonScraper.getItems(process.env.AMAZON_REGISTRY_ID);
-                break;
-            case 'target':
-                items = await targetScraper.getItems(process.env.TARGET_REGISTRY_ID);
-                break;
-            case 'crateandbarrel':
-                items = await crateAndBarrelScraper.getItems(process.env.CRATE_AND_BARREL_REGISTRY_ID);
-                break;
-            case 'potterybarn':
-                items = await potteryBarnScraper.getItems(process.env.POTTERY_BARN_REGISTRY_ID);
-                break;
-            case 'williamsonoma':
-                items = await williamsSonomaScraper.getItems(process.env.WILLIAMS_SONOMA_REGISTRY_ID);
-                break;
-            case 'rei':
-                items = await reiScraper.getItems(process.env.REI_REGISTRY_ID);
-                break;
-            case 'zola':
-                items = await zolaScraper.getItems(process.env.ZOLA_REGISTRY_ID);
-                break;
-            case 'heathceramics':
-                items = await heathCeramicsScraper.getItems(process.env.HEATH_CERAMICS_REGISTRY_ID);
-                break;
-            default:
-                return res.status(400).json({ error: 'Invalid store name' });
+        const store = (req.params.store || '').toLowerCase();
+        const includeUnavailable = req.query.includeUnavailable === 'true';
+        const forceRefresh = req.query.forceRefresh === 'true';
+
+        if (!isRegisteredStore(store)) {
+            return res.status(400).json({ success: false, error: 'Invalid store name' });
         }
-        
-        res.json({
-            success: true,
-            store: store,
-            count: items.length,
-            items: items
-        });
+
+        if (forceRefresh) {
+            await queueStoreRefresh(store, { reason: 'api-force' });
+        } else {
+            ensureStoreFreshness(store);
+        }
+
+        const items = getCachedItems({ store, includeUnavailable });
+        res.json({ success: true, store, count: items.length, items });
     } catch (error) {
-        const storeNames = {
-            'amazon': 'Amazon',
-            'target': 'Target',
-            'crateandbarrel': 'Crate & Barrel',
-            'potterybarn': 'Pottery Barn',
-            'williamsonoma': 'Williams-Sonoma',
-            'rei': 'REI',
-            'zola': 'Zola',
-            'heathceramics': 'Heath Ceramics'
-        };
-        const storeName = storeNames[req.params.store.toLowerCase()] || 'registry';
-        console.error(`Error fetching ${storeName} registry:`, error);
-        res.status(500).json({
-            success: false,
-            error: `Failed to fetch ${storeName} registry`,
-            message: error.message
-        });
+        console.error('Error serving cached store registry:', error);
+        res.status(500).json({ success: false, error: 'Failed to load registry store', message: error.message });
     }
 });
 
@@ -520,11 +393,10 @@ app.post('/api/registry/items/:id/fast-poll', async (req, res) => {
         if (!cacheId) {
             return res.status(400).json({ success: false, error: 'Invalid item id' });
         }
-        const record = markItemForFastPoll(cacheId, REGISTRY_FAST_POLL_DURATION_MS);
+        const record = await scheduleFastPoll(cacheId);
         if (!record) {
             return res.status(404).json({ success: false, error: 'Registry item not found' });
         }
-        queueStoreRefresh(record.store, { reason: 'user-fast-poll' }).catch(() => {});
         res.json({
             success: true,
             cacheId,
@@ -537,6 +409,7 @@ app.post('/api/registry/items/:id/fast-poll', async (req, res) => {
         res.status(500).json({ success: false, error: 'Unable to schedule fast polling', message: error.message });
     }
 });
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -552,7 +425,7 @@ refreshAllStores('startup').catch(error => {
     console.warn('[registry] Initial refresh failed:', error.message);
 });
 
-scheduleRegistryPolling();
+startPolling();
 
 // Start server
 app.listen(PORT, () => {

@@ -42,7 +42,17 @@ const config = {
         fastPollIntervalMs: numberFromEnv('REGISTRY_FAST_POLL_INTERVAL_MS', 1000 * 120),
         fastPollDurationMs: numberFromEnv('REGISTRY_FAST_POLL_DURATION_MS', 1000 * 60 * 30),
         fastPollSweepMs: numberFromEnv('REGISTRY_FAST_POLL_SWEEP_MS', 1000 * 30),
-        fastPollBatchLimit: numberFromEnv('REGISTRY_FAST_POLL_BATCH_LIMIT', 5)
+        fastPollBatchLimit: numberFromEnv('REGISTRY_FAST_POLL_BATCH_LIMIT', 5),
+        storeIds: {
+            amazon: process.env.AMAZON_REGISTRY_ID || '',
+            target: process.env.TARGET_REGISTRY_ID || '',
+            crateandbarrel: process.env.CRATE_AND_BARREL_REGISTRY_ID || '',
+            potterybarn: process.env.POTTERY_BARN_REGISTRY_ID || '',
+            williamsonoma: process.env.WILLIAMS_SONOMA_REGISTRY_ID || '',
+            rei: process.env.REI_REGISTRY_ID || '',
+            zola: process.env.ZOLA_REGISTRY_ID || '',
+            heathceramics: process.env.HEATH_CERAMICS_REGISTRY_ID || ''
+        }
     },
     features: {
         logRegistryDebug: bool(process.env.LOG_REGISTRY_DEBUG, false)

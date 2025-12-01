@@ -10,7 +10,20 @@
     <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
     <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="access-locked" data-access-level="locked">
+    <div id="accessOverlay" class="access-overlay" role="dialog" aria-modal="true" aria-labelledby="accessOverlayTitle">
+        <div class="access-overlay-card">
+            <h2 id="accessOverlayTitle">Welcome to Kenny &amp; Morgan's Celebration</h2>
+            <p class="access-overlay-subtitle">Enter the family password to unlock the site.</p>
+            <form id="accessForm" class="access-form">
+                <label class="access-label" for="accessPassword">Password</label>
+                <input type="password" id="accessPassword" class="access-input" autocomplete="off" required>
+                <button type="submit" class="btn btn-primary access-submit">Unlock</button>
+                <p id="accessStatus" class="access-status" role="alert"></p>
+            </form>
+            <p class="access-hint">Need help? Reach out to Kenny or Morgan for the latest password.</p>
+        </div>
+    </div>
     <header>
         <nav>
             <div class="logo">K & M</div>
@@ -19,11 +32,21 @@
                 <li><a href="#rsvp" class="nav-link">RSVP</a></li>
                 <li><a href="#theme" class="nav-link">Wedding Theme</a></li>
                 <li><a href="#registry" class="nav-link">Registry</a></li>
+                <li class="access-conditional" data-access-visible="party"><a href="#wedding-party" class="nav-link">Wedding Party</a></li>
             </ul>
-            <div class="burger">
-                <div class="line1"></div>
-                <div class="line2"></div>
-                <div class="line3"></div>
+            <div class="nav-actions">
+                <div class="admin-quick-menu access-conditional" data-access-visible="admin">
+                    <button type="button" id="adminMenuToggle" class="admin-menu-toggle" aria-haspopup="true" aria-expanded="false">
+                        <span class="sr-only">Open admin shortcuts</span>
+                        <span class="admin-menu-icon" aria-hidden="true"></span>
+                    </button>
+                    <div class="admin-menu-panel" id="adminMenuPanel" role="menu" aria-hidden="true"></div>
+                </div>
+                <div class="burger" aria-label="Toggle navigation" role="button" tabindex="0">
+                    <div class="line1"></div>
+                    <div class="line2"></div>
+                    <div class="line3"></div>
+                </div>
             </div>
         </nav>
     </header>
@@ -350,6 +373,41 @@
                         <p>Rustic Elegance - Natural beauty meets sophisticated charm</p>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        <!-- Wedding Party Section -->
+        <section id="wedding-party" class="page access-conditional" data-access-visible="party">
+            <div class="container">
+                <h1>Wedding Party HQ</h1>
+                <p class="section-subtitle">Logistics, love, and shout-outs for the fifteen incredible humans standing beside us.</p>
+                <div class="party-briefing-grid">
+                    <article class="party-briefing-card">
+                        <h2>Rehearsal</h2>
+                        <p>Friday, September 11 at 5:30&nbsp;PM</p>
+                        <p>Hollins House lawn (same ceremony space). Please arrive by 5:15&nbsp;PM for a quick lineup walkthrough.</p>
+                    </article>
+                    <article class="party-briefing-card">
+                        <h2>Rehearsal Dinner</h2>
+                        <p>Immediately following rehearsal at <strong>The Dream Inn Deck</strong>.</p>
+                        <p>Casual coastal chic attire. Parking validations are covered—just bring your smiles (and an appetite).</p>
+                    </article>
+                    <article class="party-briefing-card">
+                        <h2>Day-Of Timeline</h2>
+                        <ul>
+                            <li>12:30 PM – Hair &amp; makeup / suit steam</li>
+                            <li>2:15 PM – First look &amp; portraits</li>
+                            <li>3:00 PM – Ceremony lineup</li>
+                            <li>10:00 PM – Sparkler send-off</li>
+                        </ul>
+                    </article>
+                    <article class="party-briefing-card">
+                        <h2>Need Help?</h2>
+                        <p>Text our coordinator, Shay, at <a href="tel:14085551234">(408) 555-1234</a> for any day-of surprises.</p>
+                        <p>Rain plan? Covered veranda. Emergency coffee? Also handled.</p>
+                    </article>
+                </div>
+                <div id="weddingPartyGrid" class="wedding-party-grid" aria-live="polite"></div>
             </div>
         </section>
 

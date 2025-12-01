@@ -35,6 +35,120 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+body.access-locked header,
+body.access-locked main,
+body.access-locked footer {
+    filter: blur(18px);
+    pointer-events: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.access-conditional {
+    display: none;
+}
+
+.access-conditional.is-access-granted {
+    display: block;
+}
+
+.page.access-conditional:not(.is-access-granted) {
+    display: none !important;
+}
+
+.nav-links .access-conditional.is-access-granted {
+    display: block;
+}
+
+.access-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    z-index: 2000;
+    padding: 2rem;
+}
+
+.access-overlay[hidden] {
+    display: none;
+}
+
+.access-overlay-card {
+    background: var(--soft-white);
+    border-radius: 18px;
+    padding: 2.5rem;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.25);
+}
+
+.access-overlay-card h2 {
+    font-family: 'Playfair Display', serif;
+    margin-bottom: 0.75rem;
+}
+
+.access-overlay-subtitle {
+    margin-bottom: 1.5rem;
+    color: var(--muted-sage);
+}
+
+.access-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.access-label {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.7rem;
+}
+
+.access-input {
+    padding: 0.85rem 1rem;
+    border-radius: 999px;
+    border: 1px solid var(--muted-sage);
+    font-size: 1rem;
+}
+
+.access-submit {
+    margin-top: 0.25rem;
+}
+
+.access-status {
+    min-height: 1.25rem;
+    font-size: 0.85rem;
+    color: var(--deep-green);
+}
+
+.access-status.is-error {
+    color: #B00020;
+}
+
+.access-hint {
+    margin-top: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--muted-sage);
+}
+
 /* Header and Navigation - Editorial Style */
 header {
     background-color: var(--soft-white);
@@ -68,6 +182,12 @@ nav {
     display: flex;
     list-style: none;
     gap: 3rem;
+}
+
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
 }
 
 .nav-link {
@@ -118,6 +238,82 @@ nav {
     background-color: var(--deep-charcoal);
     margin: 5px;
     transition: var(--transition);
+}
+
+.admin-quick-menu {
+    position: relative;
+    display: none;
+}
+
+.admin-quick-menu.is-accessible {
+    display: block;
+}
+
+.admin-menu-toggle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--deep-charcoal);
+    background: var(--soft-white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.admin-menu-toggle:hover,
+.admin-menu-toggle:focus-visible {
+    background: var(--deep-green);
+    color: var(--soft-white);
+    outline: none;
+}
+
+.admin-menu-icon {
+    width: 18px;
+    height: 18px;
+    border: 2px solid currentColor;
+    border-radius: 4px;
+    position: relative;
+}
+
+.admin-menu-icon::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+}
+
+.admin-menu-panel {
+    position: absolute;
+    top: calc(100% + 0.75rem);
+    right: 0;
+    min-width: 220px;
+    background: var(--soft-white);
+    border-radius: 16px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 30px 50px rgba(0, 0, 0, 0.2);
+    padding: 0.5rem 0;
+    display: none;
+    z-index: 1200;
+}
+
+.admin-quick-menu.is-open .admin-menu-panel {
+    display: block;
+}
+
+.admin-menu-link {
+    display: block;
+    padding: 0.75rem 1.25rem;
+    text-decoration: none;
+    color: var(--deep-charcoal);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.admin-menu-link:hover {
+    background: rgba(0, 0, 0, 0.05);
 }
 
 /* Main Content */
@@ -378,6 +574,102 @@ main {
     height: 2px;
     background-color: var(--accent-gold);
     margin-top: -2px;
+}
+
+#wedding-party {
+    background-color: #fdf9f4;
+    color: var(--text-dark);
+    border-top: 2px solid var(--deep-charcoal);
+    position: relative;
+}
+
+#wedding-party::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 2px;
+    background-color: var(--accent-gold);
+    margin-top: -2px;
+}
+
+.party-briefing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 3rem;
+}
+
+.party-briefing-card {
+    background: var(--soft-white);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+    border-radius: 16px;
+    box-shadow: 0 25px 40px rgba(0, 0, 0, 0.05);
+}
+
+.party-briefing-card h2 {
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: 0.75rem;
+}
+
+.party-briefing-card ul {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+}
+
+.party-briefing-card li {
+    font-size: 0.95rem;
+    margin-bottom: 0.35rem;
+}
+
+.wedding-party-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.5rem;
+}
+
+.party-card {
+    background: var(--soft-white);
+    border-radius: 20px;
+    padding: 1.5rem;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    text-align: center;
+    box-shadow: 0 25px 45px rgba(0, 0, 0, 0.07);
+}
+
+.party-card img {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 1rem;
+    border: 3px solid var(--accent-gold);
+}
+
+.party-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem;
+    margin-bottom: 0.25rem;
+}
+
+.party-role {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--muted-sage);
+    margin-bottom: 0.75rem;
+}
+
+.party-bio {
+    font-size: 0.95rem;
+    color: var(--text-dark);
+    line-height: 1.5;
 }
 
 #address .container h1,
@@ -1452,6 +1744,21 @@ footer p {
         transform: rotate(45deg) translate(-5px, -6px);
     }
 
+    .nav-actions {
+        gap: 0.5rem;
+    }
+
+    .admin-quick-menu {
+        order: -1;
+    }
+
+    .admin-menu-panel {
+        right: auto;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(280px, 90vw);
+    }
+
     .couple-names {
         font-size: 3rem;
     }
@@ -1525,6 +1832,11 @@ footer p {
     #accommodationMap {
         min-height: 320px;
     }
+
+    .party-briefing-grid,
+    .wedding-party-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media screen and (max-width: 600px) {
@@ -1560,7 +1872,8 @@ footer p {
     #address .container h1,
     #rsvp .container h1,
     #theme .container h1,
-    #registry .container h1 {
+    #registry .container h1,
+    #wedding-party .container h1 {
         font-size: 2.5rem;
     }
 
@@ -1578,5 +1891,13 @@ footer p {
 
     .container {
         padding: 50px 5%;
+    }
+
+    .party-briefing-card {
+        padding: 1.25rem;
+    }
+
+    .party-card {
+        padding: 1.25rem;
     }
 }

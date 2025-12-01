@@ -1,5 +1,6 @@
 // Navigation functionality
 document.addEventListener('DOMContentLoaded', () => {
+    initAccessControl();
     initNavigation();
     initCountdown();
     initForms();
@@ -10,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Unable to load accommodations map:', error);
     });
     initAccommodationScrollHint();
+    initAdminMenu();
 });
 
 let registryConfig = {
@@ -20,6 +22,324 @@ let registryConfig = {
 let latestGuestLookupResults = [];
 const registryFastPollClicks = new Map();
 const REGISTRY_FAST_POLL_CLICK_THROTTLE_MS = 60 * 1000;
+const ACCESS_LEVELS = {
+    locked: 'locked',
+    family: 'family',
+    party: 'party',
+    admin: 'admin'
+};
+const ACCESS_PASSWORDS = {
+    binx: ACCESS_LEVELS.family,
+    binxparty: ACCESS_LEVELS.party,
+    'binx123!': ACCESS_LEVELS.admin
+};
+const ACCESS_TOKEN_KEY = 'km_access_level';
+let currentAccessLevel = ACCESS_LEVELS.locked;
+let hasUnlockedOnce = false;
+const ACCESS_ORDER = [ACCESS_LEVELS.locked, ACCESS_LEVELS.family, ACCESS_LEVELS.party, ACCESS_LEVELS.admin];
+
+const weddingPartyMembers = [
+    {
+        name: 'Maya Thompson',
+        role: 'Matron of Honor',
+        bio: "Morgan's older sister and resident hype queen. She keeps everyone laughing and on time.",
+        photo: 'https://placehold.co/200x200?text=Maya'
+    },
+    {
+        name: 'Alex Ramirez',
+        role: 'Best Man',
+        bio: "Kenny's college roommate turned lifelong confidant. Master of speeches and dad jokes.",
+        photo: 'https://placehold.co/200x200?text=Alex'
+    },
+    {
+        name: 'Jada Lee',
+        role: 'Maid of Honor',
+        bio: "Morgan's childhood best friend who knows every embarrassing story and still shows up early.",
+        photo: 'https://placehold.co/200x200?text=Jada'
+    },
+    {
+        name: 'Theo Patel',
+        role: 'Groomsman',
+        bio: 'Pick-up basketball MVP and Kenny’s startup co-founder. Also the unofficial DJ.',
+        photo: 'https://placehold.co/200x200?text=Theo'
+    },
+    {
+        name: 'Riley Chen',
+        role: 'Bridesmaid',
+        bio: 'Met Morgan in grad school and bonded over late-night study snacks and travel plans.',
+        photo: 'https://placehold.co/200x200?text=Riley'
+    },
+    {
+        name: 'Jordan Brooks',
+        role: 'Groomsman',
+        bio: "Cousin, camping buddy, and the guy who double-checks Kenny's cuff links.",
+        photo: 'https://placehold.co/200x200?text=Jordan'
+    },
+    {
+        name: 'Priya Singh',
+        role: 'Bridesmaid',
+        bio: 'Office bestie turned soul sister. She organized the group chat and the spa day.',
+        photo: 'https://placehold.co/200x200?text=Priya'
+    },
+    {
+        name: 'Evan Ortiz',
+        role: 'Groomsman',
+        bio: "Bandmate from Kenny's college days and lead guitarist for the reception surprise.",
+        photo: 'https://placehold.co/200x200?text=Evan'
+    },
+    {
+        name: 'Lila Nguyen',
+        role: 'Bridesmaid',
+        bio: 'Met Morgan during her first week in Santa Cruz and has been her brunch date ever since.',
+        photo: 'https://placehold.co/200x200?text=Lila'
+    },
+    {
+        name: 'Marcus Hill',
+        role: 'Groomsman',
+        bio: 'High school teammate and reigning cornhole champion. Keeper of Kenny’s spare vows.',
+        photo: 'https://placehold.co/200x200?text=Marcus'
+    },
+    {
+        name: 'Sofia Bennett',
+        role: 'Bridesmaid',
+        bio: "Morgan's fashion muse and florist consultant. She designed the bouquet vision board.",
+        photo: 'https://placehold.co/200x200?text=Sofia'
+    },
+    {
+        name: 'Carter Lewis',
+        role: 'Groomsman',
+        bio: 'Resident spreadsheet wizard who turned budget chaos into calm.',
+        photo: 'https://placehold.co/200x200?text=Carter'
+    },
+    {
+        name: 'Naomi Fields',
+        role: 'Bridesmaid',
+        bio: 'College roommate, meditation partner, and fearless toastmaster.',
+        photo: 'https://placehold.co/200x200?text=Naomi'
+    },
+    {
+        name: 'Henry Watkins',
+        role: 'Groomsman',
+        bio: "Kenny's little brother who always brings the energy (and the snacks).",
+        photo: 'https://placehold.co/200x200?text=Henry'
+    },
+    {
+        name: 'Zoe Martinez',
+        role: 'Officiant',
+        bio: 'Mutual friend who introduced Kenny and Morgan. She gets to tell the story again, officially.',
+        photo: 'https://placehold.co/200x200?text=Zoe'
+    }
+];
+
+function initAccessControl() {
+    renderWeddingPartyMembers();
+    const passwordInput = document.getElementById('accessPassword');
+    const statusEl = document.getElementById('accessStatus');
+    const form = document.getElementById('accessForm');
+
+    let storedLevel = ACCESS_LEVELS.locked;
+    try {
+        storedLevel = normalizeAccessLevel(localStorage.getItem(ACCESS_TOKEN_KEY));
+    } catch (error) {
+        storedLevel = ACCESS_LEVELS.locked;
+    }
+    if (storedLevel !== ACCESS_LEVELS.locked) {
+        applyAccessLevel(storedLevel);
+    } else {
+        showOverlay();
+        passwordInput?.focus();
+        updateAccessVisibility();
+    }
+
+    form?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const level = resolveAccessLevel(passwordInput?.value || '');
+        if (!level) {
+            statusEl.textContent = 'Incorrect password. Please try again.';
+            statusEl.classList.add('is-error');
+            return;
+        }
+        statusEl.textContent = '';
+        statusEl.classList.remove('is-error');
+        applyAccessLevel(level);
+        passwordInput.value = '';
+    });
+}
+
+function resolveAccessLevel(password) {
+    const trimmed = password.trim();
+    if (!trimmed) {
+        return null;
+    }
+    const lowered = trimmed.toLowerCase();
+    if (lowered === 'binx123!' || trimmed === 'Binx123!') {
+        return ACCESS_LEVELS.admin;
+    }
+    if (ACCESS_PASSWORDS[lowered]) {
+        return ACCESS_PASSWORDS[lowered];
+    }
+    return null;
+}
+
+function applyAccessLevel(level) {
+    const sanitized = normalizeAccessLevel(level);
+    currentAccessLevel = sanitized;
+    document.body.dataset.accessLevel = sanitized;
+    try {
+        localStorage.setItem(ACCESS_TOKEN_KEY, sanitized);
+    } catch (error) {
+        console.warn('Unable to persist access level:', error);
+    }
+
+    if (sanitized === ACCESS_LEVELS.locked) {
+        showOverlay();
+    } else {
+        hideOverlay();
+        if (!hasUnlockedOnce) {
+            setInitialSection('home');
+            hasUnlockedOnce = true;
+        }
+    }
+    updateAccessVisibility();
+}
+
+function showOverlay() {
+    document.body.classList.add('access-locked');
+    document.getElementById('accessOverlay')?.removeAttribute('hidden');
+}
+
+function hideOverlay() {
+    document.body.classList.remove('access-locked');
+    document.getElementById('accessOverlay')?.setAttribute('hidden', 'hidden');
+}
+
+function updateAccessVisibility() {
+    const nodes = document.querySelectorAll('[data-access-visible]');
+    nodes.forEach(node => {
+        const requiredLevel = normalizeAccessLevel(node.dataset.accessVisible);
+        const allowed = hasAccess(requiredLevel);
+        node.classList.toggle('is-access-granted', allowed);
+        node.setAttribute('aria-hidden', String(!allowed));
+        if (!allowed && node.classList.contains('page') && node.classList.contains('active')) {
+            setInitialSection('home');
+        }
+    });
+    setAdminMenuVisibility();
+}
+
+function normalizeAccessLevel(value) {
+    const normalized = (value || '').toLowerCase();
+    if (ACCESS_ORDER.includes(normalized)) {
+        return normalized;
+    }
+    return ACCESS_LEVELS.locked;
+}
+
+function getAccessRank(level) {
+    const normalized = normalizeAccessLevel(level);
+    const index = ACCESS_ORDER.indexOf(normalized);
+    return index === -1 ? 0 : index;
+}
+
+function hasAccess(requiredLevel) {
+    if (!requiredLevel || requiredLevel === ACCESS_LEVELS.locked) {
+        return getAccessRank(currentAccessLevel) >= 0;
+    }
+    return getAccessRank(currentAccessLevel) >= getAccessRank(requiredLevel);
+}
+
+function renderWeddingPartyMembers() {
+    const grid = document.getElementById('weddingPartyGrid');
+    if (!grid) {
+        return;
+    }
+    grid.innerHTML = weddingPartyMembers.map(member => {
+        const imageUrl = member.photo || `https://placehold.co/200x200?text=${encodeURIComponent(member.name.split(' ')[0] || 'Friend')}`;
+        return `
+            <article class="party-card">
+                <img src="${imageUrl}" alt="${member.name}" loading="lazy">
+                <h3 class="party-name">${member.name}</h3>
+                <p class="party-role">${member.role}</p>
+                <p class="party-bio">${member.bio}</p>
+            </article>
+        `;
+    }).join('');
+}
+
+function initAdminMenu() {
+    const container = document.querySelector('.admin-quick-menu');
+    const toggle = document.getElementById('adminMenuToggle');
+    const panel = document.getElementById('adminMenuPanel');
+    if (!container || !toggle || !panel) {
+        return;
+    }
+
+    const adminLinks = [
+        { label: 'Admin Console', href: 'admin.html' },
+        { label: 'Registry API Docs', href: 'API_README.md', external: true },
+        { label: 'Deployment Notes', href: 'DEPLOYMENT.md', external: true }
+    ];
+
+    panel.innerHTML = adminLinks.map(link => {
+        const attrs = link.external ? ' target="_blank" rel="noopener noreferrer"' : '';
+        return `<a class="admin-menu-link" role="menuitem" href="${link.href}"${attrs}>${link.label}</a>`;
+    }).join('');
+    panel.setAttribute('aria-hidden', 'true');
+
+    const closeMenu = () => {
+        container.classList.remove('is-open');
+        toggle.setAttribute('aria-expanded', 'false');
+        panel.setAttribute('aria-hidden', 'true');
+    };
+
+    const openMenu = () => {
+        container.classList.add('is-open');
+        toggle.setAttribute('aria-expanded', 'true');
+        panel.setAttribute('aria-hidden', 'false');
+    };
+
+    toggle.addEventListener('click', () => {
+        if (container.classList.contains('is-open')) {
+            closeMenu();
+        } else {
+            openMenu();
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!container.classList.contains('is-open')) {
+            return;
+        }
+        if (!container.contains(event.target)) {
+            closeMenu();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && container.classList.contains('is-open')) {
+            closeMenu();
+            toggle.focus();
+        }
+    });
+
+    setAdminMenuVisibility();
+}
+
+function setAdminMenuVisibility() {
+    const container = document.querySelector('.admin-quick-menu');
+    const toggle = document.getElementById('adminMenuToggle');
+    const panel = document.getElementById('adminMenuPanel');
+    if (!container) {
+        return;
+    }
+    const allowed = hasAccess(ACCESS_LEVELS.admin);
+    container.classList.toggle('is-accessible', allowed);
+    if (!allowed) {
+        container.classList.remove('is-open');
+        toggle?.setAttribute('aria-expanded', 'false');
+        panel?.setAttribute('aria-hidden', 'true');
+    }
+}
 
 // Navigation
 function initNavigation() {
@@ -27,28 +347,38 @@ function initNavigation() {
     const burger = document.querySelector('.burger');
     const nav = document.querySelector('.nav-links');
 
+    const navigate = (link, event) => {
+        event?.preventDefault();
+        const targetId = link.getAttribute('href')?.substring(1);
+        if (!targetId) {
+            return;
+        }
+
+        // Update active nav link
+        navLinks.forEach(l => l.classList.remove('active'));
+        link.classList.add('active');
+
+        // Show target page
+        document.querySelectorAll('.page').forEach(page => {
+            page.classList.remove('active');
+        });
+        document.getElementById(targetId)?.classList.add('active');
+
+        // Close mobile menu
+        nav.classList.remove('active');
+        burger.classList.remove('toggle');
+
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     // Handle navigation clicks
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const targetId = link.getAttribute('href').substring(1);
-            
-            // Update active nav link
-            navLinks.forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-            
-            // Show target page
-            document.querySelectorAll('.page').forEach(page => {
-                page.classList.remove('active');
-            });
-            document.getElementById(targetId).classList.add('active');
-            
-            // Close mobile menu
-            nav.classList.remove('active');
-            burger.classList.remove('toggle');
-            
-            // Scroll to top
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (link.closest('.access-conditional') && !link.closest('.access-conditional').classList.contains('is-access-granted')) {
+                return;
+            }
+            navigate(link, e);
         });
     });
 
@@ -57,6 +387,20 @@ function initNavigation() {
         nav.classList.toggle('active');
         burger.classList.toggle('toggle');
     });
+
+    burger.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            burger.click();
+        }
+    });
+}
+
+function setInitialSection(sectionId) {
+    const target = document.querySelector(`.nav-link[href="#${sectionId}"]`);
+    if (target) {
+        target.click();
+    }
 }
 
 // Countdown Timer

@@ -17,14 +17,14 @@ const zolaScraper = require('../scrapers/zola');
 const heathCeramicsScraper = require('../scrapers/heathceramics');
 
 const registryStoreFetchers = {
-    amazon: () => amazonScraper.getItems(process.env.AMAZON_REGISTRY_ID),
-    target: () => targetScraper.getItems(process.env.TARGET_REGISTRY_ID),
-    crateandbarrel: () => crateAndBarrelScraper.getItems(process.env.CRATE_AND_BARREL_REGISTRY_ID),
-    potterybarn: () => potteryBarnScraper.getItems(process.env.POTTERY_BARN_REGISTRY_ID),
-    williamsonoma: () => williamsSonomaScraper.getItems(process.env.WILLIAMS_SONOMA_REGISTRY_ID),
-    rei: () => reiScraper.getItems(process.env.REI_REGISTRY_ID),
-    zola: () => zolaScraper.getItems(process.env.ZOLA_REGISTRY_ID),
-    heathceramics: () => heathCeramicsScraper.getItems(process.env.HEATH_CERAMICS_REGISTRY_ID)
+    amazon: () => amazonScraper.getItems(config.registry.storeIds.amazon),
+    target: () => targetScraper.getItems(config.registry.storeIds.target),
+    crateandbarrel: () => crateAndBarrelScraper.getItems(config.registry.storeIds.crateandbarrel),
+    potterybarn: () => potteryBarnScraper.getItems(config.registry.storeIds.potterybarn),
+    williamsonoma: () => williamsSonomaScraper.getItems(config.registry.storeIds.williamsonoma),
+    rei: () => reiScraper.getItems(config.registry.storeIds.rei),
+    zola: () => zolaScraper.getItems(config.registry.storeIds.zola),
+    heathceramics: () => heathCeramicsScraper.getItems(config.registry.storeIds.heathceramics)
 };
 
 const storeKeys = Object.keys(registryStoreFetchers);

@@ -134,6 +134,18 @@ python3 -m http.server 8000
 # Frontend accessible at http://localhost:8000
 ```
 
+### Configuration Overview
+
+All runtime options flow through `config/index.js`, which normalizes environment variables and exposes a single config object to the rest of the app. Key sections:
+
+- `server`: `PORT` plus any future server toggles.
+- `cors`: `ALLOWED_ORIGINS` list (comma separated; use `*` to allow everyone for quick demos).
+- `admin`: `ADMIN_PASSWORD`, `ADMIN_SESSION_TTL_MS`, `ADMIN_SALT_ROUNDS`.
+- `database`: `DATABASE_PATH` / `GUEST_DB_PATH` toggle for the SQLite file.
+- `registry`: Poll intervals (`REGISTRY_*`), fast-poll knobs, and the per-store registry IDs (`AMAZON_REGISTRY_ID`, `TARGET_REGISTRY_ID`, etc.).
+
+Update `.env` as usual and restart the server—everything else reads from the shared config module so you never have to chase `process.env` usage across files again.
+
 ### Accessing the Admin Console
 
 After both servers are running, visit `http://localhost:8000/admin.html` (or the equivalent static host path) and log in with the `ADMIN_PASSWORD` defined in your `.env`. Successful login unlocks the guest table, CRUD form, and CSV importer.
@@ -285,6 +297,7 @@ Use `admin.html` after logging in with `ADMIN_PASSWORD` to oversee RSVP statuses
     2. The fast-poll worker re-fetches the store every `REGISTRY_FAST_POLL_INTERVAL_MS` (default 120s) while the flag is active.
     3. The UI shows “Live refresh” for items currently in the fast lane.
 - Extra knobs: `REGISTRY_FAST_POLL_SWEEP_MS` (how often we look for candidates) and `REGISTRY_FAST_POLL_BATCH_LIMIT` (how many stores/items to refresh per sweep).
+- API helpers: `GET /api/registry?store=amazon&includeUnavailable=true` pulls directly from the cache, while `forceRefresh=true` on either `/api/registry` or `/api/registry/:store` will trigger a one-off fetch before returning cached data.
 
 ## Deployment
 
