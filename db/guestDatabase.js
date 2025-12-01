@@ -1,6 +1,25 @@
 const Fuse = require('fuse.js');
 const { getDb } = require('./index');
 
+const NICKNAME_GROUPS = {
+    richard: ['rick', 'ricky', 'rich', 'richie', 'dick'],
+    william: ['bill', 'billy', 'will', 'willy', 'liam'],
+    robert: ['rob', 'bobby', 'bob', 'robby', 'bert'],
+    christopher: ['chris', 'topher', 'kit'],
+    alexander: ['alex', 'xander', 'sasha'],
+    elizabeth: ['liz', 'lizzy', 'beth', 'eliza', 'liza', 'betsy'],
+    victoria: ['tori', 'vicky', 'vic'],
+    margaret: ['meg', 'maggie', 'peggy', 'marge'],
+    katherine: ['kate', 'katie', 'kat', 'kathy'],
+    jonathan: ['jon', 'john', 'johnny', 'nate'],
+    nicholas: ['nick', 'nicky', 'cole'],
+    andrew: ['andy', 'drew'],
+    stephen: ['steve', 'stevie'],
+    joseph: ['joe', 'joey'],
+    patrick: ['pat', 'paddy'],
+    weston: ['wes']
+};
+
 function searchGuestGroupsByName(name, options = {}) {
     const rawTerm = (name || '').trim().replace(/\s+/g, ' ');
     if (!rawTerm) {
@@ -12,7 +31,10 @@ function searchGuestGroupsByName(name, options = {}) {
         return [];
     }
 
+    const firstName = parts[0];
     const lastName = parts.slice(1).join(' ');
+    const canonicalFirst = canonicalizeFirstName(firstName);
+    const canonicalQuery = buildCanonicalName(rawTerm);
     const limit = Math.min(Math.max(parseInt(options.limit, 10) || 5, 1), 25);
     const db = getDb();
 
@@ -25,35 +47,62 @@ function searchGuestGroupsByName(name, options = {}) {
 
     const candidates = candidateStmt.all({
         last: `%${escapeForLike(lastName)}%`
-    });
+    }).map(row => ({
+        ...row,
+        canonicalName: buildCanonicalName(row.full_name),
+        firstNameAlias: extractFirstName(row.full_name),
+        firstNameCanonical: canonicalizeFirstName(extractFirstName(row.full_name)),
+        lastNameToken: extractLastName(row.full_name)
+    }));
 
     if (!candidates.length) {
         return [];
     }
 
-    const fuse = new Fuse(candidates, {
-        keys: ['full_name'],
+    const filteredCandidates = candidates.filter(row => row.lastNameToken === lastName.toLowerCase());
+    const pool = filteredCandidates.length ? filteredCandidates : candidates;
+
+    const fuse = new Fuse(pool, {
+        keys: [
+            { name: 'canonicalName', weight: 0.7 },
+            { name: 'firstNameAlias', weight: 0.2 },
+            { name: 'full_name', weight: 0.1 }
+        ],
         threshold: 0.35,
-        distance: 75,
+        distance: 60,
         includeScore: true,
         minMatchCharLength: 2,
-        ignoreLocation: true
+        ignoreLocation: true,
+        shouldSort: true
     });
 
-    const ranked = fuse.search(rawTerm, { limit: limit * 3 });
+    const ranked = fuse.search(canonicalQuery, { limit: limit * 6 });
     if (!ranked.length) {
         return [];
     }
 
-    const uniqueGroupIds = [];
-    ranked.forEach(result => {
-        const groupId = result.item.group_id;
-        if (!uniqueGroupIds.includes(groupId)) {
-            uniqueGroupIds.push(groupId);
+    const prioritized = [];
+    const pushUnique = (groupId) => {
+        if (groupId && !prioritized.includes(groupId)) {
+            prioritized.push(groupId);
         }
-    });
+    };
 
-    const groupIds = uniqueGroupIds.slice(0, limit);
+    pool
+        .filter(row => row.canonicalName === canonicalQuery)
+        .forEach(row => pushUnique(row.group_id));
+
+    pool
+        .filter(row => row.firstNameCanonical === canonicalFirst)
+        .forEach(row => pushUnique(row.group_id));
+
+    pool
+        .filter(row => row.firstNameAlias && row.firstNameAlias.startsWith(firstName))
+        .forEach(row => pushUnique(row.group_id));
+
+    ranked.forEach(result => pushUnique(result.item.group_id));
+
+    const groupIds = prioritized.slice(0, limit);
     if (!groupIds.length) {
         return [];
     }
@@ -103,6 +152,35 @@ function mapGuestRow(row) {
 
 function escapeForLike(value) {
     return (value || '').replace(/[\\%_]/g, match => `\\${match}`);
+}
+
+function extractFirstName(fullName = '') {
+    const match = fullName.trim().toLowerCase().match(/^[a-z']+/);
+    return match ? match[0] : '';
+}
+
+function extractLastName(fullName = '') {
+    const tokens = fullName.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return tokens.length ? tokens[tokens.length - 1] : '';
+}
+
+function buildCanonicalName(fullName = '') {
+    const first = canonicalizeFirstName(extractFirstName(fullName));
+    const last = extractLastName(fullName);
+    return `${first} ${last}`.trim();
+}
+
+function canonicalizeFirstName(name = '') {
+    const lower = (name || '').trim().toLowerCase();
+    if (!lower) {
+        return '';
+    }
+    for (const [canonical, variants] of Object.entries(NICKNAME_GROUPS)) {
+        if (canonical === lower || variants.includes(lower)) {
+            return canonical;
+        }
+    }
+    return lower;
 }
 
 function replaceGuestRoster(guestList = []) {
