@@ -1,24 +1,16 @@
 const Fuse = require('fuse.js');
+const { EnhancedNaturalMatcher, NameNormalizer } = require('name-match');
 const { getDb } = require('./index');
 
-const NICKNAME_GROUPS = {
-    richard: ['rick', 'ricky', 'rich', 'richie', 'dick'],
-    william: ['bill', 'billy', 'will', 'willy', 'liam'],
-    robert: ['rob', 'bobby', 'bob', 'robby', 'bert'],
-    christopher: ['chris', 'topher', 'kit'],
-    alexander: ['alex', 'xander', 'sasha'],
-    elizabeth: ['liz', 'lizzy', 'beth', 'eliza', 'liza', 'betsy'],
-    victoria: ['tori', 'vicky', 'vic'],
-    margaret: ['meg', 'maggie', 'peggy', 'marge'],
-    katherine: ['kate', 'katie', 'kat', 'kathy'],
-    jonathan: ['jon', 'john', 'johnny', 'nate'],
-    nicholas: ['nick', 'nicky', 'cole'],
-    andrew: ['andy', 'drew'],
-    stephen: ['steve', 'stevie'],
-    joseph: ['joe', 'joey'],
-    patrick: ['pat', 'paddy'],
+const CUSTOM_NAME_VARIATIONS = {
+    victoria: ['vic'],
     weston: ['wes']
 };
+
+const NAME_VARIATIONS = buildNameVariationMap();
+const nameMatcher = new EnhancedNaturalMatcher({ threshold: 0.82 });
+const STRICT_NAME_SCORE = 0.92;
+const STRONG_NAME_SCORE = 0.84;
 
 function searchGuestGroupsByName(name, options = {}) {
     const rawTerm = (name || '').trim().replace(/\s+/g, ' ');
@@ -26,15 +18,18 @@ function searchGuestGroupsByName(name, options = {}) {
         return [];
     }
 
-    const parts = rawTerm.toLowerCase().split(' ').filter(Boolean);
-    if (parts.length < 2) {
+    const parsedQuery = NameNormalizer.parseName(rawTerm);
+    if (!parsedQuery.firstName || !parsedQuery.lastName) {
         return [];
     }
 
-    const firstName = parts[0];
-    const lastName = parts.slice(1).join(' ');
+    const firstName = parsedQuery.firstName;
+    const lastName = parsedQuery.lastName;
+    const queryLastToken = lastName.toLowerCase();
     const canonicalFirst = canonicalizeFirstName(firstName);
     const canonicalQuery = buildCanonicalName(rawTerm);
+    const normalizedQueryName = buildNormalizedFullName(rawTerm);
+    const queryFirstVariants = getFirstNameVariants(firstName);
     const limit = Math.min(Math.max(parseInt(options.limit, 10) || 5, 1), 25);
     const db = getDb();
 
@@ -47,26 +42,41 @@ function searchGuestGroupsByName(name, options = {}) {
 
     const candidates = candidateStmt.all({
         last: `%${escapeForLike(lastName)}%`
-    }).map(row => ({
-        ...row,
-        canonicalName: buildCanonicalName(row.full_name),
-        firstNameAlias: extractFirstName(row.full_name),
-        firstNameCanonical: canonicalizeFirstName(extractFirstName(row.full_name)),
-        lastNameToken: extractLastName(row.full_name)
-    }));
+    }).map(row => {
+        const firstAlias = extractFirstName(row.full_name);
+        const normalizedFull = buildNormalizedFullName(row.full_name);
+        return {
+            ...row,
+            canonicalName: buildCanonicalName(row.full_name),
+            normalizedName: normalizedFull,
+            firstNameAlias: firstAlias,
+            firstNameCanonical: canonicalizeFirstName(firstAlias),
+            firstNameVariants: getFirstNameVariants(firstAlias),
+            lastNameToken: extractLastName(row.full_name),
+            matchScore: nameMatcher.getSimilarity(normalizedQueryName, normalizedFull)
+        };
+    });
 
     if (!candidates.length) {
         return [];
     }
 
-    const filteredCandidates = candidates.filter(row => row.lastNameToken === lastName.toLowerCase());
-    const pool = filteredCandidates.length ? filteredCandidates : candidates;
+    const strictLastMatches = candidates.filter(row => row.lastNameToken === queryLastToken);
+    if (!strictLastMatches.length) {
+        return [];
+    }
+
+    const pool = strictLastMatches.filter(row => hasFirstNameAffinity(row, canonicalFirst, queryFirstVariants));
+    if (!pool.length) {
+        return [];
+    }
 
     const fuse = new Fuse(pool, {
         keys: [
-            { name: 'canonicalName', weight: 0.7 },
-            { name: 'firstNameAlias', weight: 0.2 },
-            { name: 'full_name', weight: 0.1 }
+            { name: 'canonicalName', weight: 0.5 },
+            { name: 'normalizedName', weight: 0.3 },
+            { name: 'firstNameAlias', weight: 0.15 },
+            { name: 'full_name', weight: 0.05 }
         ],
         threshold: 0.35,
         distance: 60,
@@ -93,11 +103,19 @@ function searchGuestGroupsByName(name, options = {}) {
         .forEach(row => pushUnique(row.group_id));
 
     pool
+        .filter(row => row.matchScore >= STRICT_NAME_SCORE)
+        .forEach(row => pushUnique(row.group_id));
+
+    pool
         .filter(row => row.firstNameCanonical === canonicalFirst)
         .forEach(row => pushUnique(row.group_id));
 
     pool
-        .filter(row => row.firstNameAlias && row.firstNameAlias.startsWith(firstName))
+        .filter(row => row.matchScore >= STRONG_NAME_SCORE)
+        .forEach(row => pushUnique(row.group_id));
+
+    pool
+        .filter(row => row.firstNameVariants.some(variant => queryFirstVariants.includes(variant)))
         .forEach(row => pushUnique(row.group_id));
 
     ranked.forEach(result => pushUnique(result.item.group_id));
@@ -155,18 +173,21 @@ function escapeForLike(value) {
 }
 
 function extractFirstName(fullName = '') {
-    const match = fullName.trim().toLowerCase().match(/^[a-z']+/);
-    return match ? match[0] : '';
+    return NameNormalizer.parseName(fullName).firstName || '';
 }
 
 function extractLastName(fullName = '') {
-    const tokens = fullName.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return tokens.length ? tokens[tokens.length - 1] : '';
+    return NameNormalizer.parseName(fullName).lastName || '';
+}
+
+function buildNormalizedFullName(fullName = '') {
+    return NameNormalizer.standardizeName(fullName) || '';
 }
 
 function buildCanonicalName(fullName = '') {
-    const first = canonicalizeFirstName(extractFirstName(fullName));
-    const last = extractLastName(fullName);
+    const parsed = NameNormalizer.parseName(fullName);
+    const first = canonicalizeFirstName(parsed.firstName);
+    const last = parsed.lastName || '';
     return `${first} ${last}`.trim();
 }
 
@@ -175,12 +196,68 @@ function canonicalizeFirstName(name = '') {
     if (!lower) {
         return '';
     }
-    for (const [canonical, variants] of Object.entries(NICKNAME_GROUPS)) {
-        if (canonical === lower || variants.includes(lower)) {
+    if (NAME_VARIATIONS[lower]) {
+        return lower;
+    }
+    for (const [canonical, variants] of Object.entries(NAME_VARIATIONS)) {
+        if (variants.includes(lower)) {
             return canonical;
         }
     }
     return lower;
+}
+
+function getFirstNameVariants(name = '') {
+    const lower = (name || '').trim().toLowerCase();
+    if (!lower) {
+        return [];
+    }
+    const canonical = canonicalizeFirstName(lower);
+    const variants = NAME_VARIATIONS[canonical] || [];
+    return Array.from(new Set([canonical, lower, ...variants]));
+}
+
+function hasFirstNameAffinity(row, canonicalFirst, queryFirstVariants) {
+    if (!row) {
+        return false;
+    }
+    if (row.firstNameCanonical === canonicalFirst) {
+        return true;
+    }
+    if (row.matchScore >= STRONG_NAME_SCORE) {
+        return true;
+    }
+    return row.firstNameVariants?.some(variant => queryFirstVariants.includes(variant)) || false;
+}
+
+function buildNameVariationMap() {
+    const base = NameNormalizer.NAME_VARIATIONS || {};
+    const merged = {};
+
+    for (const [canonical, variants] of Object.entries(base)) {
+        const normalizedCanonical = (canonical || '').trim().toLowerCase();
+        if (!normalizedCanonical) {
+            continue;
+        }
+        const normalizedVariants = Array.from(new Set([normalizedCanonical, ...(variants || [])]))
+            .map(value => (value || '').trim().toLowerCase())
+            .filter(Boolean);
+        merged[normalizedCanonical] = normalizedVariants;
+    }
+
+    for (const [canonical, variants] of Object.entries(CUSTOM_NAME_VARIATIONS)) {
+        const normalizedCanonical = (canonical || '').trim().toLowerCase();
+        if (!normalizedCanonical) {
+            continue;
+        }
+        const normalizedVariants = (variants || [])
+            .map(value => (value || '').trim().toLowerCase())
+            .filter(Boolean);
+        const existing = merged[normalizedCanonical] || [normalizedCanonical];
+        merged[normalizedCanonical] = Array.from(new Set([...existing, ...normalizedVariants]));
+    }
+
+    return merged;
 }
 
 function replaceGuestRoster(guestList = []) {
