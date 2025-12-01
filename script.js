@@ -3,9 +3,19 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initCountdown();
     initForms();
-    initRegistry();
-    initAccommodationsMap();
+    initRegistry().catch(error => {
+        console.error('Unable to initialize registry filters:', error);
+    });
+    initAccommodationsMap().catch(error => {
+        console.error('Unable to load accommodations map:', error);
+    });
+    initAccommodationScrollHint();
 });
+
+let registryConfig = {
+    apiBaseUrl: '',
+    registries: []
+};
 
 // Navigation
 function initNavigation() {
@@ -161,24 +171,57 @@ function showMessage(elementId, message, type) {
 }
 
 // Registry Management
-function initRegistry() {
-    const registryBtns = document.querySelectorAll('.registry-btn');
-    
-    registryBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            registryBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            
-            const registry = btn.getAttribute('data-registry');
-            loadRegistryItems(registry);
-        });
+async function initRegistry() {
+    await loadRegistryConfig();
+
+    const registryFilter = document.getElementById('registryFilter');
+
+    if (!registryFilter) {
+        return;
+    }
+
+    registryFilter.addEventListener('change', (event) => {
+        loadRegistryItems(event.target.value || 'all');
     });
-    
-    // Load all items initially
-    loadRegistryItems('all');
+
+    registryFilter.value = 'all';
+    registryFilter.disabled = true;
+
+    // Load all items initially and build filter options
+    await loadRegistryItems('all', { refreshFilters: true });
 }
 
-async function loadRegistryItems(filter) {
+async function loadRegistryConfig() {
+    try {
+        const response = await fetch('registry.config.json', { cache: 'no-store' });
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        const registries = Array.isArray(data.registries)
+            ? data.registries
+                .map(entry => ({
+                    ...entry,
+                    store: (entry.store || '').toLowerCase()
+                }))
+                .filter(entry => entry.store)
+            : [];
+        registryConfig = {
+            apiBaseUrl: data.apiBaseUrl || '',
+            registries
+        };
+    } catch (error) {
+        console.warn('Unable to load registry.config.json, falling back to defaults.', error);
+        registryConfig = {
+            apiBaseUrl: '',
+            registries: []
+        };
+    }
+
+    return registryConfig;
+}
+
+async function loadRegistryItems(filter, options = {}) {
     const registryContainer = document.getElementById('registryItems');
     const loadingEl = document.getElementById('registryLoading');
     
@@ -187,13 +230,9 @@ async function loadRegistryItems(filter) {
     registryContainer.innerHTML = '';
     
     try {
-        // Get API URL from environment or use default
-        const apiUrl = getApiUrl();
-        const endpoint = filter === 'all' 
-            ? `${apiUrl}/api/registry` 
-            : `${apiUrl}/api/registry/${filter}`;
-        
-        const response = await fetch(endpoint);
+        const endpoint = buildRegistryEndpoint(filter);
+        const fetchOptions = getRegistryFetchOptions(filter);
+        const response = await fetch(endpoint, fetchOptions);
         
         if (!response.ok) {
             throw new Error(`API request failed: ${response.status}`);
@@ -202,6 +241,9 @@ async function loadRegistryItems(filter) {
         const data = await response.json();
         
         if (data.success && data.items) {
+            if (options.refreshFilters || filter === 'all') {
+                updateRegistryFilterOptions(data.items);
+            }
             displayRegistryItems(data.items);
         } else {
             throw new Error('Invalid response format');
@@ -211,20 +253,56 @@ async function loadRegistryItems(filter) {
         // Show error message - no fallback to mock data
         displayRegistryItems([]);
         showRegistryError('Unable to load registry items. Please ensure valid registry IDs are configured.');
+        resetRegistryFilterOptions();
     } finally {
         loadingEl.style.display = 'none';
     }
 }
 
-function getApiUrl() {
-    // In production, this should be configured based on environment
-    // For local development, use localhost
-    // For GitHub Pages, use your deployed backend URL
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return 'http://localhost:3000';
+function updateRegistryFilterOptions(items) {
+    const registryFilter = document.getElementById('registryFilter');
+    if (!registryFilter) {
+        return;
     }
-    // Replace with your actual backend URL when deployed
-    return process.env.API_URL || 'http://localhost:3000';
+
+    const previousValue = registryFilter.value;
+
+    // Remove existing store options except "all"
+    Array.from(registryFilter.querySelectorAll('option:not([value="all"])')).forEach(option => option.remove());
+
+    const storeCounts = items.reduce((acc, item) => {
+        const key = (item.store || '').toLowerCase().trim();
+        if (!key) {
+            return acc;
+        }
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    }, {});
+
+    const storesWithItems = Object.entries(storeCounts)
+        .filter(([, count]) => count > 0)
+        .sort((a, b) => capitalizeStore(a[0]).localeCompare(capitalizeStore(b[0])));
+
+    storesWithItems.forEach(([store]) => {
+        const option = document.createElement('option');
+        option.value = store;
+        option.textContent = capitalizeStore(store);
+        registryFilter.appendChild(option);
+    });
+
+    const canKeepPrevious = previousValue !== 'all' && storesWithItems.some(([store]) => store === previousValue);
+    registryFilter.value = canKeepPrevious ? previousValue : 'all';
+    registryFilter.disabled = registryFilter.options.length <= 1;
+}
+
+function resetRegistryFilterOptions() {
+    const registryFilter = document.getElementById('registryFilter');
+    if (!registryFilter) {
+        return;
+    }
+    Array.from(registryFilter.querySelectorAll('option:not([value="all"])')).forEach(option => option.remove());
+    registryFilter.value = 'all';
+    registryFilter.disabled = true;
 }
 
 function showRegistryError(message) {
@@ -236,114 +314,6 @@ function showRegistryError(message) {
     registryContainer.insertBefore(errorDiv, registryContainer.firstChild);
 }
 
-function getRegistryItems(filter) {
-    // In a real application, this would fetch from actual registry APIs
-    // For now, we'll use mock data
-    const allItems = [
-        {
-            id: 1,
-            name: 'KitchenAid Stand Mixer',
-            store: 'amazon',
-            price: 379.99,
-            image: 'https://via.placeholder.com/300x300/D4A373/FFFFFF?text=Stand+Mixer',
-            url: 'https://amazon.com'
-        },
-        {
-            id: 2,
-            name: 'Nespresso Coffee Machine',
-            store: 'target',
-            price: 199.99,
-            image: 'https://via.placeholder.com/300x300/8B4513/FFFFFF?text=Coffee+Machine',
-            url: 'https://target.com'
-        },
-        {
-            id: 3,
-            name: 'Cast Iron Skillet Set',
-            store: 'crateandbarrel',
-            price: 129.99,
-            image: 'https://via.placeholder.com/300x300/2F4F4F/FFFFFF?text=Skillet+Set',
-            url: 'https://crateandbarrel.com'
-        },
-        {
-            id: 4,
-            name: 'Egyptian Cotton Sheet Set',
-            store: 'amazon',
-            price: 149.99,
-            image: 'https://via.placeholder.com/300x300/FAEBD7/333333?text=Sheet+Set',
-            url: 'https://amazon.com'
-        },
-        {
-            id: 5,
-            name: 'Stainless Steel Cookware Set',
-            store: 'target',
-            price: 299.99,
-            image: 'https://via.placeholder.com/300x300/556B2F/FFFFFF?text=Cookware+Set',
-            url: 'https://target.com'
-        },
-        {
-            id: 6,
-            name: 'Wine Glass Set',
-            store: 'crateandbarrel',
-            price: 79.99,
-            image: 'https://via.placeholder.com/300x300/D4A373/FFFFFF?text=Wine+Glasses',
-            url: 'https://crateandbarrel.com'
-        },
-        {
-            id: 7,
-            name: 'Instant Pot Duo',
-            store: 'amazon',
-            price: 89.99,
-            image: 'https://via.placeholder.com/300x300/8B4513/FFFFFF?text=Instant+Pot',
-            url: 'https://amazon.com'
-        },
-        {
-            id: 8,
-            name: 'Bamboo Cutting Board Set',
-            store: 'target',
-            price: 49.99,
-            image: 'https://via.placeholder.com/300x300/2F4F4F/FFFFFF?text=Cutting+Boards',
-            url: 'https://target.com'
-        },
-        {
-            id: 9,
-            name: 'Dinner Plate Set',
-            store: 'crateandbarrel',
-            price: 159.99,
-            image: 'https://via.placeholder.com/300x300/FAEBD7/333333?text=Dinner+Plates',
-            url: 'https://crateandbarrel.com'
-        },
-        {
-            id: 10,
-            name: 'Cuisinart Food Processor',
-            store: 'amazon',
-            price: 199.99,
-            image: 'https://via.placeholder.com/300x300/556B2F/FFFFFF?text=Food+Processor',
-            url: 'https://amazon.com'
-        },
-        {
-            id: 11,
-            name: 'Dutch Oven',
-            store: 'target',
-            price: 119.99,
-            image: 'https://via.placeholder.com/300x300/D4A373/FFFFFF?text=Dutch+Oven',
-            url: 'https://target.com'
-        },
-        {
-            id: 12,
-            name: 'Flatware Set',
-            store: 'crateandbarrel',
-            price: 99.99,
-            image: 'https://via.placeholder.com/300x300/8B4513/FFFFFF?text=Flatware+Set',
-            url: 'https://crateandbarrel.com'
-        }
-    ];
-    
-    if (filter === 'all') {
-        return allItems;
-    }
-    
-    return allItems.filter(item => item.store === filter);
-}
 
 function displayRegistryItems(items) {
     const registryContainer = document.getElementById('registryItems');
@@ -382,44 +352,207 @@ function capitalizeStore(store) {
     return storeNames[store] || store;
 }
 
+function findRegistryConfig(filter) {
+    if (!registryConfig.registries.length || filter === 'all') {
+        return null;
+    }
+    return registryConfig.registries.find(entry => entry.store === filter) || null;
+}
+
+function buildRegistryEndpoint(filter) {
+    const config = findRegistryConfig(filter);
+
+    if (config?.endpoint) {
+        const hasQuery = config.endpoint.includes('?');
+        const params = new URLSearchParams();
+
+        if (config.registryId) {
+            params.set('registry', config.registryId);
+        }
+        if (config.token) {
+            params.set('token', config.token);
+        }
+
+        const query = params.toString();
+        if (query) {
+            return `${config.endpoint}${hasQuery ? '&' : '?'}${query}`;
+        }
+        return config.endpoint;
+    }
+
+    const baseUrl = config?.apiBaseUrl || registryConfig.apiBaseUrl;
+    if (baseUrl) {
+        return filter === 'all'
+            ? `${baseUrl.replace(/\/$/, '')}/api/registry`
+            : `${baseUrl.replace(/\/$/, '')}/api/registry/${filter}`;
+    }
+
+    const defaultBase = window.location.origin;
+    return filter === 'all'
+        ? `${defaultBase}/api/registry`
+        : `${defaultBase}/api/registry/${filter}`;
+}
+
+function getRegistryFetchOptions(filter) {
+    const config = findRegistryConfig(filter);
+    if (!config || !config.headers) {
+        return {};
+    }
+
+    const headers = {};
+    Object.entries(config.headers).forEach(([key, value]) => {
+        if (typeof value === 'string' && value.trim()) {
+            headers[key] = value;
+        }
+    });
+
+    return { headers };
+}
+
 // Accommodation map + interactions
-function initAccommodationsMap() {
+async function initAccommodationsMap() {
     const mapContainer = document.getElementById('accommodationMap');
     if (!mapContainer || typeof L === 'undefined') {
         return;
     }
 
-    const accommodations = Array.from(document.querySelectorAll('.accommodation-item')).map((element, index) => {
-        const lat = parseFloat(element.dataset.lat);
-        const lng = parseFloat(element.dataset.lng);
+    const geocodeCacheKey = 'accommodationGeoCache';
+    let geocodeCache = {};
 
-        if (Number.isNaN(lat) || Number.isNaN(lng)) {
+    try {
+        geocodeCache = JSON.parse(localStorage.getItem(geocodeCacheKey) || '{}');
+    } catch (error) {
+        console.warn('Unable to read geocode cache, starting fresh.', error);
+    }
+
+    const saveGeocodeCache = () => {
+        try {
+            localStorage.setItem(geocodeCacheKey, JSON.stringify(geocodeCache));
+        } catch (error) {
+            console.warn('Unable to persist geocode cache.', error);
+        }
+    };
+
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    const geocodeAddress = async (address) => {
+        if (!address) {
             return null;
         }
+        if (geocodeCache[address]) {
+            return geocodeCache[address];
+        }
+        try {
+            const params = new URLSearchParams({
+                format: 'json',
+                limit: '1',
+                q: address
+            });
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+                headers: {
+                    'Accept-Language': 'en-US,en;q=0.9'
+                }
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (!data.length) {
+                return null;
+            }
+            const coords = {
+                lat: parseFloat(data[0].lat),
+                lng: parseFloat(data[0].lon)
+            };
+            geocodeCache[address] = coords;
+            saveGeocodeCache();
+            await sleep(1200); // respect Nominatim rate limits
+            return coords;
+        } catch (error) {
+            console.error('Geocoding failed for', address, error);
+            return null;
+        }
+    };
 
-        return {
+    const accommodationElements = Array.from(document.querySelectorAll('.accommodation-item'));
+    const accommodations = [];
+
+    for (const [index, element] of accommodationElements.entries()) {
+        let lat = parseFloat(element.dataset.lat);
+        let lng = parseFloat(element.dataset.lng);
+        const address = element.dataset.address || element.querySelector('.accommodation-address')?.textContent.trim() || '';
+
+        if ((Number.isNaN(lat) || Number.isNaN(lng)) && address) {
+            const coords = await geocodeAddress(address);
+            if (coords) {
+                lat = coords.lat;
+                lng = coords.lng;
+                element.dataset.lat = coords.lat;
+                element.dataset.lng = coords.lng;
+            }
+        }
+
+        if (Number.isNaN(lat) || Number.isNaN(lng)) {
+            continue;
+        }
+
+        accommodations.push({
             id: element.dataset.accommodationId || `accommodation-${index}`,
             name: element.querySelector('.accommodation-name')?.textContent.trim() || 'Accommodation',
-            address: element.querySelector('.accommodation-address')?.textContent.trim() || '',
+            address,
             lat,
             lng,
             element
-        };
-    }).filter(Boolean);
+        });
+    }
 
-    if (!accommodations.length) {
+    const venueCard = document.querySelector('[data-venue-card="hollins-house"]');
+    let venuePoint = null;
+
+    if (venueCard) {
+        let venueLat = parseFloat(venueCard.dataset.lat);
+        let venueLng = parseFloat(venueCard.dataset.lng);
+        const venueAddress = venueCard.dataset.address || venueCard.querySelector('.address')?.textContent.replace(/\s+/g, ' ').trim() || '20 Clubhouse Rd, Santa Cruz, CA 95060';
+
+        if ((Number.isNaN(venueLat) || Number.isNaN(venueLng)) && venueAddress) {
+            const coords = await geocodeAddress(venueAddress);
+            if (coords) {
+                venueLat = coords.lat;
+                venueLng = coords.lng;
+                venueCard.dataset.lat = coords.lat;
+                venueCard.dataset.lng = coords.lng;
+            }
+        }
+
+        if (!Number.isNaN(venueLat) && !Number.isNaN(venueLng)) {
+            venuePoint = {
+                id: 'venue-hollins-house',
+                name: 'Hollins House (Venue)',
+                address: venueAddress,
+                lat: venueLat,
+                lng: venueLng,
+                element: venueCard,
+                isVenue: true
+            };
+        }
+    }
+
+    const mapPoints = venuePoint ? [...accommodations, venuePoint] : accommodations;
+
+    if (!mapPoints.length) {
         mapContainer.innerHTML = '<p class="map-empty">Map data is unavailable at the moment.</p>';
         return;
     }
 
-    const averageLat = accommodations.reduce((sum, acc) => sum + acc.lat, 0) / accommodations.length;
-    const averageLng = accommodations.reduce((sum, acc) => sum + acc.lng, 0) / accommodations.length;
+    const averageLat = mapPoints.reduce((sum, acc) => sum + acc.lat, 0) / mapPoints.length;
+    const averageLng = mapPoints.reduce((sum, acc) => sum + acc.lng, 0) / mapPoints.length;
 
     const map = L.map(mapContainer, { scrollWheelZoom: false }).setView([averageLat, averageLng], 12);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        subdomains: 'abcd'
     }).addTo(map);
 
     map.scrollWheelZoom.disable();
@@ -440,21 +573,51 @@ function initAccommodationsMap() {
         weight: 3,
         fillOpacity: 1
     };
+    const venueStyle = {
+        radius: 12,
+        color: '#0F77FF',
+        weight: 3,
+        fillColor: '#0F77FF',
+        fillOpacity: 0.95
+    };
+    const venueActiveStyle = {
+        ...venueStyle,
+        radius: 14,
+        color: '#FFFFFF'
+    };
 
     const markers = {};
     let activeId = null;
     const bounds = [];
 
+    const getMarkerStyle = (point, isActive) => {
+        if (point.isVenue) {
+            return isActive ? venueActiveStyle : venueStyle;
+        }
+        return isActive ? activeStyle : defaultStyle;
+    };
+
+    const toggleElementState = (point, isActive) => {
+        if (!point.element) {
+            return;
+        }
+        if (point.isVenue) {
+            point.element.classList.toggle('venue-active', isActive);
+        } else {
+            point.element.classList.toggle('active', isActive);
+        }
+    };
+
     const setActive = (id) => {
         if (activeId === id) return;
         activeId = id;
 
-        accommodations.forEach((acc) => {
-            const isActive = acc.id === id;
-            acc.element.classList.toggle('active', isActive);
-            const marker = markers[acc.id];
+        mapPoints.forEach((point) => {
+            const isActive = point.id === id;
+            toggleElementState(point, isActive);
+            const marker = markers[point.id];
             if (marker && marker.setStyle) {
-                marker.setStyle(isActive ? activeStyle : defaultStyle);
+                marker.setStyle(getMarkerStyle(point, isActive));
             }
             if (!isActive && marker) {
                 marker.closePopup();
@@ -464,10 +627,13 @@ function initAccommodationsMap() {
 
     const clearActive = () => {
         activeId = null;
-        accommodations.forEach((acc) => acc.element.classList.remove('active'));
-        Object.values(markers).forEach((marker) => {
-            marker.setStyle(defaultStyle);
-            marker.closePopup();
+        mapPoints.forEach((point) => {
+            toggleElementState(point, false);
+            const marker = markers[point.id];
+            if (marker) {
+                marker.setStyle(getMarkerStyle(point, false));
+                marker.closePopup();
+            }
         });
     };
 
@@ -477,46 +643,72 @@ function initAccommodationsMap() {
         element.focus({ preventScroll: true });
     };
 
-    accommodations.forEach((acc) => {
-        const marker = L.circleMarker([acc.lat, acc.lng], defaultStyle).addTo(map);
-        marker.bindPopup(`<strong>${acc.name}</strong><br>${acc.address}`);
-        marker.bindTooltip(acc.name, { direction: 'top', offset: [0, -8] });
-        markers[acc.id] = marker;
-        bounds.push([acc.lat, acc.lng]);
+    mapPoints.forEach((point) => {
+        const marker = L.circleMarker([point.lat, point.lng], getMarkerStyle(point, false)).addTo(map);
+        marker.bindPopup(`<strong>${point.name}</strong><br>${point.address}`);
+        marker.bindTooltip(point.isVenue ? `${point.name}` : point.name, { direction: 'top', offset: [0, -8] });
+        markers[point.id] = marker;
+        bounds.push([point.lat, point.lng]);
 
-        marker.on('mouseover', () => setActive(acc.id));
+        marker.on('mouseover', () => setActive(point.id));
         marker.on('mouseout', () => {
-            if (activeId === acc.id) {
+            if (activeId === point.id) {
                 clearActive();
             }
         });
         marker.on('click', () => {
-            setActive(acc.id);
+            setActive(point.id);
             marker.openPopup();
-            focusCard(acc.element);
+            focusCard(point.element);
         });
 
-        acc.element.addEventListener('mouseenter', () => {
-            setActive(acc.id);
-        });
+        if (point.element) {
+            point.element.addEventListener('mouseenter', () => {
+                setActive(point.id);
+            });
 
-        acc.element.addEventListener('mouseleave', () => {
-            if (activeId === acc.id) {
-                clearActive();
-            }
-        });
+            point.element.addEventListener('mouseleave', () => {
+                if (activeId === point.id) {
+                    clearActive();
+                }
+            });
 
-        acc.element.addEventListener('focus', () => setActive(acc.id));
-        acc.element.addEventListener('blur', () => {
-            if (activeId === acc.id) {
-                clearActive();
-            }
-        });
+            point.element.addEventListener('focus', () => setActive(point.id));
+            point.element.addEventListener('blur', () => {
+                if (activeId === point.id) {
+                    clearActive();
+                }
+            });
+        }
     });
 
     if (bounds.length > 1) {
         map.fitBounds(bounds, { padding: [30, 30] });
     }
+}
+
+function initAccommodationScrollHint() {
+    const list = document.querySelector('.accommodation-list');
+    const hint = document.querySelector('.accommodation-scroll-hint');
+
+    if (!list || !hint) {
+        return;
+    }
+
+    const updateHintVisibility = () => {
+        const isScrollable = list.scrollHeight - list.clientHeight > 2;
+        if (!isScrollable) {
+            hint.classList.add('is-hidden');
+            return;
+        }
+
+        const reachedBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 2;
+        hint.classList.toggle('is-hidden', reachedBottom);
+    };
+
+    list.addEventListener('scroll', updateHintVisibility);
+    window.addEventListener('resize', updateHintVisibility);
+    updateHintVisibility();
 }
 
 // Registry Scraping Functions (for real implementation)

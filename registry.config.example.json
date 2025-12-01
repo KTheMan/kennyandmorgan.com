@@ -1,0 +1,19 @@
+{
+  "apiBaseUrl": "https://your-backend.example.com",
+  "registries": [
+    {
+      "store": "amazon",
+      "registryId": "YOUR_AMAZON_REGISTRY_ID",
+      "token": "OPTIONAL_TOKEN_IF_REQUIRED"
+    },
+    {
+      "store": "target",
+      "registryId": "YOUR_TARGET_REGISTRY_ID",
+      "token": "",
+      "endpoint": "https://custom-endpoint.example.com/registry",
+      "headers": {
+        "Authorization": "Bearer YOUR_PRIVATE_TOKEN"
+      }
+    }
+  ]
+}

@@ -22,6 +22,7 @@ node_modules/
 
 # Environment variables
 .env
+registry.config.json
 
 # OS files
 .DS_Store
