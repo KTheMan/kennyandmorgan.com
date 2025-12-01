@@ -40,7 +40,7 @@ A beautiful, responsive wedding website built with vanilla JavaScript, HTML, and
 - Password-protected dashboard at `admin.html`
 - Shares the same overlay password flow as the main site (defaults to `Binx123!`) and only stores bcrypt hashes in SQLite
 - Live table view of all guests with CRUD actions
-- CSV import utility for quickly loading or updating the roster
+- CSV import utility for quickly loading or updating the roster (now with address columns)
 - Manual guest form with RSVP status, meal choice, and dietary note fields
 
 ## Color Palette
@@ -291,7 +291,7 @@ Set `GUEST_DB_PATH` in `.env` if you want the SQLite file somewhere other than `
 - `POST /api/rsvp` records the RSVP, meal choice, dietary notes, and song request, while updating every guest in the selected party.
 - `admin.html` uses `/api/admin/*` routes for authentication, CRUD, and CSV import/export workflows.
 
-Use `admin.html` after logging in with `ADMIN_PASSWORD` to oversee RSVP statuses, edit guests, or bulk import CSV data (the importer accepts headers such as `fullName`, `groupId`, `isPrimary`, `mealChoice`, `dietaryNotes`, etc.).
+Use `admin.html` after logging in with `ADMIN_PASSWORD` to oversee RSVP statuses, edit guests, or bulk import CSV data (the importer accepts headers such as `fullName`, `groupId`, `isPrimary`, `mealChoice`, `dietaryNotes`, `addressLine1`, `addressLine2`, `city`, `state`, `postalCode`, etc.).
 
 ### Registry Cache & Fast Polling
 

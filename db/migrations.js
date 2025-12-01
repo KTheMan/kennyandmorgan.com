@@ -84,6 +84,11 @@ function runMigrations(db) {
     ensureColumn(db, 'guests', 'meal_choice', 'meal_choice TEXT');
     ensureColumn(db, 'guests', 'dietary_notes', 'dietary_notes TEXT');
     ensureColumn(db, 'guests', 'last_rsvp_at', 'last_rsvp_at TEXT');
+    ensureColumn(db, 'guests', 'address_line1', 'address_line1 TEXT');
+    ensureColumn(db, 'guests', 'address_line2', 'address_line2 TEXT');
+    ensureColumn(db, 'guests', 'city', 'city TEXT');
+    ensureColumn(db, 'guests', 'state', 'state TEXT');
+    ensureColumn(db, 'guests', 'postal_code', 'postal_code TEXT');
     ensureColumn(db, 'rsvp_submissions', 'song_request', 'song_request TEXT');
 }
 

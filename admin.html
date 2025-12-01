@@ -37,8 +37,17 @@
             <div class="admin-panels">
                 <article class="admin-panel admin-panel--wide">
                     <div class="panel-header">
-                        <h2>Guest List</h2>
-                        <button type="button" class="btn btn-secondary" id="refreshGuestsButton">Refresh</button>
+                        <div>
+                            <h2>Guest List</h2>
+                            <p class="panel-subtitle">Search, filter, and manage everyone invited.</p>
+                        </div>
+                        <div class="panel-actions">
+                            <label class="table-filter" for="guestTableFilter">
+                                <span class="sr-only">Filter guests</span>
+                                <input type="search" id="guestTableFilter" placeholder="Search guests or groups">
+                            </label>
+                            <button type="button" class="btn btn-secondary" id="refreshGuestsButton">Refresh</button>
+                        </div>
                     </div>
                     <div class="table-wrapper">
                         <table id="guestTable">
@@ -51,6 +60,7 @@
                                     <th>RSVP</th>
                                     <th>Meal</th>
                                     <th>Dietary</th>
+                                    <th>Address</th>
                                     <th>Updated</th>
                                     <th></th>
                                 </tr>
@@ -61,12 +71,18 @@
                 </article>
 
                 <article class="admin-panel">
-                    <h2>Add or Update Guest</h2>
+                    <div class="panel-header">
+                        <div>
+                            <h2>Add or Update Guest</h2>
+                            <p class="panel-subtitle">Update RSVP details or add a new invitation.</p>
+                        </div>
+                    </div>
                     <form id="guestForm" class="admin-form">
                         <input type="hidden" id="guestId" name="id">
                         <div class="form-group">
                             <label for="guestFullName">Full Name *</label>
                             <input type="text" id="guestFullName" name="fullName" required>
+                            <small class="field-hint field-hint--error" id="guestFullNameError" aria-live="polite"></small>
                         </div>
                         <div class="form-group">
                             <label for="guestEmail">Email</label>
@@ -75,6 +91,7 @@
                         <div class="form-group">
                             <label for="guestGroupId">Group ID *</label>
                             <input type="text" id="guestGroupId" name="groupId" required>
+                            <small class="field-hint field-hint--error" id="guestGroupIdError" aria-live="polite"></small>
                         </div>
                         <div class="form-group form-group--inline">
                             <label><input type="checkbox" id="guestIsPrimary" name="isPrimary"> Primary</label>
@@ -102,6 +119,28 @@
                             <textarea id="guestDietaryNotes" name="dietaryNotes" rows="2"></textarea>
                         </div>
                         <div class="form-group">
+                            <label for="guestAddressLine1">Address Line 1</label>
+                            <input type="text" id="guestAddressLine1" name="addressLine1">
+                        </div>
+                        <div class="form-group">
+                            <label for="guestAddressLine2">Address Line 2</label>
+                            <input type="text" id="guestAddressLine2" name="addressLine2">
+                        </div>
+                        <div class="form-group form-group--triple">
+                            <label>
+                                City
+                                <input type="text" id="guestCity" name="city">
+                            </label>
+                            <label>
+                                State
+                                <input type="text" id="guestState" name="state">
+                            </label>
+                            <label>
+                                ZIP / Postal Code
+                                <input type="text" id="guestPostalCode" name="postalCode">
+                            </label>
+                        </div>
+                        <div class="form-group">
                             <label for="guestNotes">Internal Notes</label>
                             <textarea id="guestNotes" name="notes" rows="2"></textarea>
                         </div>
@@ -114,8 +153,13 @@
                 </article>
 
                 <article class="admin-panel">
-                    <h2>CSV Import</h2>
-                    <p class="form-hint">Headers supported: fullName, email, groupId, isPrimary, isPlusOne, notes, rsvpStatus, mealChoice, dietaryNotes.</p>
+                    <div class="panel-header">
+                        <div>
+                            <h2>CSV Import</h2>
+                            <p class="panel-subtitle">Bulk update the roster with a single upload.</p>
+                        </div>
+                    </div>
+                    <p class="form-hint">Headers supported: fullName, email, groupId, isPrimary, isPlusOne, notes, rsvpStatus, mealChoice, dietaryNotes, addressLine1, addressLine2, city, state, postalCode.</p>
                     <div class="form-group">
                         <label for="csvFileInput">Upload CSV</label>
                         <input type="file" id="csvFileInput" accept=".csv,text/csv">
@@ -127,6 +171,7 @@
         </section>
     </main>
 
+    <div id="adminToastStack" class="admin-toast-stack" aria-live="polite" aria-atomic="true"></div>
     <script src="admin.js"></script>
 </body>
 </html>

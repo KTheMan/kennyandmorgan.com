@@ -24,7 +24,8 @@ function searchGuestGroupsByName(name, options = {}) {
 
     const placeholders = groupMatches.map(() => '?').join(',');
     const membersStmt = db.prepare(`
-        SELECT id, full_name, email, group_id, is_primary, is_plus_one, notes, rsvp_status, meal_choice, dietary_notes
+         SELECT id, full_name, email, group_id, is_primary, is_plus_one, notes, rsvp_status, meal_choice, dietary_notes,
+             address_line1, address_line2, city, state, postal_code
         FROM guests
         WHERE group_id IN (${placeholders})
         ORDER BY is_primary DESC, full_name COLLATE NOCASE
@@ -55,7 +56,12 @@ function mapGuestRow(row) {
         notes: row.notes || null,
         rsvpStatus: row.rsvp_status || 'pending',
         mealChoice: row.meal_choice || null,
-        dietaryNotes: row.dietary_notes || null
+        dietaryNotes: row.dietary_notes || null,
+        addressLine1: row.address_line1 || null,
+        addressLine2: row.address_line2 || null,
+        city: row.city || null,
+        state: row.state || null,
+        postalCode: row.postal_code || null
     };
 }
 
@@ -63,8 +69,10 @@ function replaceGuestRoster(guestList = []) {
     const db = getDb();
     const clearStmt = db.prepare('DELETE FROM guests');
     const insertStmt = db.prepare(`
-        INSERT INTO guests (full_name, email, group_id, is_primary, is_plus_one, notes, rsvp_status, meal_choice, dietary_notes)
-        VALUES (@full_name, @email, @group_id, @is_primary, @is_plus_one, @notes, @rsvp_status, @meal_choice, @dietary_notes)
+        INSERT INTO guests (full_name, email, group_id, is_primary, is_plus_one, notes, rsvp_status, meal_choice, dietary_notes,
+            address_line1, address_line2, city, state, postal_code)
+        VALUES (@full_name, @email, @group_id, @is_primary, @is_plus_one, @notes, @rsvp_status, @meal_choice, @dietary_notes,
+            @address_line1, @address_line2, @city, @state, @postal_code)
     `);
 
     const insertMany = db.transaction(rows => {
@@ -78,7 +86,12 @@ function replaceGuestRoster(guestList = []) {
             notes: row.notes || null,
             rsvp_status: row.rsvpStatus || 'pending',
             meal_choice: row.mealChoice || null,
-            dietary_notes: row.dietaryNotes || null
+            dietary_notes: row.dietaryNotes || null,
+            address_line1: row.addressLine1 || null,
+            address_line2: row.addressLine2 || null,
+            city: row.city || null,
+            state: row.state || null,
+            postal_code: row.postalCode || null
         }));
     });
 
@@ -88,7 +101,8 @@ function replaceGuestRoster(guestList = []) {
 function listGuests() {
     const db = getDb();
     return db.prepare(`
-        SELECT id, full_name, email, group_id, is_primary, is_plus_one, rsvp_status, meal_choice, dietary_notes, notes, last_rsvp_at
+        SELECT id, full_name, email, group_id, is_primary, is_plus_one, rsvp_status, meal_choice, dietary_notes, notes, last_rsvp_at,
+               address_line1, address_line2, city, state, postal_code
         FROM guests
         ORDER BY group_id, is_primary DESC, full_name COLLATE NOCASE
     `).all().map(mapGuestRowWithMeta);
@@ -105,8 +119,10 @@ function mapGuestRowWithMeta(row) {
 function createGuest(guest) {
     const db = getDb();
     const stmt = db.prepare(`
-        INSERT INTO guests (full_name, email, group_id, is_primary, is_plus_one, notes, rsvp_status, meal_choice, dietary_notes)
-        VALUES (@full_name, @email, @group_id, @is_primary, @is_plus_one, @notes, @rsvp_status, @meal_choice, @dietary_notes)
+        INSERT INTO guests (full_name, email, group_id, is_primary, is_plus_one, notes, rsvp_status, meal_choice, dietary_notes,
+            address_line1, address_line2, city, state, postal_code)
+        VALUES (@full_name, @email, @group_id, @is_primary, @is_plus_one, @notes, @rsvp_status, @meal_choice, @dietary_notes,
+            @address_line1, @address_line2, @city, @state, @postal_code)
     `);
 
     const result = stmt.run({
@@ -118,7 +134,12 @@ function createGuest(guest) {
         notes: guest.notes || null,
         rsvp_status: guest.rsvpStatus || 'pending',
         meal_choice: guest.mealChoice || null,
-        dietary_notes: guest.dietaryNotes || null
+        dietary_notes: guest.dietaryNotes || null,
+        address_line1: guest.addressLine1 || null,
+        address_line2: guest.addressLine2 || null,
+        city: guest.city || null,
+        state: guest.state || null,
+        postal_code: guest.postalCode || null
     });
 
     return result.lastInsertRowid;
@@ -138,7 +159,12 @@ function updateGuest(id, updates) {
         notes: 'notes',
         rsvpStatus: 'rsvp_status',
         mealChoice: 'meal_choice',
-        dietaryNotes: 'dietary_notes'
+        dietaryNotes: 'dietary_notes',
+        addressLine1: 'address_line1',
+        addressLine2: 'address_line2',
+        city: 'city',
+        state: 'state',
+        postalCode: 'postal_code'
     };
 
     Object.entries(mappings).forEach(([key, column]) => {
@@ -179,13 +205,20 @@ function importGuests(rows = []) {
         notes: row.notes || null,
         rsvp_status: row.rsvpStatus || 'pending',
         meal_choice: row.mealChoice || null,
-        dietary_notes: row.dietaryNotes || null
+        dietary_notes: row.dietaryNotes || null,
+        address_line1: row.addressLine1 || null,
+        address_line2: row.addressLine2 || null,
+        city: row.city || null,
+        state: row.state || null,
+        postal_code: row.postalCode || null
     }));
 
     const db = getDb();
     const insertStmt = db.prepare(`
-        INSERT INTO guests (full_name, email, group_id, is_primary, is_plus_one, notes, rsvp_status, meal_choice, dietary_notes)
-        VALUES (@full_name, @email, @group_id, @is_primary, @is_plus_one, @notes, @rsvp_status, @meal_choice, @dietary_notes)
+        INSERT INTO guests (full_name, email, group_id, is_primary, is_plus_one, notes, rsvp_status, meal_choice, dietary_notes,
+            address_line1, address_line2, city, state, postal_code)
+        VALUES (@full_name, @email, @group_id, @is_primary, @is_plus_one, @notes, @rsvp_status, @meal_choice, @dietary_notes,
+            @address_line1, @address_line2, @city, @state, @postal_code)
     `);
 
     const insertMany = db.transaction(payload => {

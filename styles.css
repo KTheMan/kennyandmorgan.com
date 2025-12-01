@@ -60,7 +60,7 @@ body.access-locked footer {
     display: none;
 }
 
-.access-conditional.is-access-granted {
+.access-conditional.is-access-granted:not(.page) {
     display: block;
 }
 
@@ -1637,6 +1637,62 @@ footer p {
     margin-bottom: 1rem;
 }
 
+.panel-subtitle {
+    margin: 0.25rem 0 0;
+    color: var(--muted-sage);
+    font-size: 0.9rem;
+}
+
+.panel-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.table-filter input {
+    border: 1px solid var(--deep-charcoal);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    border-radius: 999px;
+}
+
+.admin-toast-stack {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    z-index: 2000;
+    pointer-events: none;
+}
+
+.admin-toast {
+    min-width: 240px;
+    max-width: 320px;
+    background: var(--soft-white);
+    border-left: 4px solid var(--deep-charcoal);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.12);
+    padding: 0.85rem 1rem;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    pointer-events: auto;
+    transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.admin-toast.is-hiding {
+    opacity: 0;
+    transform: translateX(30px);
+}
+
+.admin-toast--success { border-left-color: #2E7D32; }
+.admin-toast--error { border-left-color: #C62828; }
+.admin-toast--info { border-left-color: var(--deep-charcoal); }
+
 .table-wrapper {
     overflow-x: auto;
     border: 1px solid var(--deep-charcoal);
@@ -1702,6 +1758,52 @@ footer p {
     display: flex;
     gap: 1rem;
     flex-wrap: wrap;
+}
+
+.form-group--triple {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+}
+
+.form-group--triple label {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+#guestForm {
+    position: relative;
+    padding-bottom: 3.5rem;
+}
+
+#guestForm .form-actions {
+    position: sticky;
+    bottom: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0) 0%, var(--soft-white) 35%);
+    padding-top: 1rem;
+    margin-top: 1.5rem;
+    border-top: 1px solid rgba(0,0,0,0.08);
+    z-index: 2;
+}
+
+.field-hint {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+    color: var(--muted-sage);
+}
+
+.field-hint--error {
+    color: #C62828;
+    display: none;
+}
+
+.field-hint--error.is-visible {
+    display: block;
 }
 
 /* Responsive Design */

@@ -38,94 +38,94 @@ const ACCESS_ORDER = [ACCESS_LEVELS.locked, ACCESS_LEVELS.family, ACCESS_LEVELS.
 
 const weddingPartyMembers = [
     {
-        name: 'Maya Thompson',
+        name: 'Alexis Miller',
         role: 'Matron of Honor',
-        bio: "Morgan's older sister and resident hype queen. She keeps everyone laughing and on time.",
-        photo: 'https://placehold.co/200x200?text=Maya'
+        bio: "Morgan's older sister and resident hype queen. The glue that holds the crew together.",
+        photo: 'https://placehold.co/200x200?text=Alexis'
     },
     {
-        name: 'Alex Ramirez',
+        name: 'Chayton Whiskey',
         role: 'Best Man',
-        bio: "Kenny's college roommate turned lifelong confidant. Master of speeches and dad jokes.",
-        photo: 'https://placehold.co/200x200?text=Alex'
+        bio: "Kenny's best friend since middle school, and all-around goofball who keeps the energy high.",
+        photo: 'https://placehold.co/200x200?text=Chayton'
     },
     {
-        name: 'Jada Lee',
+        name: 'Najah Izquierdo',
         role: 'Maid of Honor',
-        bio: "Morgan's childhood best friend who knows every embarrassing story and still shows up early.",
-        photo: 'https://placehold.co/200x200?text=Jada'
+        bio: "Morgan's best friend who knows every embarrassing story and still shows up early.",
+        photo: 'https://placehold.co/200x200?text=Najah'
     },
     {
-        name: 'Theo Patel',
+        name: 'Sam Calderon',
         role: 'Groomsman',
-        bio: 'Pick-up basketball MVP and Kenny’s startup co-founder. Also the unofficial DJ.',
-        photo: 'https://placehold.co/200x200?text=Theo'
+        bio: 'D&D game master and Kenny’s partner in crime for all things nerdy and adventurous.',
+        photo: 'https://placehold.co/200x200?text=Sam'
     },
     {
-        name: 'Riley Chen',
+        name: 'Raquel Esquerra',
         role: 'Bridesmaid',
-        bio: 'Met Morgan in grad school and bonded over late-night study snacks and travel plans.',
-        photo: 'https://placehold.co/200x200?text=Riley'
+        bio: 'Met Morgan in high school and bonded over late-night study snacks and travel plans.',
+        photo: 'https://placehold.co/200x200?text=Raquel'
     },
     {
-        name: 'Jordan Brooks',
+        name: 'Roy Calderon',
         role: 'Groomsman',
-        bio: "Cousin, camping buddy, and the guy who double-checks Kenny's cuff links.",
-        photo: 'https://placehold.co/200x200?text=Jordan'
+        bio: "Kindred spirit to Sam and Kenny, always ready with a joke and a helping hand.",
+        photo: 'https://placehold.co/200x200?text=Roy'
     },
     {
-        name: 'Priya Singh',
+        name: 'Jen Miller',
         role: 'Bridesmaid',
-        bio: 'Office bestie turned soul sister. She organized the group chat and the spa day.',
-        photo: 'https://placehold.co/200x200?text=Priya'
+        bio: 'Sister-in-law and supporter for all things wedding planning. She keeps everyone laughing and on time.',
+        photo: 'https://placehold.co/200x200?text=Jen'
     },
     {
-        name: 'Evan Ortiz',
+        name: 'Weston Cargay',
         role: 'Groomsman',
-        bio: "Bandmate from Kenny's college days and lead guitarist for the reception surprise.",
-        photo: 'https://placehold.co/200x200?text=Evan'
+        bio: "Cousin and adventure partner who’s always been there for the big moments and bonding over the small ones.",
+        photo: 'https://placehold.co/200x200?text=Weston'
     },
     {
-        name: 'Lila Nguyen',
+        name: 'Alyssa Graham',
         role: 'Bridesmaid',
-        bio: 'Met Morgan during her first week in Santa Cruz and has been her brunch date ever since.',
-        photo: 'https://placehold.co/200x200?text=Lila'
+        bio: 'Work bestie turned every other type of bestie. She’s been there through it all.',
+        photo: 'https://placehold.co/200x200?text=Alyssa'
     },
     {
-        name: 'Marcus Hill',
+        name: 'Anthony Sacci',
         role: 'Groomsman',
-        bio: 'High school teammate and reigning cornhole champion. Keeper of Kenny’s spare vows.',
-        photo: 'https://placehold.co/200x200?text=Marcus'
+        bio: 'Kindergarten day one friend who has seen it all who can always be counted on for a good time.',
+        photo: 'https://placehold.co/200x200?text=Anthony'
     },
     {
-        name: 'Sofia Bennett',
-        role: 'Bridesmaid',
-        bio: "Morgan's fashion muse and florist consultant. She designed the bouquet vision board.",
-        photo: 'https://placehold.co/200x200?text=Sofia'
+        name: 'Tim Miller',
+        role: 'Bridesman',
+        bio: "Morgan's older brother and steadfast supporter through every life chapter.",
+        photo: 'https://placehold.co/200x200?text=Tim'
     },
     {
-        name: 'Carter Lewis',
-        role: 'Groomsman',
-        bio: 'Resident spreadsheet wizard who turned budget chaos into calm.',
-        photo: 'https://placehold.co/200x200?text=Carter'
+        name: 'Kelcie Bettencourt',
+        role: 'Groomswoman',
+        bio: 'Middle school best friend who has been a constant source of support and laughter.',
+        photo: 'https://placehold.co/200x200?text=Kelcie'
     },
     {
-        name: 'Naomi Fields',
+        name: 'Haley Zimmer',
         role: 'Bridesmaid',
         bio: 'College roommate, meditation partner, and fearless toastmaster.',
-        photo: 'https://placehold.co/200x200?text=Naomi'
+        photo: 'https://placehold.co/200x200?text=Haley'
     },
     {
-        name: 'Henry Watkins',
+        name: 'Ryan Gordon',
         role: 'Groomsman',
-        bio: "Kenny's little brother who always brings the energy (and the snacks).",
-        photo: 'https://placehold.co/200x200?text=Henry'
+        bio: "Kenny's older brother who always brings the energy (and the electronics).",
+        photo: 'https://placehold.co/200x200?text=Ryan'
     },
     {
-        name: 'Zoe Martinez',
+        name: 'Gabe Lapp',
         role: 'Officiant',
-        bio: 'Mutual friend who introduced Kenny and Morgan. She gets to tell the story again, officially.',
-        photo: 'https://placehold.co/200x200?text=Zoe'
+        bio: 'High school partner in crime and lifelong best friend honored with leading this special day.',
+        photo: 'https://placehold.co/200x200?text=Gabe'
     }
 ];
 
@@ -314,6 +314,7 @@ function updateAccessVisibility() {
         }
     });
     setAdminMenuVisibility();
+    setRegistryFilterState();
 }
 
 function normalizeAccessLevel(value) {
@@ -428,6 +429,15 @@ function setAdminMenuVisibility() {
         toggle?.setAttribute('aria-expanded', 'false');
         panel?.setAttribute('aria-hidden', 'true');
     }
+}
+
+function setRegistryFilterState() {
+    const filter = document.getElementById('registryFilter');
+    if (!filter) {
+        return;
+    }
+    const allowed = hasAccess(ACCESS_LEVELS.family);
+    filter.disabled = !allowed;
 }
 
 // Navigation
@@ -763,7 +773,7 @@ async function initRegistry() {
     });
 
     registryFilter.value = 'all';
-    registryFilter.disabled = true;
+    registryFilter.disabled = !document.body.dataset.accessLevel || document.body.dataset.accessLevel === ACCESS_LEVELS.locked;
 
     // Load all items initially and build filter options
     await loadRegistryItems('all', { refreshFilters: true });

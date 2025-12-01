@@ -37,7 +37,9 @@ const ACCESS_SESSION_TTL_MS = config.admin.sessionTtlMs;
 const ACCESS_SALT_ROUNDS = config.admin.saltRounds;
 const ACCESS_LEVEL_ORDER = [ACCESS_LEVELS.FAMILY, ACCESS_LEVELS.PARTY, ACCESS_LEVELS.ADMIN];
 const accessSessions = new Map();
-const allowedOrigins = config.cors.allowedOrigins || [];
+const allowedOrigins = (config.cors.allowedOrigins && config.cors.allowedOrigins.length)
+    ? config.cors.allowedOrigins
+    : ['*'];
 
 // Middleware
 app.use(cors({
@@ -52,8 +54,10 @@ app.use(cors({
         }
         return callback(null, true);
     },
-    methods: ['GET', 'POST'],
-    credentials: true
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Admin-Token'],
+    optionsSuccessStatus: 204
 }));
 app.use(express.json({ limit: '1mb' }));
 
@@ -354,7 +358,12 @@ app.post('/api/admin/guests/import', requireAccessLevel(ACCESS_LEVELS.ADMIN), (r
             notes: row.notes || row.note,
             rsvpStatus: row.rsvpStatus || row.rsvp_status,
             mealChoice: row.mealChoice || row.meal_choice,
-            dietaryNotes: row.dietaryNotes || row.dietary_notes
+            dietaryNotes: row.dietaryNotes || row.dietary_notes,
+            addressLine1: row.addressLine1 || row.address_line1,
+            addressLine2: row.addressLine2 || row.address_line2,
+            city: row.city,
+            state: row.state,
+            postalCode: row.postalCode || row.postal_code || row.zip
         })).filter(row => row.fullName && row.groupId);
 
         if (!normalized.length) {

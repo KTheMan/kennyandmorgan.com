@@ -39,6 +39,18 @@ npm start
 
 The server will start on port 3000 by default (configurable via PORT environment variable).
 
+### Admin Guest CSV Columns
+
+When calling `/api/admin/guests/import`, each row can now include optional address fields. Supported headers (case-insensitive, snake_case or camelCase) include:
+
+```
+fullName, email, groupId, isPrimary, isPlusOne, notes,
+rsvpStatus, mealChoice, dietaryNotes,
+addressLine1, addressLine2, city, state, postalCode
+```
+
+Missing fields default to `null`, so you can migrate your address book incrementally.
+
 ## API Endpoints
 
 ### Health Check
