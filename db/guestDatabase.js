@@ -4,7 +4,8 @@ const { getDb } = require('./index');
 
 const CUSTOM_NAME_VARIATIONS = {
     victoria: ['vic'],
-    weston: ['wes']
+    weston: ['wes'],
+    veronica: ['ronnie', 'ronni', 'ronny', 'nica'],
 };
 
 const NAME_VARIATIONS = buildNameVariationMap();
