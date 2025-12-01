@@ -203,7 +203,8 @@ async function resumeAccessSession() {
 }
 
 async function authenticateAccessPassword(password) {
-    const response = await fetch('/api/access/login', {
+    const apiBase = resolveApiBaseUrl();
+    const response = await fetch(`${apiBase}/api/access/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password })
@@ -218,7 +219,8 @@ async function authenticateAccessPassword(password) {
 }
 
 async function fetchAccessSession(token) {
-    const response = await fetch('/api/access/session', {
+    const apiBase = resolveApiBaseUrl();
+    const response = await fetch(`${apiBase}/api/access/session`, {
         headers: { Authorization: `Bearer ${token}` }
     });
     const data = await safeJson(response);
@@ -993,7 +995,7 @@ function buildRegistryEndpoint(filter) {
             : `${baseUrl.replace(/\/$/, '')}/api/registry/${filter}`;
     }
 
-    const defaultBase = window.location.origin;
+    const defaultBase = resolveApiBaseUrl().replace(/\/$/, '');
     return filter === 'all'
         ? `${defaultBase}/api/registry`
         : `${defaultBase}/api/registry/${filter}`;

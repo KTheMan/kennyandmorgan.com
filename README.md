@@ -129,7 +129,7 @@ npm start
 
 4. **Start frontend server (in another terminal):**
 ```bash
-python3 -m http.server 8000
+npx http-server . -p 8000
 # Or use any other static file server
 # Frontend accessible at http://localhost:8000
 ```

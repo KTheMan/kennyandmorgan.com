@@ -56,7 +56,7 @@ fi
 echo ""
 
 # Start the frontend server
-echo "🚀 Starting frontend server..."
+echo "🚀 Starting frontend server (Node http-server)..."
 echo "✅ Frontend will be available at http://localhost:8000"
 echo ""
 echo "📝 To stop the servers:"
@@ -68,8 +68,8 @@ echo "   Backend API: http://localhost:3000"
 echo "   Frontend:    http://localhost:8000"
 echo ""
 
-# Start frontend server
-python3 -m http.server 8000
+# Start frontend server using the Node-based http-server module
+npx http-server . -p 8000
 
 # Cleanup when frontend server stops
 kill $SERVER_PID 2>/dev/null

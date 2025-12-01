@@ -51,7 +51,7 @@ echo [OK] Backend server started on http://localhost:3000
 echo.
 
 REM Start the frontend server
-echo [*] Starting frontend server...
+echo [*] Starting frontend server (Node http-server)...
 echo [OK] Frontend will be available at http://localhost:8000
 echo.
 echo Press Ctrl+C to stop both servers
@@ -63,7 +63,7 @@ echo   Frontend:    http://localhost:8000
 echo ================================================
 echo.
 
-python -m http.server 8000
+npx http-server . -p 8000
 
 echo.
 echo Servers stopped. Thanks for developing!
