@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RSVP Admin | Kenny & Morgan</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="admin-body">
+    <main class="admin-layout">
+        <section class="admin-card" id="adminLoginPanel">
+            <h1>RSVP Admin</h1>
+            <p class="section-subtitle">Enter the admin password to manage the guest list.</p>
+            <form id="adminLoginForm" class="admin-form">
+                <div class="form-group">
+                    <label for="adminPassword">Password</label>
+                    <input type="password" id="adminPassword" name="password" required>
+                    <p class="form-hint">This password is configured in the server's <code>.env</code> file.</p>
+                </div>
+                <button type="submit" class="btn btn-primary">Sign In</button>
+            </form>
+            <div id="adminLoginMessage" class="message"></div>
+        </section>
+
+        <section class="admin-console hidden" id="adminConsole">
+            <header class="admin-console__header">
+                <div>
+                    <h1>Guest Management</h1>
+                    <p>Review RSVP status, edit guests, or import updates from a CSV export.</p>
+                </div>
+                <button type="button" class="btn btn-secondary" id="adminLogoutButton">Log Out</button>
+            </header>
+
+            <div class="admin-panels">
+                <article class="admin-panel admin-panel--wide">
+                    <div class="panel-header">
+                        <h2>Guest List</h2>
+                        <button type="button" class="btn btn-secondary" id="refreshGuestsButton">Refresh</button>
+                    </div>
+                    <div class="table-wrapper">
+                        <table id="guestTable">
+                            <thead>
+                                <tr>
+                                    <th>Full Name</th>
+                                    <th>Group</th>
+                                    <th>Primary?</th>
+                                    <th>Plus One?</th>
+                                    <th>RSVP</th>
+                                    <th>Meal</th>
+                                    <th>Dietary</th>
+                                    <th>Updated</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </article>
+
+                <article class="admin-panel">
+                    <h2>Add or Update Guest</h2>
+                    <form id="guestForm" class="admin-form">
+                        <input type="hidden" id="guestId" name="id">
+                        <div class="form-group">
+                            <label for="guestFullName">Full Name *</label>
+                            <input type="text" id="guestFullName" name="fullName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="guestEmail">Email</label>
+                            <input type="email" id="guestEmail" name="email">
+                        </div>
+                        <div class="form-group">
+                            <label for="guestGroupId">Group ID *</label>
+                            <input type="text" id="guestGroupId" name="groupId" required>
+                        </div>
+                        <div class="form-group form-group--inline">
+                            <label><input type="checkbox" id="guestIsPrimary" name="isPrimary"> Primary</label>
+                            <label><input type="checkbox" id="guestIsPlusOne" name="isPlusOne"> Plus One</label>
+                        </div>
+                        <div class="form-group">
+                            <label for="guestRsvpStatus">RSVP Status</label>
+                            <select id="guestRsvpStatus" name="rsvpStatus">
+                                <option value="pending">Pending</option>
+                                <option value="accepted">Accepted</option>
+                                <option value="declined">Declined</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="guestMealChoice">Meal Choice</label>
+                            <select id="guestMealChoice" name="mealChoice">
+                                <option value="">Not Selected</option>
+                                <option value="chicken">Chicken</option>
+                                <option value="steak">Steak</option>
+                                <option value="vegetarian">Vegetarian</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="guestDietaryNotes">Dietary Notes</label>
+                            <textarea id="guestDietaryNotes" name="dietaryNotes" rows="2"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="guestNotes">Internal Notes</label>
+                            <textarea id="guestNotes" name="notes" rows="2"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary" id="guestSaveButton">Save Guest</button>
+                            <button type="button" class="btn btn-secondary" id="guestResetButton">Reset</button>
+                        </div>
+                    </form>
+                    <div id="guestFormMessage" class="message"></div>
+                </article>
+
+                <article class="admin-panel">
+                    <h2>CSV Import</h2>
+                    <p class="form-hint">Headers supported: fullName, email, groupId, isPrimary, isPlusOne, notes, rsvpStatus, mealChoice, dietaryNotes.</p>
+                    <div class="form-group">
+                        <label for="csvFileInput">Upload CSV</label>
+                        <input type="file" id="csvFileInput" accept=".csv,text/csv">
+                    </div>
+                    <button type="button" class="btn btn-secondary" id="csvImportButton">Import CSV</button>
+                    <div id="csvImportMessage" class="message"></div>
+                </article>
+            </div>
+        </section>
+    </main>
+
+    <script src="admin.js"></script>
+</body>
+</html>

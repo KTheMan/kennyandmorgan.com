@@ -20,6 +20,8 @@ A beautiful, responsive wedding website built with vanilla JavaScript, HTML, and
 - Dietary restrictions and allergy notes
 - Song requests for the reception
 - Special messages for the couple
+- Party lookup backed by SQLite so guests can search by name
+- RSVP submissions are written to the SQLite database with meal choices and dietary notes
 
 ### 🎨 Theme Information
 - Wedding color palette display with interactive swatches
@@ -31,6 +33,13 @@ A beautiful, responsive wedding website built with vanilla JavaScript, HTML, and
 - Filter by store (Amazon, Target, Crate & Barrel)
 - Mock data with placeholder for real registry integration
 - Direct links to purchase items
+
+### 🔐 Admin Console
+- Password-protected dashboard at `admin.html`
+- Login against the hashed `ADMIN_PASSWORD` configured in `.env`
+- Live table view of all guests with CRUD actions
+- CSV import utility for quickly loading or updating the roster
+- Manual guest form with RSVP status, meal choice, and dietary note fields
 
 ## Color Palette
 
@@ -45,15 +54,22 @@ A beautiful, responsive wedding website built with vanilla JavaScript, HTML, and
 ### Technologies Used
 - **HTML5** - Semantic markup
 - **CSS3** - Modern styling with CSS Grid and Flexbox
-- **Vanilla JavaScript** - No dependencies, pure JS
-- **LocalStorage API** - Client-side data persistence
+- **Vanilla JavaScript** - Frontend interactions and admin console UI
+- **Node.js + Express** - API for registry scraping, RSVP submissions, and admin routes
+- **SQLite (better-sqlite3)** - Guest roster, RSVPs, and admin settings
+- **bcryptjs & csv-parse** - Admin authentication + CSV import helpers
+- **LocalStorage API** - Address form demo persistence
 
 ### File Structure
 ```
 kennyandmorgan.com/
 ├── index.html          # Main HTML file with all sections
+├── admin.html          # Password-protected admin portal
 ├── styles.css          # Complete styling and responsive design
 ├── script.js           # All JavaScript functionality
+├── admin.js            # Admin console interactions
+├── server.js           # Express API (registry + RSVP)
+├── db/                 # SQLite helpers and seed utilities
 └── README.md           # This file
 ```
 
@@ -116,6 +132,10 @@ python3 -m http.server 8000
 # Frontend accessible at http://localhost:8000
 ```
 
+### Accessing the Admin Console
+
+After both servers are running, visit `http://localhost:8000/admin.html` (or the equivalent static host path) and log in with the `ADMIN_PASSWORD` defined in your `.env`. Successful login unlocks the guest table, CRUD form, and CSV importer.
+
 See [API_README.md](API_README.md) for detailed API documentation.
 See [DEPLOYMENT.md](DEPLOYMENT.md) for production deployment instructions.
 
@@ -147,7 +167,7 @@ Edit the CSS variables in `styles.css` (lines 8-14):
 ```
 
 #### Connect to Backend
-The forms currently use localStorage. To connect to a backend:
+The address collection form currently uses LocalStorage as a demo. To wire it (or any additional forms) to your backend:
 
 1. Update `handleAddressSubmit()` in `script.js`:
 ```javascript
@@ -165,7 +185,7 @@ async function handleAddressSubmit(form) {
 }
 ```
 
-2. Similar updates for `handleRSVPSubmit()`
+2. Similar updates for any other forms that should write to the server (the RSVP form is already connected to `/api/rsvp`).
 
 #### Implement Real Registry Scraping
 
@@ -215,6 +235,43 @@ npm start
 - Implementing caching to reduce requests
 - Adding rate limiting
 - Reviewing each store's terms of service
+
+### Guest Lookup, RSVP Storage & Admin Tools (SQLite)
+
+The RSVP flow now talks directly to SQLite. Guests can locate their party, submit responses (including meal selections and dietary notes), and the data is saved via the Express API.
+
+1. **Install dependencies (already included):** `better-sqlite3`
+2. **Create or seed the guest database:**
+
+```bash
+npm run seed:guests               # Loads data/guests.sample.json
+npm run seed:guests custom.json   # Provide your own JSON array
+```
+
+Seed files expect objects shaped like:
+
+```json
+{
+    "fullName": "Alex Guest",
+    "email": "alex@example.com",
+    "groupId": "GUEST-001",
+    "isPrimary": true,
+    "isPlusOne": false,
+    "notes": "Welcome party"
+}
+```
+
+3. **Configure the database path (optional):**
+
+Set `GUEST_DB_PATH` in `.env` if you want the SQLite file somewhere other than `data/guests.db`.
+
+4. **Run the API:** `npm start`
+
+- `GET /api/guests/search?name=` powers the "Find My Party" button.
+- `POST /api/rsvp` records the RSVP, meal choice, dietary notes, and song request, while updating every guest in the selected party.
+- `admin.html` uses `/api/admin/*` routes for authentication, CRUD, and CSV import/export workflows.
+
+Use `admin.html` after logging in with `ADMIN_PASSWORD` to oversee RSVP statuses, edit guests, or bulk import CSV data (the importer accepts headers such as `fullName`, `groupId`, `isPrimary`, `mealChoice`, `dietaryNotes`, etc.).
 
 ## Deployment
 

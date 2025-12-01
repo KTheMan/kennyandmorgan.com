@@ -1,0 +1,26 @@
+[
+  {
+    "fullName": "Morgan Rivera",
+    "email": "morgan@example.com",
+    "groupId": "RIVERA-001",
+    "isPrimary": true,
+    "isPlusOne": false,
+    "notes": "Bride"
+  },
+  {
+    "fullName": "Guest Plus One",
+    "email": "",
+    "groupId": "RIVERA-001",
+    "isPrimary": false,
+    "isPlusOne": true,
+    "notes": "Invited plus one"
+  },
+  {
+    "fullName": "Kenny Gardner",
+    "email": "kenny@example.com",
+    "groupId": "GARDNER-002",
+    "isPrimary": true,
+    "isPlusOne": false,
+    "notes": "Groom"
+  }
+]

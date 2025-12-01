@@ -17,6 +17,8 @@ let registryConfig = {
     registries: []
 };
 
+let latestGuestLookupResults = [];
+
 // Navigation
 function initNavigation() {
     const navLinks = document.querySelectorAll('.nav-link');
@@ -99,6 +101,8 @@ function initForms() {
         handleRSVPSubmit(e.target);
     });
 
+    setupGuestLookup();
+
     // Show/hide guest count based on attendance
     const attendingRadios = document.querySelectorAll('input[name="attending"]');
     attendingRadios.forEach(radio => {
@@ -113,6 +117,124 @@ function initForms() {
             }
         });
     });
+}
+
+function setupGuestLookup() {
+    const lookupButton = document.getElementById('guestLookupButton');
+    const nameInput = document.getElementById('rsvpName');
+    const guestCountGroup = document.getElementById('guestCountGroup');
+    const guestCountInput = document.getElementById('guestCount');
+    const hiddenGroupInput = document.getElementById('guestGroupId');
+    const resultsContainer = document.getElementById('guestLookupResults');
+    const messageElement = document.getElementById('guestLookupMessage');
+
+    if (!lookupButton || !nameInput || !resultsContainer || !messageElement) {
+        return;
+    }
+
+    const setLookupState = (text, variant = 'info') => {
+        messageElement.textContent = text;
+        messageElement.className = `guest-lookup-message is-${variant}`;
+    };
+
+    const resetResults = () => {
+        latestGuestLookupResults = [];
+        resultsContainer.innerHTML = '';
+        if (hiddenGroupInput) {
+            hiddenGroupInput.value = '';
+        }
+    };
+
+    lookupButton.addEventListener('click', async () => {
+        const query = nameInput.value.trim();
+        resetResults();
+
+        if (!query) {
+            setLookupState('Please enter your full name first.', 'error');
+            return;
+        }
+
+        lookupButton.disabled = true;
+        lookupButton.textContent = 'Searching...';
+        setLookupState('Looking up your party...', 'info');
+
+        try {
+            const apiBase = resolveApiBaseUrl();
+            const response = await fetch(`${apiBase}/api/guests/search?name=${encodeURIComponent(query)}`);
+
+            if (!response.ok) {
+                throw new Error('Search request failed');
+            }
+
+            const data = await response.json();
+
+            if (!data.success || !Array.isArray(data.results) || !data.results.length) {
+                setLookupState('We could not find a party with that name. Double-check the spelling or reach out to us.', 'error');
+                return;
+            }
+
+            latestGuestLookupResults = data.results;
+            renderGuestLookupResults(resultsContainer, data.results);
+            setLookupState('Select your party below to auto-fill the RSVP.', 'success');
+        } catch (error) {
+            console.error('Guest lookup failed:', error);
+            setLookupState('Something went wrong while searching. Please try again or contact us.', 'error');
+        } finally {
+            lookupButton.disabled = false;
+            lookupButton.textContent = 'Find My Party';
+        }
+    });
+
+    resultsContainer.addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-select-group]');
+        if (!trigger) {
+            return;
+        }
+
+        const { selectGroup: groupId } = trigger.dataset;
+        const selectedGroup = latestGuestLookupResults.find(group => group.groupId === groupId);
+        if (!selectedGroup) {
+            return;
+        }
+
+        if (hiddenGroupInput) {
+            hiddenGroupInput.value = selectedGroup.groupId;
+        }
+
+        if (guestCountGroup && guestCountInput && selectedGroup.guests?.length) {
+            guestCountGroup.classList.remove('hidden');
+            guestCountInput.value = selectedGroup.guests.length;
+        }
+
+        if (selectedGroup.guests?.length) {
+            nameInput.value = selectedGroup.primaryGuest || selectedGroup.guests[0].fullName;
+        }
+
+        setLookupState(`Loaded guests for ${selectedGroup.primaryGuest || 'your party'}.`, 'success');
+    });
+}
+
+function renderGuestLookupResults(container, groups) {
+    container.innerHTML = groups.map((group, index) => {
+        const guestList = group.guests?.map(guest => {
+            const role = guest.isPlusOne ? ' (plus one)' : '';
+            return `<li>${guest.fullName}${role}</li>`;
+        }).join('') || '';
+
+        return `
+            <article class="guest-result-card" data-group-id="${group.groupId}">
+                <div class="guest-result-header">
+                    <div>
+                        <p class="guest-result-label">Party ${index + 1}</p>
+                        <p class="guest-result-title">${group.primaryGuest || 'Guest Party'}</p>
+                    </div>
+                    <button type="button" class="btn btn-secondary guest-result-select" data-select-group="${group.groupId}">Use This Party</button>
+                </div>
+                <p class="guest-result-summary">Guests on this invitation:</p>
+                <ul class="guest-result-list">${guestList}</ul>
+            </article>
+        `;
+    }).join('');
 }
 
 function handleAddressSubmit(form) {
@@ -135,28 +257,49 @@ function handleAddressSubmit(form) {
     form.reset();
 }
 
-function handleRSVPSubmit(form) {
+async function handleRSVPSubmit(form) {
+    const submitButton = form.querySelector('button[type="submit"]');
     const formData = new FormData(form);
-    const data = Object.fromEntries(formData);
-    
-    // In a real application, this would send data to a backend
-    console.log('RSVP submitted:', data);
-    
-    // Store in localStorage for demo purposes
-    const rsvps = JSON.parse(localStorage.getItem('rsvps') || '[]');
-    rsvps.push({
-        ...data,
-        submittedAt: new Date().toISOString()
-    });
-    localStorage.setItem('rsvps', JSON.stringify(rsvps));
-    
-    const message = data.attending === 'yes' 
-        ? 'Thank you for your RSVP! We can\'t wait to celebrate with you!' 
-        : 'Thank you for letting us know. You will be missed!';
-    
-    showMessage('rsvpMessage', message, 'success');
-    form.reset();
-    document.getElementById('guestCountGroup').style.display = 'none';
+    const data = Object.fromEntries(formData.entries());
+
+    const payload = {
+        name: data.rsvpName,
+        email: data.rsvpEmail,
+        attending: data.attending === 'yes',
+        guestCount: data.guestCount ? Number(data.guestCount) : undefined,
+        dietaryRestrictions: data.dietaryRestrictions || '',
+        specialMessage: data.specialMessage || data.songRequest || '',
+        songRequest: data.songRequest || '',
+        guestGroupId: data.guestGroupId || '',
+        mealChoice: data.mealChoice || ''
+    };
+
+    const apiBase = resolveApiBaseUrl();
+    submitButton?.setAttribute('disabled', 'disabled');
+    submitButton?.classList.add('is-loading');
+
+    try {
+        const response = await fetch(`${apiBase}/api/rsvp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Submission failed');
+        }
+
+        showMessage('rsvpMessage', result.message || 'Thank you for your RSVP!', 'success');
+        form.reset();
+        document.getElementById('guestCountGroup').style.display = 'none';
+    } catch (error) {
+        console.error('Unable to submit RSVP:', error);
+        showMessage('rsvpMessage', 'We could not save your RSVP. Please try again or contact us directly.', 'error');
+    } finally {
+        submitButton?.removeAttribute('disabled');
+        submitButton?.classList.remove('is-loading');
+    }
 }
 
 function showMessage(elementId, message, type) {
@@ -779,3 +922,17 @@ async function aggregateRegistries(registries) {
 //     { store: 'crateandbarrel', id: 'YOUR_CB_REGISTRY_ID' }
 // ];
 // aggregateRegistries(registries).then(displayRegistryItems);
+
+function resolveApiBaseUrl() {
+    if (registryConfig.apiBaseUrl) {
+        return registryConfig.apiBaseUrl.replace(/\/$/, '');
+    }
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:3000';
+    }
+    return window.location.origin;
+}
+
+function getApiUrl() {
+    return resolveApiBaseUrl();
+}

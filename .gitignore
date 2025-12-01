@@ -23,6 +23,8 @@ node_modules/
 # Environment variables
 .env
 registry.config.json
+data/*.db
+data/*.sqlite
 
 # OS files
 .DS_Store
@@ -33,3 +35,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Test output
+playwright-report/
+test-results/
