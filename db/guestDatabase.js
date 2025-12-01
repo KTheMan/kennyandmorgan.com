@@ -197,18 +197,42 @@ function importGuests(rows = []) {
 }
 
 function getAdminPasswordHash() {
-    const db = getDb();
-    const row = db.prepare('SELECT value FROM admin_settings WHERE key = ?').get('admin_password_hash');
-    return row?.value || null;
+    return getSecretValue('admin_password_hash');
 }
 
 function setAdminPasswordHash(hash) {
+    setSecretValue('admin_password_hash', hash);
+}
+
+function getAccessPasswordHash(level) {
+    return getSecretValue(`access_${normalizeAccessLevel(level)}_hash`);
+}
+
+function setAccessPasswordHash(level, hash) {
+    setSecretValue(`access_${normalizeAccessLevel(level)}_hash`, hash);
+}
+
+function normalizeAccessLevel(level) {
+    const normalized = (level || '').toLowerCase();
+    if (!['family', 'party', 'admin'].includes(normalized)) {
+        throw new Error(`Unsupported access level: ${level}`);
+    }
+    return normalized;
+}
+
+function getSecretValue(key) {
+    const db = getDb();
+    const row = db.prepare('SELECT value FROM admin_settings WHERE key = ?').get(key);
+    return row?.value || null;
+}
+
+function setSecretValue(key, value) {
     const db = getDb();
     db.prepare(`
         INSERT INTO admin_settings (key, value)
-        VALUES ('admin_password_hash', @value)
+        VALUES (@key, @value)
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
-    `).run({ value: hash });
+    `).run({ key, value });
 }
 
 function recordRsvpSubmission(data) {
@@ -262,5 +286,7 @@ module.exports = {
     importGuests,
     getAdminPasswordHash,
     setAdminPasswordHash,
+    getAccessPasswordHash,
+    setAccessPasswordHash,
     recordRsvpSubmission
 };

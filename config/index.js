@@ -37,6 +37,11 @@ const config = {
         sessionTtlMs: numberFromEnv('ADMIN_SESSION_TTL_MS', 1000 * 60 * 60),
         saltRounds: numberFromEnv('ADMIN_SALT_ROUNDS', 10)
     },
+    access: {
+        familyPassword: process.env.ACCESS_PASSWORD_FAMILY || '',
+        partyPassword: process.env.ACCESS_PASSWORD_PARTY || '',
+        adminPassword: process.env.ACCESS_PASSWORD_ADMIN || process.env.ADMIN_PASSWORD || 'Binx123!'
+    },
     registry: {
         pollIntervalMs: numberFromEnv('REGISTRY_POLL_INTERVAL_MS', 1000 * 60 * 60),
         fastPollIntervalMs: numberFromEnv('REGISTRY_FAST_POLL_INTERVAL_MS', 1000 * 120),

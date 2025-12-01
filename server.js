@@ -4,6 +4,11 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { parse: parseCsv } = require('csv-parse/sync');
 const config = require('./config');
+const ACCESS_LEVELS = {
+    FAMILY: 'family',
+    PARTY: 'party',
+    ADMIN: 'admin'
+};
 const {
     searchGuestGroupsByName,
     recordRsvpSubmission,
@@ -12,8 +17,8 @@ const {
     updateGuest,
     deleteGuest,
     importGuests,
-    getAdminPasswordHash,
-    setAdminPasswordHash
+    getAccessPasswordHash,
+    setAccessPasswordHash
 } = require('./db/guestDatabase');
 const {
     storeKeys,
@@ -28,9 +33,10 @@ const {
 
 const app = express();
 const PORT = config.server.port;
-const ADMIN_SESSION_TTL_MS = config.admin.sessionTtlMs;
-const ADMIN_SALT_ROUNDS = config.admin.saltRounds;
-const adminSessions = new Map();
+const ACCESS_SESSION_TTL_MS = config.admin.sessionTtlMs;
+const ACCESS_SALT_ROUNDS = config.admin.saltRounds;
+const ACCESS_LEVEL_ORDER = [ACCESS_LEVELS.FAMILY, ACCESS_LEVELS.PARTY, ACCESS_LEVELS.ADMIN];
+const accessSessions = new Map();
 const allowedOrigins = config.cors.allowedOrigins || [];
 
 // Middleware
@@ -51,47 +57,53 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 
-function ensureAdminPasswordHash() {
+function ensureAccessPasswordHash(level, candidatePassword) {
     try {
-        const storedHash = getAdminPasswordHash();
-        const envPassword = config.admin.password;
+        const storedHash = getAccessPasswordHash(level);
+        const password = (candidatePassword || '').trim();
 
-        if (!storedHash && envPassword) {
-            const hash = bcrypt.hashSync(envPassword, ADMIN_SALT_ROUNDS);
-            setAdminPasswordHash(hash);
+        if (!storedHash && password) {
+            const hash = bcrypt.hashSync(password, ACCESS_SALT_ROUNDS);
+            setAccessPasswordHash(level, hash);
             return;
         }
 
-        if (storedHash && envPassword && !bcrypt.compareSync(envPassword, storedHash)) {
-            const hash = bcrypt.hashSync(envPassword, ADMIN_SALT_ROUNDS);
-            setAdminPasswordHash(hash);
+        if (storedHash && password && !bcrypt.compareSync(password, storedHash)) {
+            const hash = bcrypt.hashSync(password, ACCESS_SALT_ROUNDS);
+            setAccessPasswordHash(level, hash);
         }
 
-        if (!storedHash && !envPassword) {
-            console.warn('ADMIN_PASSWORD is not configured. Admin login will be unavailable.');
+        if (!storedHash && !password) {
+            console.warn(`No password configured for ${level} access.`);
         }
     } catch (error) {
-        console.error('Failed to ensure admin password hash:', error);
+        console.error(`Failed to ensure ${level} password hash:`, error);
     }
+}
+
+function ensureAccessPasswords() {
+    ensureAccessPasswordHash(ACCESS_LEVELS.FAMILY, config.access.familyPassword);
+    ensureAccessPasswordHash(ACCESS_LEVELS.PARTY, config.access.partyPassword);
+    ensureAccessPasswordHash(ACCESS_LEVELS.ADMIN, config.access.adminPassword);
 }
 
 function cleanupExpiredSessions() {
     const now = Date.now();
-    for (const [token, meta] of adminSessions.entries()) {
-        if (!meta?.createdAt || now - meta.createdAt > ADMIN_SESSION_TTL_MS) {
-            adminSessions.delete(token);
+    for (const [token, meta] of accessSessions.entries()) {
+        if (!meta?.createdAt || now - meta.createdAt > ACCESS_SESSION_TTL_MS) {
+            accessSessions.delete(token);
         }
     }
 }
 
-function createAdminSession() {
+function createAccessSession(level) {
     cleanupExpiredSessions();
     const token = crypto.randomBytes(32).toString('hex');
-    adminSessions.set(token, { createdAt: Date.now() });
+    accessSessions.set(token, { createdAt: Date.now(), level });
     return token;
 }
 
-function extractAdminToken(req) {
+function extractAccessToken(req) {
     const header = req.headers.authorization || '';
     if (header.toLowerCase().startsWith('bearer ')) {
         return header.slice(7).trim();
@@ -105,19 +117,49 @@ function extractAdminToken(req) {
     return null;
 }
 
-function requireAdminAuth(req, res, next) {
-    cleanupExpiredSessions();
-    const token = extractAdminToken(req);
-    if (!token || !adminSessions.has(token)) {
-        return res.status(401).json({ success: false, error: 'Unauthorized' });
-    }
-    req.adminToken = token;
-    req.adminSession = adminSessions.get(token);
-    req.adminSession.lastSeenAt = Date.now();
-    return next();
+function getAccessRank(level) {
+    const normalized = (level || '').toLowerCase();
+    const idx = ACCESS_LEVEL_ORDER.indexOf(normalized);
+    return idx === -1 ? -1 : idx;
 }
 
-ensureAdminPasswordHash();
+function requireAccessLevel(requiredLevel) {
+    return function accessMiddleware(req, res, next) {
+        cleanupExpiredSessions();
+        const token = extractAccessToken(req);
+        if (!token) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        const session = accessSessions.get(token);
+        if (!session) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        if (getAccessRank(session.level) < getAccessRank(requiredLevel)) {
+            return res.status(403).json({ success: false, error: 'Forbidden' });
+        }
+        session.lastSeenAt = Date.now();
+        req.accessToken = token;
+        req.accessLevel = session.level;
+        return next();
+    };
+}
+
+function resolveAccessLevelFromPassword(password) {
+    const candidate = (password || '').trim();
+    if (!candidate) {
+        return null;
+    }
+    const levelsByPriority = [...ACCESS_LEVEL_ORDER].reverse();
+    for (const level of levelsByPriority) {
+        const hash = getAccessPasswordHash(level);
+        if (hash && bcrypt.compareSync(candidate, hash)) {
+            return level;
+        }
+    }
+    return null;
+}
+
+ensureAccessPasswords();
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -211,37 +253,31 @@ app.post('/api/rsvp', (req, res) => {
     }
 });
 
-app.post('/api/admin/login', (req, res) => {
+app.post('/api/access/login', (req, res) => {
     try {
         const { password } = req.body || {};
-        const storedHash = getAdminPasswordHash();
-
-        if (!storedHash) {
-            return res.status(503).json({ success: false, error: 'Admin password is not configured.' });
-        }
-
-        if (!password || !bcrypt.compareSync(password, storedHash)) {
+        const level = resolveAccessLevelFromPassword(password);
+        if (!level) {
             return res.status(401).json({ success: false, error: 'Invalid password.' });
         }
-
-        const token = createAdminSession();
-        return res.json({ success: true, token, expiresIn: ADMIN_SESSION_TTL_MS });
+        const token = createAccessSession(level);
+        return res.json({ success: true, token, accessLevel: level, expiresIn: ACCESS_SESSION_TTL_MS });
     } catch (error) {
-        console.error('Admin login failed:', error);
-        return res.status(500).json({ success: false, error: 'Unable to log in.' });
+        console.error('Access login failed:', error);
+        return res.status(500).json({ success: false, error: 'Unable to authenticate.' });
     }
 });
 
-app.post('/api/admin/logout', requireAdminAuth, (req, res) => {
-    adminSessions.delete(req.adminToken);
+app.post('/api/access/logout', requireAccessLevel(ACCESS_LEVELS.FAMILY), (req, res) => {
+    accessSessions.delete(req.accessToken);
     res.json({ success: true });
 });
 
-app.get('/api/admin/session', requireAdminAuth, (req, res) => {
-    res.json({ success: true, expiresIn: ADMIN_SESSION_TTL_MS });
+app.get('/api/access/session', requireAccessLevel(ACCESS_LEVELS.FAMILY), (req, res) => {
+    res.json({ success: true, accessLevel: req.accessLevel, expiresIn: ACCESS_SESSION_TTL_MS });
 });
 
-app.get('/api/admin/guests', requireAdminAuth, (req, res) => {
+app.get('/api/admin/guests', requireAccessLevel(ACCESS_LEVELS.ADMIN), (req, res) => {
     try {
         const guests = listGuests();
         res.json({ success: true, count: guests.length, guests });
@@ -251,7 +287,7 @@ app.get('/api/admin/guests', requireAdminAuth, (req, res) => {
     }
 });
 
-app.post('/api/admin/guests', requireAdminAuth, (req, res) => {
+app.post('/api/admin/guests', requireAccessLevel(ACCESS_LEVELS.ADMIN), (req, res) => {
     try {
         const payload = req.body || {};
         if (!payload.fullName || !payload.groupId) {
@@ -265,7 +301,7 @@ app.post('/api/admin/guests', requireAdminAuth, (req, res) => {
     }
 });
 
-app.patch('/api/admin/guests/:id', requireAdminAuth, (req, res) => {
+app.patch('/api/admin/guests/:id', requireAccessLevel(ACCESS_LEVELS.ADMIN), (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         if (!id) {
@@ -282,7 +318,7 @@ app.patch('/api/admin/guests/:id', requireAdminAuth, (req, res) => {
     }
 });
 
-app.delete('/api/admin/guests/:id', requireAdminAuth, (req, res) => {
+app.delete('/api/admin/guests/:id', requireAccessLevel(ACCESS_LEVELS.ADMIN), (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         if (!id) {
@@ -296,7 +332,7 @@ app.delete('/api/admin/guests/:id', requireAdminAuth, (req, res) => {
     }
 });
 
-app.post('/api/admin/guests/import', requireAdminAuth, (req, res) => {
+app.post('/api/admin/guests/import', requireAccessLevel(ACCESS_LEVELS.ADMIN), (req, res) => {
     try {
         const { csv } = req.body || {};
         if (!csv || !csv.trim()) {

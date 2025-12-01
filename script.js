@@ -1,6 +1,8 @@
 // Navigation functionality
 document.addEventListener('DOMContentLoaded', () => {
-    initAccessControl();
+    initAccessControl().catch(error => {
+        console.error('Access control failed to initialize:', error);
+    });
     initNavigation();
     initCountdown();
     initForms();
@@ -28,12 +30,8 @@ const ACCESS_LEVELS = {
     party: 'party',
     admin: 'admin'
 };
-const ACCESS_PASSWORDS = {
-    binx: ACCESS_LEVELS.family,
-    binxparty: ACCESS_LEVELS.party,
-    'binx123!': ACCESS_LEVELS.admin
-};
-const ACCESS_TOKEN_KEY = 'km_access_level';
+const ACCESS_LEVEL_STORAGE_KEY = 'km_access_level';
+const ACCESS_TOKEN_STORAGE_KEY = 'km_access_token';
 let currentAccessLevel = ACCESS_LEVELS.locked;
 let hasUnlockedOnce = false;
 const ACCESS_ORDER = [ACCESS_LEVELS.locked, ACCESS_LEVELS.family, ACCESS_LEVELS.party, ACCESS_LEVELS.admin];
@@ -131,54 +129,143 @@ const weddingPartyMembers = [
     }
 ];
 
-function initAccessControl() {
+async function initAccessControl() {
     renderWeddingPartyMembers();
     const passwordInput = document.getElementById('accessPassword');
     const statusEl = document.getElementById('accessStatus');
     const form = document.getElementById('accessForm');
 
-    let storedLevel = ACCESS_LEVELS.locked;
-    try {
-        storedLevel = normalizeAccessLevel(localStorage.getItem(ACCESS_TOKEN_KEY));
-    } catch (error) {
-        storedLevel = ACCESS_LEVELS.locked;
-    }
-    if (storedLevel !== ACCESS_LEVELS.locked) {
-        applyAccessLevel(storedLevel);
-    } else {
+    const resumed = await resumeAccessSession();
+    if (!resumed) {
         showOverlay();
         passwordInput?.focus();
         updateAccessVisibility();
     }
 
-    form?.addEventListener('submit', (event) => {
+    form?.addEventListener('submit', async (event) => {
         event.preventDefault();
-        const level = resolveAccessLevel(passwordInput?.value || '');
-        if (!level) {
-            statusEl.textContent = 'Incorrect password. Please try again.';
-            statusEl.classList.add('is-error');
-            return;
-        }
-        statusEl.textContent = '';
-        statusEl.classList.remove('is-error');
-        applyAccessLevel(level);
-        passwordInput.value = '';
+        await handleAccessUnlock(passwordInput, statusEl);
     });
 }
 
-function resolveAccessLevel(password) {
+async function handleAccessUnlock(passwordInput, statusEl) {
+    const password = passwordInput?.value || '';
     const trimmed = password.trim();
     if (!trimmed) {
+        if (statusEl) {
+            statusEl.textContent = 'Please enter the password to continue.';
+            statusEl.classList.add('is-error');
+        }
+        return;
+    }
+
+    if (statusEl) {
+        statusEl.textContent = 'Unlocking...';
+        statusEl.classList.remove('is-error');
+    }
+
+    try {
+        const result = await authenticateAccessPassword(trimmed);
+        persistAccessToken(result.token);
+        applyAccessLevel(result.accessLevel);
+        if (statusEl) {
+            statusEl.textContent = '';
+        }
+    } catch (error) {
+        console.error('Unable to unlock access:', error);
+        if (statusEl) {
+            statusEl.textContent = error.message || 'Incorrect password. Please try again.';
+            statusEl.classList.add('is-error');
+        }
+        showOverlay();
+    } finally {
+        if (passwordInput) {
+            passwordInput.value = '';
+        }
+    }
+}
+
+async function resumeAccessSession() {
+    const token = getStoredAccessToken();
+    if (!token) {
+        return false;
+    }
+    try {
+        const session = await fetchAccessSession(token);
+        persistAccessToken(token);
+        applyAccessLevel(session.accessLevel);
+        return true;
+    } catch (error) {
+        console.warn('Stored access token is no longer valid:', error);
+        clearStoredAccess();
+        return false;
+    }
+}
+
+async function authenticateAccessPassword(password) {
+    const response = await fetch('/api/access/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+    });
+    const data = await safeJson(response);
+    if (!response.ok || data.success === false) {
+        const error = new Error(data.error || data.message || 'Unable to authenticate.');
+        error.status = response.status;
+        throw error;
+    }
+    return data;
+}
+
+async function fetchAccessSession(token) {
+    const response = await fetch('/api/access/session', {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await safeJson(response);
+    if (!response.ok || data.success === false) {
+        const error = new Error(data.error || data.message || 'Access session invalid.');
+        error.status = response.status;
+        throw error;
+    }
+    return data;
+}
+
+async function safeJson(response) {
+    try {
+        return await response.json();
+    } catch (error) {
+        return {};
+    }
+}
+
+function getStoredAccessToken() {
+    try {
+        return localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+    } catch (error) {
+        console.warn('Unable to read stored access token:', error);
         return null;
     }
-    const lowered = trimmed.toLowerCase();
-    if (lowered === 'binx123!' || trimmed === 'Binx123!') {
-        return ACCESS_LEVELS.admin;
+}
+
+function persistAccessToken(token) {
+    if (!token) {
+        clearStoredAccess();
+        return;
     }
-    if (ACCESS_PASSWORDS[lowered]) {
-        return ACCESS_PASSWORDS[lowered];
+    try {
+        localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+    } catch (error) {
+        console.warn('Unable to persist access token:', error);
     }
-    return null;
+}
+
+function clearStoredAccess() {
+    try {
+        localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+        localStorage.removeItem(ACCESS_LEVEL_STORAGE_KEY);
+    } catch (error) {
+        console.warn('Unable to clear stored access data:', error);
+    }
 }
 
 function applyAccessLevel(level) {
@@ -186,7 +273,7 @@ function applyAccessLevel(level) {
     currentAccessLevel = sanitized;
     document.body.dataset.accessLevel = sanitized;
     try {
-        localStorage.setItem(ACCESS_TOKEN_KEY, sanitized);
+        localStorage.setItem(ACCESS_LEVEL_STORAGE_KEY, sanitized);
     } catch (error) {
         console.warn('Unable to persist access level:', error);
     }

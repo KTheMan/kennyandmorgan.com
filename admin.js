@@ -1,6 +1,8 @@
-const ADMIN_TOKEN_KEY = 'km_admin_token';
+const ACCESS_TOKEN_KEY = 'km_access_token';
+const REQUIRED_ACCESS_LEVEL = 'admin';
 const state = {
-    token: localStorage.getItem(ADMIN_TOKEN_KEY) || null,
+    token: localStorage.getItem(ACCESS_TOKEN_KEY) || null,
+    accessLevel: null,
     guests: []
 };
 
@@ -80,21 +82,29 @@ async function apiRequest(path, options = {}) {
 }
 
 async function verifySession() {
-    return apiRequest('/api/admin/session');
+    const session = await apiRequest('/api/access/session');
+    if (session.accessLevel !== REQUIRED_ACCESS_LEVEL) {
+        const error = new Error('Admin-level access is required.');
+        error.status = 403;
+        throw error;
+    }
+    state.accessLevel = session.accessLevel;
+    return session;
 }
 
 function handleUnauthorized() {
     setAuthToken(null);
     toggleConsole(false);
-    showMessage('adminLoginMessage', 'Your session expired. Please sign in again.', 'error');
+    showMessage('adminLoginMessage', 'Your session expired. Please unlock the main site with the admin password again.', 'error');
 }
 
 function setAuthToken(token) {
     state.token = token;
     if (token) {
-        localStorage.setItem(ADMIN_TOKEN_KEY, token);
+        localStorage.setItem(ACCESS_TOKEN_KEY, token);
     } else {
-        localStorage.removeItem(ADMIN_TOKEN_KEY);
+        localStorage.removeItem(ACCESS_TOKEN_KEY);
+        state.accessLevel = null;
     }
 }
 
@@ -112,11 +122,16 @@ async function handleLogin(event) {
     submitButton?.classList.add('is-loading');
 
     try {
-        const result = await apiRequest('/api/admin/login', {
+        const result = await apiRequest('/api/access/login', {
             method: 'POST',
             body: JSON.stringify({ password })
         });
+        if (result.accessLevel !== REQUIRED_ACCESS_LEVEL) {
+            showMessage('adminLoginMessage', 'That password unlocks the site, but not the admin console.', 'error');
+            return;
+        }
         setAuthToken(result.token);
+        state.accessLevel = result.accessLevel;
         toggleConsole(true);
         showMessage('adminLoginMessage', '', 'success');
         await loadGuests();
@@ -133,7 +148,7 @@ async function handleLogin(event) {
 async function handleLogout() {
     try {
         if (state.token) {
-            await apiRequest('/api/admin/logout', { method: 'POST' });
+            await apiRequest('/api/access/logout', { method: 'POST' });
         }
     } catch (error) {
         console.warn('Logout error:', error);

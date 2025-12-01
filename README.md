@@ -38,7 +38,7 @@ A beautiful, responsive wedding website built with vanilla JavaScript, HTML, and
 
 ### 🔐 Admin Console
 - Password-protected dashboard at `admin.html`
-- Login against the hashed `ADMIN_PASSWORD` configured in `.env`
+- Shares the same overlay password flow as the main site (defaults to `Binx123!`) and only stores bcrypt hashes in SQLite
 - Live table view of all guests with CRUD actions
 - CSV import utility for quickly loading or updating the roster
 - Manual guest form with RSVP status, meal choice, and dietary note fields
@@ -141,6 +141,7 @@ All runtime options flow through `config/index.js`, which normalizes environment
 - `server`: `PORT` plus any future server toggles.
 - `cors`: `ALLOWED_ORIGINS` list (comma separated; use `*` to allow everyone for quick demos).
 - `admin`: `ADMIN_PASSWORD`, `ADMIN_SESSION_TTL_MS`, `ADMIN_SALT_ROUNDS`.
+- `access`: `ACCESS_PASSWORD_FAMILY`, `ACCESS_PASSWORD_PARTY`, `ACCESS_PASSWORD_ADMIN` seed the password overlay (the server hashes and stores them automatically—`ACCESS_PASSWORD_ADMIN` defaults to `Binx123!`).
 - `database`: `DATABASE_PATH` / `GUEST_DB_PATH` toggle for the SQLite file.
 - `registry`: Poll intervals (`REGISTRY_*`), fast-poll knobs, and the per-store registry IDs (`AMAZON_REGISTRY_ID`, `TARGET_REGISTRY_ID`, etc.).
 
@@ -148,7 +149,12 @@ Update `.env` as usual and restart the server—everything else reads from the s
 
 ### Accessing the Admin Console
 
-After both servers are running, visit `http://localhost:8000/admin.html` (or the equivalent static host path) and log in with the `ADMIN_PASSWORD` defined in your `.env`. Successful login unlocks the guest table, CRUD form, and CSV importer.
+After both servers are running, unlock the main site with the admin-level overlay password (defaults to `Binx123!`, configurable via `ACCESS_PASSWORD_ADMIN`). That request hits `/api/access/login`, stores a short-lived token in SQLite, and hides the overlay. Once unlocked, visit `http://localhost:8000/admin.html` (or the equivalent static host path) and the console will reuse the same token automatically. If you open `admin.html` directly, the login form posts to the same `/api/access/login` endpoint—only the admin-level password grants access to the guest table, CRUD form, and CSV importer.
+
+### Password Overlay & Access Tokens
+- The password modal on `index.html` never checks plaintext values on the client. Every attempt posts to `/api/access/login`, which compares bcrypt hashes stored in the `admin_settings` table.
+- Successful logins receive a bearer token (default TTL: one hour) saved as `km_access_token` in `localStorage`. The front-end uses the token to resume sessions and the server enforces the access tier for every `/api/admin/*` request.
+- Configure separate tiers via `ACCESS_PASSWORD_FAMILY`, `ACCESS_PASSWORD_PARTY`, and `ACCESS_PASSWORD_ADMIN`. Family/party unlock extra front-end sections, while the admin level is required for the management console and all privileged API routes.
 
 See [API_README.md](API_README.md) for detailed API documentation.
 See [DEPLOYMENT.md](DEPLOYMENT.md) for production deployment instructions.

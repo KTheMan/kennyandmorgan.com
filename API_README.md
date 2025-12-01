@@ -55,6 +55,34 @@ Check if the API is running.
 }
 ```
 
+### Access Tokens & Overlay Passwords
+
+The site-wide overlay and the admin console both authenticate through these endpoints. All passwords are hashed with bcrypt and stored in the `admin_settings` table—no plaintext secrets leave the server.
+
+**POST** `/api/access/login`
+
+- Body: `{ "password": "Binx123!" }`
+- Response:
+```json
+{
+  "success": true,
+  "token": "<bearer token>",
+  "accessLevel": "admin",
+  "expiresIn": 3600000
+}
+```
+
+**GET** `/api/access/session`
+
+- Requires `Authorization: Bearer <token>` header.
+- Returns the current access level so the frontend can resume sessions without re-prompting for a password.
+
+**POST** `/api/access/logout`
+
+- Requires the same bearer token header and revokes the session immediately.
+
+> ℹ️ Only the admin-level password (defaults to `Binx123!` or `ACCESS_PASSWORD_ADMIN`) can access `/api/admin/*` routes. Family/party tiers stop at front-end content unlocks and will receive `403` responses if they hit privileged endpoints.
+
 ### Get All Registry Items
 
 **GET** `/api/registry`
