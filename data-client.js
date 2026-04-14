@@ -6,18 +6,6 @@
         return window.KMSiteConfig.load();
     }
 
-    function getSupabaseClient() {
-        return window.KMSiteConfig.getSupabaseClient(window.KMSiteConfig.getSync());
-    }
-
-    function shouldUseSupabase(config = window.KMSiteConfig.getSync()) {
-        return window.KMSiteConfig.isSupabaseConfigured(config);
-    }
-
-    function canUseLocalFallback(config = window.KMSiteConfig.getSync()) {
-        return window.KMSiteConfig.isLocalhost();
-    }
-
     async function callSupabaseRpc(fn, params = {}) {
         const config = await ensureConfig();
         const client = window.KMSiteConfig.getSupabaseClient(config);
@@ -29,36 +17,6 @@
         if (error) {
             throw new Error(error.message || 'Supabase request failed.');
         }
-        return data;
-    }
-
-    async function callApi(path, options = {}) {
-        const config = await ensureConfig();
-        const baseUrl = window.KMSiteConfig.getApiBaseUrl(config);
-        const headers = options.headers ? { ...options.headers } : {};
-        if (options.body && !headers['Content-Type']) {
-            headers['Content-Type'] = 'application/json';
-        }
-
-        const response = await fetch(`${baseUrl}${path}`, {
-            ...options,
-            headers
-        });
-
-        let data = {};
-        try {
-            data = await response.json();
-        } catch (error) {
-            data = {};
-        }
-
-        if (!response.ok || data.success === false) {
-            const message = data.error || data.message || `Request failed with ${response.status}.`;
-            const err = new Error(message);
-            err.status = response.status;
-            throw err;
-        }
-
         return data;
     }
 
@@ -100,130 +58,104 @@
         return ACCESS_LEVELS.includes(level) ? level : null;
     }
 
+    function canUseLocalFallback() {
+        return window.KMSiteConfig.isLocalhost();
+    }
+
     async function loginAccess(password) {
         const config = await ensureConfig();
-        if (shouldUseSupabase(config)) {
+
+        if (window.KMSiteConfig.isSupabaseConfigured(config)) {
             try {
                 return await callSupabaseRpc('login_access', {
                     candidate_password: password,
                     session_ttl_ms: config.supabase.sessionTtlMs || 1000 * 60 * 60
                 });
             } catch (error) {
-                if (!canUseLocalFallback(config)) {
+                if (!canUseLocalFallback()) {
                     throw error;
                 }
             }
         }
 
-        try {
-            return await callApi('/api/access/login', {
-                method: 'POST',
-                body: JSON.stringify({ password })
-            });
-        } catch (error) {
-            if (!canUseLocalFallback(config)) {
-                throw error;
-            }
-            const accessLevel = getLocalAccessLevel(password);
-            if (!accessLevel) {
-                throw new Error('Invalid password.');
-            }
-            return {
-                success: true,
-                token: buildLocalToken(accessLevel),
-                accessLevel,
-                expiresIn: config.supabase.sessionTtlMs || 1000 * 60 * 60
-            };
+        const accessLevel = getLocalAccessLevel(password);
+        if (!accessLevel) {
+            throw new Error('Invalid password.');
         }
+
+        return {
+            success: true,
+            token: buildLocalToken(accessLevel),
+            accessLevel,
+            expiresIn: config.supabase.sessionTtlMs || 1000 * 60 * 60
+        };
     }
 
     async function getAccessSession(token) {
         const config = await ensureConfig();
-        if (shouldUseSupabase(config)) {
+
+        if (window.KMSiteConfig.isSupabaseConfigured(config)) {
             try {
                 return await callSupabaseRpc('get_access_session', {
                     session_token: token
                 });
             } catch (error) {
-                if (!canUseLocalFallback(config)) {
+                if (!canUseLocalFallback()) {
                     throw error;
                 }
             }
         }
 
-        try {
-            return await callApi('/api/access/session', {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-        } catch (error) {
-            if (!canUseLocalFallback(config)) {
-                throw error;
-            }
-            const accessLevel = parseLocalToken(token);
-            if (!accessLevel) {
-                throw new Error('Access session invalid.');
-            }
-            return {
-                success: true,
-                accessLevel,
-                expiresIn: config.supabase.sessionTtlMs || 1000 * 60 * 60
-            };
+        const accessLevel = parseLocalToken(token);
+        if (!accessLevel) {
+            throw new Error('Access session invalid.');
         }
+
+        return {
+            success: true,
+            accessLevel,
+            expiresIn: config.supabase.sessionTtlMs || 1000 * 60 * 60
+        };
     }
 
     async function logoutAccess(token) {
         const config = await ensureConfig();
-        if (shouldUseSupabase(config)) {
+
+        if (window.KMSiteConfig.isSupabaseConfigured(config)) {
             try {
                 return await callSupabaseRpc('logout_access', {
                     session_token: token
                 });
             } catch (error) {
-                if (!canUseLocalFallback(config)) {
+                if (!canUseLocalFallback()) {
                     throw error;
                 }
             }
         }
 
-        try {
-            return await callApi('/api/access/logout', {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` }
-            });
-        } catch (error) {
-            if (!canUseLocalFallback(config)) {
-                throw error;
-            }
-            return { success: true };
+        if (!parseLocalToken(token)) {
+            throw new Error('Access session invalid.');
         }
+
+        return { success: true };
     }
 
     async function searchGuestGroups(query, limit = 5) {
-        const config = await ensureConfig();
-        if (shouldUseSupabase(config)) {
-            const data = await callSupabaseRpc('search_guest_groups', {
-                search_name: query,
-                max_results: limit
-            });
-            return {
-                success: true,
-                count: Array.isArray(data) ? data.length : 0,
-                results: Array.isArray(data) ? data : []
-            };
-        }
-        return callApi(`/api/guests/search?name=${encodeURIComponent(query)}&limit=${limit}`);
+        const data = await callSupabaseRpc('search_guest_groups', {
+            search_name: query,
+            max_results: limit
+        });
+
+        return {
+            success: true,
+            count: Array.isArray(data) ? data.length : 0,
+            results: Array.isArray(data) ? data : []
+        };
     }
 
     async function submitRsvp(payload) {
-        const config = await ensureConfig();
-        if (shouldUseSupabase(config)) {
-            return callSupabaseRpc('submit_rsvp', {
-                payload
-            });
-        }
-        return callApi('/api/rsvp', {
-            method: 'POST',
-            body: JSON.stringify(payload)
+        return callSupabaseRpc('submit_rsvp', {
+            payload
         });
     }
 
@@ -236,19 +168,15 @@
     }
 
     async function submitAddress(payload) {
-        const config = await ensureConfig();
-        if (shouldUseSupabase(config)) {
-            return callSupabaseRpc('save_address_submission', {
+        try {
+            return await callSupabaseRpc('save_address_submission', {
                 payload
             });
-        }
-
-        try {
-            return await callApi('/api/addresses', {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
         } catch (error) {
+            if (!canUseLocalFallback()) {
+                throw error;
+            }
+
             const entries = loadLocalCollection('addresses');
             entries.push({
                 ...payload,
@@ -260,51 +188,28 @@
     }
 
     async function listAdminGuests(token) {
-        const config = await ensureConfig();
-        if (shouldUseSupabase(config)) {
-            const guests = await callSupabaseRpc('list_admin_guests', {
-                session_token: token
-            });
-            return {
-                success: true,
-                guests: Array.isArray(guests) ? guests : []
-            };
-        }
-        return callApi('/api/admin/guests', {
-            headers: { Authorization: `Bearer ${token}` }
+        const guests = await callSupabaseRpc('list_admin_guests', {
+            session_token: token
         });
+
+        return {
+            success: true,
+            guests: Array.isArray(guests) ? guests : []
+        };
     }
 
     async function saveAdminGuest(token, payload, guestId) {
-        const config = await ensureConfig();
-        if (shouldUseSupabase(config)) {
-            return callSupabaseRpc('admin_upsert_guest', {
-                session_token: token,
-                guest_id: guestId ? Number(guestId) : null,
-                payload
-            });
-        }
-
-        const path = guestId ? `/api/admin/guests/${guestId}` : '/api/admin/guests';
-        const method = guestId ? 'PATCH' : 'POST';
-        return callApi(path, {
-            method,
-            headers: { Authorization: `Bearer ${token}` },
-            body: JSON.stringify(payload)
+        return callSupabaseRpc('admin_upsert_guest', {
+            session_token: token,
+            guest_id: guestId ? Number(guestId) : null,
+            payload
         });
     }
 
     async function deleteAdminGuest(token, guestId) {
-        const config = await ensureConfig();
-        if (shouldUseSupabase(config)) {
-            return callSupabaseRpc('admin_delete_guest', {
-                session_token: token,
-                guest_id: Number(guestId)
-            });
-        }
-        return callApi(`/api/admin/guests/${guestId}`, {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${token}` }
+        return callSupabaseRpc('admin_delete_guest', {
+            session_token: token,
+            guest_id: Number(guestId)
         });
     }
 
@@ -328,14 +233,14 @@
             row = [];
         };
 
-        for (let charIndex = 0; charIndex < text.length; charIndex += 1) {
-            const char = text[charIndex];
-            const next = text[charIndex + 1];
+        for (let i = 0; i < text.length; i += 1) {
+            const char = text[i];
+            const next = text[i + 1];
 
             if (char === '"') {
                 if (inQuotes && next === '"') {
                     current += '"';
-                    charIndex += 1;
+                    i += 1;
                 } else {
                     inQuotes = !inQuotes;
                 }
@@ -349,7 +254,7 @@
 
             if ((char === '\n' || char === '\r') && !inQuotes) {
                 if (char === '\r' && next === '\n') {
-                    charIndex += 1;
+                    i += 1;
                 }
                 pushValue();
                 pushRow();
@@ -538,51 +443,14 @@
     }
 
     async function importAdminGuests(token, csvText) {
-        const config = await ensureConfig();
-        if (shouldUseSupabase(config)) {
-            const rows = finalizeImportedGuests(parseCsv(csvText));
-            if (!rows.length) {
-                throw new Error('CSV must contain recognizable name and party/group columns.');
-            }
-            return callSupabaseRpc('admin_import_guests', {
-                session_token: token,
-                payload: rows
-            });
-        }
-        return callApi('/api/admin/guests/import', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ csv: csvText })
-        });
-    }
-
-    async function listRegistryItems(filter = 'all') {
-        const config = await ensureConfig();
-        if (shouldUseSupabase(config)) {
-            const items = await callSupabaseRpc('list_registry_items', {
-                store_filter: filter === 'all' ? null : filter,
-                include_unavailable: false
-            });
-            return {
-                success: true,
-                items: Array.isArray(items) ? items : []
-            };
+        const rows = finalizeImportedGuests(parseCsv(csvText));
+        if (!rows.length) {
+            throw new Error('CSV must contain recognizable name and party/group columns.');
         }
 
-        const baseUrl = window.KMSiteConfig.getApiBaseUrl(config);
-        const endpoint = filter === 'all'
-            ? `${baseUrl}/api/registry`
-            : `${baseUrl}/api/registry/${filter}`;
-        return callApi(endpoint.replace(baseUrl, ''), {});
-    }
-
-    async function flagRegistryItemForFastPoll(cacheId) {
-        const config = await ensureConfig();
-        if (shouldUseSupabase(config)) {
-            return { success: true, skipped: true };
-        }
-        return callApi(`/api/registry/items/${cacheId}/fast-poll`, {
-            method: 'POST'
+        return callSupabaseRpc('admin_import_guests', {
+            session_token: token,
+            payload: rows
         });
     }
 
@@ -596,8 +464,6 @@
         listAdminGuests,
         saveAdminGuest,
         deleteAdminGuest,
-        importAdminGuests,
-        listRegistryItems,
-        flagRegistryItemForFastPoll
+        importAdminGuests
     };
 })(window);

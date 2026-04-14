@@ -1,6 +1,5 @@
 (function(window) {
     const DEFAULT_CONFIG = {
-        apiBaseUrl: '',
         registryPageUrl: 'https://www.myregistry.com/giftlist/morganandkenny',
         supabase: {
             url: '',
@@ -11,8 +10,7 @@
             familyPassword: '',
             partyPassword: '',
             adminPassword: ''
-        },
-        registries: []
+        }
     };
 
     let configPromise = null;
@@ -25,10 +23,6 @@
     function mergeConfig(base, extra) {
         const merged = { ...base };
         Object.entries(extra || {}).forEach(([key, value]) => {
-            if (Array.isArray(value)) {
-                merged[key] = value.slice();
-                return;
-            }
             if (isPlainObject(value) && isPlainObject(base[key])) {
                 merged[key] = mergeConfig(base[key], value);
                 return;
@@ -36,20 +30,6 @@
             merged[key] = value;
         });
         return merged;
-    }
-
-    function normalizeLegacyConfig(raw) {
-        if (!raw || typeof raw !== 'object') {
-            return {};
-        }
-        return {
-            apiBaseUrl: raw.apiBaseUrl || '',
-            registries: Array.isArray(raw.registries) ? raw.registries : []
-        };
-    }
-
-    function isLocalhost() {
-        return ['localhost', '127.0.0.1'].includes(window.location.hostname);
     }
 
     async function fetchJsonConfig(path) {
@@ -70,19 +50,11 @@
 
             try {
                 loaded = await fetchJsonConfig('site.config.json');
-            } catch (siteConfigError) {
-                try {
-                    loaded = normalizeLegacyConfig(await fetchJsonConfig('registry.config.json'));
-                } catch (legacyConfigError) {
-                    loaded = {};
-                }
+            } catch (error) {
+                loaded = {};
             }
 
             const config = mergeConfig(DEFAULT_CONFIG, loaded);
-            if (isLocalhost() && !config.apiBaseUrl) {
-                config.apiBaseUrl = 'http://localhost:3000';
-            }
-
             window.__KM_SITE_CONFIG = config;
             return config;
         })();
@@ -118,23 +90,16 @@
         return supabaseClient;
     }
 
-    function getApiBaseUrl(config = getSync()) {
-        if (config?.apiBaseUrl) {
-            return config.apiBaseUrl.replace(/\/$/, '');
-        }
-        if (isLocalhost()) {
-            return 'http://localhost:3000';
-        }
-        return window.location.origin;
+    function isLocalhost() {
+        return ['localhost', '127.0.0.1'].includes(window.location.hostname);
     }
 
     window.KMSiteConfig = {
         DEFAULT_CONFIG,
         load,
         getSync,
-        isLocalhost,
-        isSupabaseConfigured,
         getSupabaseClient,
-        getApiBaseUrl
+        isSupabaseConfigured,
+        isLocalhost
     };
 })(window);

@@ -1,5 +1,4 @@
 {
-  "apiBaseUrl": "",
   "registryPageUrl": "https://www.myregistry.com/giftlist/morganandkenny",
   "supabase": {
     "url": "https://hewiaylxiueuqtokaczg.supabase.co",
@@ -10,6 +9,5 @@
     "familyPassword": "",
     "partyPassword": "",
     "adminPassword": ""
-  },
-  "registries": []
+  }
 }

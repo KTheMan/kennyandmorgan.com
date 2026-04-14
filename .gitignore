@@ -26,9 +26,6 @@ node_modules/
 
 # Environment variables
 .env
-registry.config.json
-data/*.db*
-data/*.sqlite
 
 # OS files
 .DS_Store

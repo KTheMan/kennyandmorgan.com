@@ -108,46 +108,6 @@ function clearGuestFieldErrors() {
     setFieldError('guestGroupIdError');
 }
 
-function getApiBaseUrl() {
-    return window.KMSiteConfig.getApiBaseUrl(window.KMSiteConfig.getSync());
-}
-
-async function apiRequest(path, options = {}) {
-    const headers = options.headers ? { ...options.headers } : {};
-    if (options.body && !headers['Content-Type']) {
-        headers['Content-Type'] = 'application/json';
-    }
-    if (state.token) {
-        headers.Authorization = `Bearer ${state.token}`;
-    }
-
-    const response = await fetch(`${getApiBaseUrl()}${path}`, {
-        ...options,
-        headers
-    });
-
-    let data = {};
-    try {
-        data = await response.json();
-    } catch (error) {
-        // no-op
-    }
-
-    if (response.status === 401 && state.token) {
-        handleUnauthorized();
-        throw new Error('Unauthorized');
-    }
-
-    if (!response.ok || data.success === false) {
-        const message = data.error || data.message || 'Request failed.';
-        const error = new Error(message);
-        error.status = response.status;
-        throw error;
-    }
-
-    return data;
-}
-
 async function verifySession() {
     const session = await window.KMDataClient.getAccessSession(state.token);
     if (session.accessLevel !== REQUIRED_ACCESS_LEVEL) {

@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Access control failed to initialize:', error);
     });
     await initRegistry().catch(error => {
-        console.error('Unable to initialize registry filters:', error);
+        console.error('Unable to initialize registry link:', error);
     });
     await initAccommodationsMap().catch(error => {
         console.error('Unable to load accommodations map:', error);
@@ -23,16 +23,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     initAdminMenu();
 });
 
-let registryConfig = {
-    apiBaseUrl: '',
-    registries: []
-};
-
 let latestGuestLookupResults = [];
 let activeGuestParty = null;
 const guestResponseState = new Map();
-const registryFastPollClicks = new Map();
-const REGISTRY_FAST_POLL_CLICK_THROTTLE_MS = 60 * 1000;
 const ACCESS_LEVELS = {
     locked: 'locked',
     family: 'family',
@@ -225,13 +218,6 @@ async function fetchAccessSession(token) {
     return window.KMDataClient.getAccessSession(token);
 }
 
-async function safeJson(response) {
-    try {
-        return await response.json();
-    } catch (error) {
-        return {};
-    }
-}
 
 function getStoredAccessToken() {
     try {
@@ -307,7 +293,6 @@ function updateAccessVisibility() {
         }
     });
     setAdminMenuVisibility();
-    setRegistryFilterState();
 }
 
 function normalizeAccessLevel(value) {
@@ -422,15 +407,6 @@ function setAdminMenuVisibility() {
         toggle?.setAttribute('aria-expanded', 'false');
         panel?.setAttribute('aria-hidden', 'true');
     }
-}
-
-function setRegistryFilterState() {
-    const filter = document.getElementById('registryFilter');
-    if (!filter) {
-        return;
-    }
-    const allowed = hasAccess(ACCESS_LEVELS.family);
-    filter.disabled = !allowed;
 }
 
 // Navigation
@@ -936,287 +912,16 @@ function showMessage(elementId, message, type) {
 }
 
 // Registry Management
-async function initRegistry() {
-    await loadRegistryConfig();
-
-    const registryFilter = document.getElementById('registryFilter');
-
-    if (!registryFilter) {
-        return;
-    }
-
-    registryFilter.addEventListener('change', (event) => {
-        loadRegistryItems(event.target.value || 'all');
-    });
-
-    registryFilter.value = 'all';
-    registryFilter.disabled = !document.body.dataset.accessLevel || document.body.dataset.accessLevel === ACCESS_LEVELS.locked;
-
-    // Load all items initially and build filter options
-    await loadRegistryItems('all', { refreshFilters: true });
-    setupRegistryFastPollListener();
-}
-
-async function loadRegistryConfig() {
-    const data = await window.KMSiteConfig.load();
-    const registries = Array.isArray(data.registries)
-        ? data.registries
-            .map(entry => ({
-                ...entry,
-                store: (entry.store || '').toLowerCase()
-            }))
-            .filter(entry => entry.store)
-        : [];
-
-    registryConfig = {
-        apiBaseUrl: data.apiBaseUrl || '',
-        registries
-    };
-
-    return registryConfig;
-}
-
-async function loadRegistryItems(filter, options = {}) {
-    const registryContainer = document.getElementById('registryItems');
-    const loadingEl = document.getElementById('registryLoading');
-    
-    // Show loading
-    loadingEl.style.display = 'block';
-    registryContainer.innerHTML = '';
-    
-    try {
-        const data = await window.KMDataClient.listRegistryItems(filter);
-
-        if (data.success && data.items) {
-            if (options.refreshFilters || filter === 'all') {
-                updateRegistryFilterOptions(data.items);
-            }
-            displayRegistryItems(data.items);
-        } else {
-            throw new Error('Invalid response format');
-        }
-    } catch (error) {
-        console.error('Error loading registry items:', error);
-        // Show error message - no fallback to mock data
-        displayRegistryItems([]);
-        showRegistryError(`Unable to load preview items right now. You can still view the full registry at ${getRegistryPageUrl()}.`);
-        resetRegistryFilterOptions();
-    } finally {
-        loadingEl.style.display = 'none';
-    }
-}
-
-function updateRegistryFilterOptions(items) {
-    const registryFilter = document.getElementById('registryFilter');
-    if (!registryFilter) {
-        return;
-    }
-
-    const previousValue = registryFilter.value;
-
-    // Remove existing store options except "all"
-    Array.from(registryFilter.querySelectorAll('option:not([value="all"])')).forEach(option => option.remove());
-
-    const storeCounts = items.reduce((acc, item) => {
-        const key = (item.store || '').toLowerCase().trim();
-        if (!key) {
-            return acc;
-        }
-        acc[key] = (acc[key] || 0) + 1;
-        return acc;
-    }, {});
-
-    const storesWithItems = Object.entries(storeCounts)
-        .filter(([, count]) => count > 0)
-        .sort((a, b) => capitalizeStore(a[0]).localeCompare(capitalizeStore(b[0])));
-
-    storesWithItems.forEach(([store]) => {
-        const option = document.createElement('option');
-        option.value = store;
-        option.textContent = capitalizeStore(store);
-        registryFilter.appendChild(option);
-    });
-
-    const canKeepPrevious = previousValue !== 'all' && storesWithItems.some(([store]) => store === previousValue);
-    registryFilter.value = canKeepPrevious ? previousValue : 'all';
-    registryFilter.disabled = registryFilter.options.length <= 1;
-}
-
-function setupRegistryFastPollListener() {
-    const registryContainer = document.getElementById('registryItems');
-    if (!registryContainer) {
-        return;
-    }
-    registryContainer.addEventListener('click', (event) => {
-        const link = event.target.closest('.registry-item-link');
-        if (!link) {
-            return;
-        }
-        const cacheId = link.dataset.cacheId;
-        if (cacheId) {
-            flagRegistryItemForFastPoll(cacheId);
-        }
-    });
-}
-
-function resetRegistryFilterOptions() {
-    const registryFilter = document.getElementById('registryFilter');
-    if (!registryFilter) {
-        return;
-    }
-    Array.from(registryFilter.querySelectorAll('option:not([value="all"])')).forEach(option => option.remove());
-    registryFilter.value = 'all';
-    registryFilter.disabled = true;
-}
-
-function showRegistryError(message) {
-    const registryContainer = document.getElementById('registryItems');
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'registry-error';
-    errorDiv.style.cssText = 'grid-column: 1/-1; text-align: center; padding: 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; color: #856404;';
-    errorDiv.textContent = message;
-    registryContainer.insertBefore(errorDiv, registryContainer.firstChild);
-}
-
-
-function displayRegistryItems(items) {
-    const registryContainer = document.getElementById('registryItems');
-    
-    if (items.length === 0) {
-        registryContainer.innerHTML = `<p style="text-align: center; grid-column: 1/-1; padding: 40px 20px; color: var(--slate-gray);">Preview items are not available yet. You can still browse the full registry on <a href="${getRegistryPageUrl()}" target="_blank" rel="noopener noreferrer">MyRegistry</a>.</p>`;
-        return;
-    }
-    
-    registryContainer.innerHTML = items.map(item => {
-        const purchased = formatQuantityValue(item.purchasedQuantity);
-        const wanted = formatQuantityValue(item.wantedQuantity);
-        const refreshLabel = item.fastPollActive ? 'Live refresh (2 min)' : 'Hourly refresh';
-        const refreshClass = item.fastPollActive ? 'registry-item-refresh is-live' : 'registry-item-refresh';
-        const priceDisplay = formatRegistryPrice(item.price);
-        const cacheIdAttr = item.cacheId ? ` data-cache-id="${item.cacheId}"` : '';
-        const imageSrc = item.image || 'https://via.placeholder.com/300x300/D4A373/FFFFFF?text=Registry+Item';
-        return `
-        <div class="registry-item"${cacheIdAttr}>
-            <img src="${imageSrc}" alt="${item.name}" class="registry-item-image">
-            <div class="registry-item-details">
-                <div class="registry-item-name">${item.name}</div>
-                <div class="registry-item-store">${capitalizeStore(item.store)}</div>
-                <div class="registry-item-price">${priceDisplay}</div>
-                <div class="registry-item-quantities">
-                    <span class="registry-item-qty">${purchased} / ${wanted} purchased</span>
-                    <span class="${refreshClass}">${refreshLabel}</span>
-                </div>
-                <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="registry-item-link"${cacheIdAttr}>
-                    View on ${capitalizeStore(item.store)}
-                </a>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-function capitalizeStore(store) {
-    const storeNames = {
-        'amazon': 'Amazon',
-        'target': 'Target',
-        'crateandbarrel': 'Crate & Barrel',
-        'potterybarn': 'Pottery Barn',
-        'williamsonoma': 'Williams-Sonoma',
-        'rei': 'REI',
-        'zola': 'Zola',
-        'heathceramics': 'Heath Ceramics',
-        'myregistry': 'MyRegistry'
-    };
-    return storeNames[store] || store;
-}
-
-function findRegistryConfig(filter) {
-    if (!registryConfig.registries.length || filter === 'all') {
-        return null;
-    }
-    return registryConfig.registries.find(entry => entry.store === filter) || null;
-}
-
-function buildRegistryEndpoint(filter) {
-    const config = findRegistryConfig(filter);
-
-    if (config?.endpoint) {
-        const hasQuery = config.endpoint.includes('?');
-        const params = new URLSearchParams();
-
-        if (config.registryId) {
-            params.set('registry', config.registryId);
-        }
-        if (config.token) {
-            params.set('token', config.token);
-        }
-
-        const query = params.toString();
-        if (query) {
-            return `${config.endpoint}${hasQuery ? '&' : '?'}${query}`;
-        }
-        return config.endpoint;
-    }
-
-    const baseUrl = config?.apiBaseUrl || registryConfig.apiBaseUrl;
-    if (baseUrl) {
-        return filter === 'all'
-            ? `${baseUrl.replace(/\/$/, '')}/api/registry`
-            : `${baseUrl.replace(/\/$/, '')}/api/registry/${filter}`;
-    }
-
-    const defaultBase = resolveApiBaseUrl().replace(/\/$/, '');
-    return filter === 'all'
-        ? `${defaultBase}/api/registry`
-        : `${defaultBase}/api/registry/${filter}`;
-}
-
-function getRegistryFetchOptions(filter) {
-    const config = findRegistryConfig(filter);
-    if (!config || !config.headers) {
-        return {};
-    }
-
-    const headers = {};
-    Object.entries(config.headers).forEach(([key, value]) => {
-        if (typeof value === 'string' && value.trim()) {
-            headers[key] = value;
-        }
-    });
-
-    return { headers };
-}
-
-async function flagRegistryItemForFastPoll(cacheId) {
-    const now = Date.now();
-    const lastClick = registryFastPollClicks.get(cacheId);
-    if (lastClick && (now - lastClick) < REGISTRY_FAST_POLL_CLICK_THROTTLE_MS) {
-        return;
-    }
-    registryFastPollClicks.set(cacheId, now);
-    try {
-        await window.KMDataClient.flagRegistryItemForFastPoll(cacheId);
-    } catch (error) {
-        console.warn('Unable to schedule fast poll for item', cacheId, error);
+function initRegistry() {
+    const registryLink = document.querySelector('.registry-direct-link a');
+    if (registryLink) {
+        registryLink.href = getRegistryPageUrl();
     }
 }
 
 function getRegistryPageUrl() {
     const config = window.KMSiteConfig?.getSync?.();
     return config?.registryPageUrl || window.KMSiteConfig?.DEFAULT_CONFIG?.registryPageUrl || '';
-}
-
-function formatRegistryPrice(price) {
-    if (typeof price === 'number' && Number.isFinite(price)) {
-        return `$${price.toFixed(2)}`;
-    }
-    return '—';
-}
-
-function formatQuantityValue(value) {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-        return value;
-    }
-    return '—';
 }
 
 // Accommodation map + interactions
@@ -1521,86 +1226,16 @@ function initAccommodationScrollHint() {
     updateHintVisibility();
 }
 
-// Registry Scraping Functions (for real implementation)
-// Note: In a production environment, you would need a backend service to handle
-// actual scraping due to CORS and authentication requirements
-
-/**
- * Scrapes registry items from various stores via backend API
- * This function communicates with the backend server which handles
- * actual scraping to avoid CORS and authentication issues
- */
-async function scrapeRegistry(store, registryId) {
-    try {
-        const apiUrl = getApiUrl();
-        const endpoint = `${apiUrl}/api/registry/${store}`;
-        
-        const response = await fetch(endpoint);
-        
-        if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.items) {
-            return data.items;
-        }
-        
-        return [];
-    } catch (error) {
-        console.error(`Error scraping ${store}:`, error);
-        return [];
-    }
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 
-/**
- * Aggregates items from multiple registries via backend API
- */
-async function aggregateRegistries(registries) {
-    try {
-        const apiUrl = getApiUrl();
-        const endpoint = `${apiUrl}/api/registry?store=all`;
-        
-        const response = await fetch(endpoint);
-        
-        if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.items) {
-            // Sort by name
-            return data.items.sort((a, b) => a.name.localeCompare(b.name));
-        }
-        
-        return [];
-    } catch (error) {
-        console.error('Error aggregating registries:', error);
-        return [];
-    }
+function escapeHtmlAttr(value) {
+    return escapeHtml(value).replace(/"/g, '&quot;');
 }
-
-// For production use, you would call these functions with actual registry IDs:
-// const registries = [
-//     { store: 'amazon', id: 'YOUR_AMAZON_REGISTRY_ID' },
-//     { store: 'target', id: 'YOUR_TARGET_REGISTRY_ID' },
-//     { store: 'crateandbarrel', id: 'YOUR_CB_REGISTRY_ID' }
-// ];
-// aggregateRegistries(registries).then(displayRegistryItems);
-
-function resolveApiBaseUrl() {
-    if (registryConfig.apiBaseUrl) {
-        return registryConfig.apiBaseUrl.replace(/\/$/, '');
-    }
-    return window.KMSiteConfig.getApiBaseUrl(window.KMSiteConfig.getSync());
-}
-
-function getApiUrl() {
-    return resolveApiBaseUrl();
-}
-
 function escapeHtml(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
