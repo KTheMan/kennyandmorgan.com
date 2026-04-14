@@ -1,0 +1,14 @@
+{
+  "apiBaseUrl": "",
+  "supabase": {
+    "url": "https://YOUR_PROJECT.supabase.co",
+    "anonKey": "YOUR_SUPABASE_ANON_KEY",
+    "sessionTtlMs": 3600000
+  },
+  "localFallbackAccess": {
+    "familyPassword": "",
+    "partyPassword": "",
+    "adminPassword": ""
+  },
+  "registries": []
+}
