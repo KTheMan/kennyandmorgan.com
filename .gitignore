@@ -8,7 +8,11 @@ _site/
 .jekyll-metadata
 
 # Additional Ruby/bundler ignore for when you run: bundle install
-/vendor
+/vendor/*
+!/vendor/leaflet/
+!/vendor/leaflet/**
+!/vendor/supabase/
+!/vendor/supabase/**
 
 # Specific ignore for GitHub Pages
 # GitHub Pages will always use its own deployed version of pages-gem 
@@ -22,9 +26,6 @@ node_modules/
 
 # Environment variables
 .env
-registry.config.json
-data/*.db*
-data/*.sqlite
 
 # OS files
 .DS_Store

@@ -12,7 +12,12 @@ const state = {
     isLoadingGuests: false
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        await window.KMSiteConfig.load();
+    } catch (error) {
+        console.warn('Unable to load site config, continuing with defaults.', error);
+    }
     initAdminApp();
 });
 
@@ -103,51 +108,8 @@ function clearGuestFieldErrors() {
     setFieldError('guestGroupIdError');
 }
 
-function getApiBaseUrl() {
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return 'http://localhost:3000';
-    }
-    return window.location.origin;
-}
-
-async function apiRequest(path, options = {}) {
-    const headers = options.headers ? { ...options.headers } : {};
-    if (options.body && !headers['Content-Type']) {
-        headers['Content-Type'] = 'application/json';
-    }
-    if (state.token) {
-        headers.Authorization = `Bearer ${state.token}`;
-    }
-
-    const response = await fetch(`${getApiBaseUrl()}${path}`, {
-        ...options,
-        headers
-    });
-
-    let data = {};
-    try {
-        data = await response.json();
-    } catch (error) {
-        // no-op
-    }
-
-    if (response.status === 401 && state.token) {
-        handleUnauthorized();
-        throw new Error('Unauthorized');
-    }
-
-    if (!response.ok || data.success === false) {
-        const message = data.error || data.message || 'Request failed.';
-        const error = new Error(message);
-        error.status = response.status;
-        throw error;
-    }
-
-    return data;
-}
-
 async function verifySession() {
-    const session = await apiRequest('/api/access/session');
+    const session = await window.KMDataClient.getAccessSession(state.token);
     if (session.accessLevel !== REQUIRED_ACCESS_LEVEL) {
         const error = new Error('Admin-level access is required.');
         error.status = 403;
@@ -188,10 +150,7 @@ async function handleLogin(event) {
     submitButton?.classList.add('is-loading');
 
     try {
-        const result = await apiRequest('/api/access/login', {
-            method: 'POST',
-            body: JSON.stringify({ password })
-        });
+        const result = await window.KMDataClient.loginAccess(password);
         if (result.accessLevel !== REQUIRED_ACCESS_LEVEL) {
             showMessage('adminLoginMessage', 'That password unlocks the site, but not the admin console.', 'error');
             pushToast('Admin-level password required.', 'error');
@@ -217,7 +176,7 @@ async function handleLogin(event) {
 async function handleLogout() {
     try {
         if (state.token) {
-            await apiRequest('/api/access/logout', { method: 'POST' });
+            await window.KMDataClient.logoutAccess(state.token);
         }
     } catch (error) {
         console.warn('Logout error:', error);
@@ -245,7 +204,7 @@ async function loadGuests() {
     state.isLoadingGuests = true;
     renderGuestTable();
     try {
-        const data = await apiRequest('/api/admin/guests');
+        const data = await window.KMDataClient.listAdminGuests(state.token);
         state.guests = data.guests || [];
         applyGuestFilter();
     } catch (error) {
@@ -423,17 +382,11 @@ async function handleGuestSubmit(event) {
 
     try {
         if (guestId) {
-            await apiRequest(`/api/admin/guests/${guestId}`, {
-                method: 'PATCH',
-                body: JSON.stringify(payload)
-            });
+            await window.KMDataClient.saveAdminGuest(state.token, payload, guestId);
             showMessage('guestFormMessage', 'Guest updated.', 'success');
             pushToast('Guest updated.', 'success');
         } else {
-            await apiRequest('/api/admin/guests', {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
+            await window.KMDataClient.saveAdminGuest(state.token, payload);
             showMessage('guestFormMessage', 'Guest added.', 'success');
             pushToast('Guest added.', 'success');
         }
@@ -454,7 +407,7 @@ async function deleteGuestRecord(guestId) {
         return;
     }
     try {
-        await apiRequest(`/api/admin/guests/${guestId}`, { method: 'DELETE' });
+        await window.KMDataClient.deleteAdminGuest(state.token, guestId);
         state.guests = state.guests.filter(guest => guest.id !== guestId);
         renderGuestTable();
         showMessage('guestFormMessage', 'Guest removed.', 'success');
@@ -480,10 +433,7 @@ async function handleCsvImport() {
 
     try {
         const csvText = await file.text();
-        const result = await apiRequest('/api/admin/guests/import', {
-            method: 'POST',
-            body: JSON.stringify({ csv: csvText })
-        });
+        const result = await window.KMDataClient.importAdminGuests(state.token, csvText);
         showMessage('csvImportMessage', `Imported ${result.inserted || 0} guests.`, 'success');
         pushToast(`Imported ${result.inserted || 0} guests.`, 'success');
         fileInput.value = '';

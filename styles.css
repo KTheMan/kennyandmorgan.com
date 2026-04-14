@@ -1170,174 +1170,16 @@ textarea {
 }
 
 /* Registry Section */
-.registry-filter {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
-    margin: 3rem 0;
-}
-
-.registry-filter label {
-    font-family: 'Montserrat', sans-serif;
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.2em;
-    color: var(--deep-charcoal);
-}
-
-.registry-filter-control {
-    position: relative;
-    width: min(320px, 100%);
-}
-
-.registry-filter select {
-    width: 100%;
-    -webkit-appearance: none;
-    appearance: none;
-    background: var(--soft-white);
-    border: 1px solid var(--deep-charcoal);
-    padding: 0.9rem 3rem 0.9rem 1.1rem;
-    font-family: 'Montserrat', sans-serif;
-    font-size: 0.85rem;
-    font-weight: 500;
-    letter-spacing: 0.05em;
-    color: var(--deep-charcoal);
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.registry-filter select:focus {
-    outline: 2px solid var(--accent-gold);
-    outline-offset: 2px;
-}
-
-.registry-filter select:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-.registry-filter-icon {
-    position: absolute;
-    right: 1rem;
-    top: 50%;
-    width: 0.65rem;
-    height: 0.65rem;
-    border-right: 2px solid var(--deep-charcoal);
-    border-bottom: 2px solid var(--deep-charcoal);
-    transform: translateY(-50%) rotate(45deg);
-    pointer-events: none;
-}
-
-.registry-items {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 3rem;
-    margin-top: 3rem;
-}
-
-.registry-item {
-    background: var(--soft-white);
-    border-radius: 0;
-    overflow: hidden;
-    box-shadow: none;
-    border: 1px solid var(--deep-charcoal);
-    transition: var(--transition);
-    display: flex;
-    flex-direction: column;
-}
-
-.registry-item:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
-}
-
-.registry-item-image {
-    width: 100%;
-    height: 300px;
-    object-fit: cover;
-    background-color: #F5F5F5;
-}
-
-.registry-item-details {
-    padding: 2rem;
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-.registry-item-name {
-    font-family: 'Montserrat', sans-serif;
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text-dark);
-    margin-bottom: 0.75rem;
-    line-height: 1.4;
-}
-
-.registry-item-store {
-    font-family: 'Montserrat', sans-serif;
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--muted-sage);
-    margin-bottom: 1rem;
-}
-
-.registry-item-price {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.5rem;
-    color: var(--deep-charcoal);
-    font-weight: 400;
-    margin-bottom: 1.5rem;
-}
-
-.registry-item-quantities {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    font-size: 0.85rem;
-    margin-bottom: 1.5rem;
-    color: var(--muted-sage);
-}
-
-.registry-item-qty {
-    font-weight: 600;
-    color: var(--deep-charcoal);
-}
-
-.registry-item-refresh {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-}
-
-.registry-item-refresh.is-live {
-    color: var(--deep-green);
-}
-
-.registry-item-link {
-    display: inline-block;
-    margin-top: auto;
-    padding: 1rem 2rem;
-    background-color: var(--deep-charcoal);
-    color: var(--soft-white);
-    text-decoration: none;
-    border-radius: 0;
+.registry-direct-link {
+    margin: 1.5rem 0 0;
     text-align: center;
-    font-family: 'Montserrat', sans-serif;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    transition: var(--transition);
 }
 
-.registry-item-link:hover {
-    background-color: var(--deep-green);
+.registry-note {
+    max-width: 620px;
+    margin: 1.5rem auto 0;
+    text-align: center;
+    color: var(--slate-gray);
 }
 
 .loading {
@@ -2003,10 +1845,6 @@ footer p {
 
     .countdown-value {
         font-size: 2.5rem;
-    }
-
-    .registry-items {
-        grid-template-columns: 1fr;
     }
 
     .wedding-details {

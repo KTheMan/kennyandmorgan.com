@@ -394,26 +394,11 @@
         <section id="registry" class="page">
             <div class="container">
                 <h1>Gift Registry</h1>
-                <p class="section-subtitle">Your presence is the greatest gift, but if you wish to honor us with a gift, we've registered at the following stores:</p>
-                
-                <div class="registry-filter">
-                    <label for="registryFilter">Filter by Store</label>
-                    <div class="registry-filter-control">
-                        <select id="registryFilter" aria-label="Filter registry items by store">
-                            <option value="all" selected>All Stores</option>
-                        </select>
-                        <span class="registry-filter-icon" aria-hidden="true"></span>
-                    </div>
-                </div>
-
-                <div id="registryLoading" class="loading">
-                    <div class="spinner"></div>
-                    <p>Loading registry items...</p>
-                </div>
-
-                <div id="registryItems" class="registry-items">
-                    <!-- Registry items will be dynamically loaded here -->
-                </div>
+                <p class="section-subtitle">Your presence is the greatest gift, but if you'd like to send something, we now keep everything in one shared MyRegistry list.</p>
+                <p class="registry-direct-link">
+                    <a href="https://www.myregistry.com/giftlist/morganandkenny" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">Open our full MyRegistry page</a>
+                </p>
+                <p class="registry-note">All gifts are managed directly on MyRegistry now, so the site no longer mirrors or scrapes registry inventory.</p>
             </div>
         </section>
     </main>
@@ -424,6 +409,9 @@
     </footer>
 
     <script src="vendor/leaflet/leaflet.js"></script>
+    <script src="vendor/supabase/supabase.js"></script>
+    <script src="site-config.js"></script>
+    <script src="data-client.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

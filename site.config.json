@@ -1,0 +1,13 @@
+{
+  "registryPageUrl": "https://www.myregistry.com/giftlist/morganandkenny",
+  "supabase": {
+    "url": "https://hewiaylxiueuqtokaczg.supabase.co",
+    "anonKey": "sb_publishable_zR9XTJhZ_xUdbQrpZ7iUzw_QwhKZxX7",
+    "sessionTtlMs": 3600000
+  },
+  "localFallbackAccess": {
+    "familyPassword": "",
+    "partyPassword": "",
+    "adminPassword": ""
+  }
+}

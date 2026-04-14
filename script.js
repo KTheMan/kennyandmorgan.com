@@ -1,31 +1,33 @@
 // Navigation functionality
-document.addEventListener('DOMContentLoaded', () => {
-    initAccessControl().catch(error => {
-        console.error('Access control failed to initialize:', error);
-    });
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        await window.KMSiteConfig.load();
+    } catch (error) {
+        console.warn('Unable to load site config, continuing with defaults.', error);
+    }
+
     initNavigation();
     initCountdown();
     initForms();
-    initRegistry().catch(error => {
-        console.error('Unable to initialize registry filters:', error);
+
+    await initAccessControl().catch(error => {
+        console.error('Access control failed to initialize:', error);
     });
-    initAccommodationsMap().catch(error => {
+    try {
+        initRegistry();
+    } catch (error) {
+        console.error('Unable to initialize registry link:', error);
+    }
+    await initAccommodationsMap().catch(error => {
         console.error('Unable to load accommodations map:', error);
     });
     initAccommodationScrollHint();
     initAdminMenu();
 });
 
-let registryConfig = {
-    apiBaseUrl: '',
-    registries: []
-};
-
 let latestGuestLookupResults = [];
 let activeGuestParty = null;
 const guestResponseState = new Map();
-const registryFastPollClicks = new Map();
-const REGISTRY_FAST_POLL_CLICK_THROTTLE_MS = 60 * 1000;
 const ACCESS_LEVELS = {
     locked: 'locked',
     family: 'family',
@@ -211,42 +213,13 @@ async function resumeAccessSession() {
 }
 
 async function authenticateAccessPassword(password) {
-    const apiBase = resolveApiBaseUrl();
-    const response = await fetch(`${apiBase}/api/access/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
-    });
-    const data = await safeJson(response);
-    if (!response.ok || data.success === false) {
-        const error = new Error(data.error || data.message || 'Unable to authenticate.');
-        error.status = response.status;
-        throw error;
-    }
-    return data;
+    return window.KMDataClient.loginAccess(password);
 }
 
 async function fetchAccessSession(token) {
-    const apiBase = resolveApiBaseUrl();
-    const response = await fetch(`${apiBase}/api/access/session`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
-    const data = await safeJson(response);
-    if (!response.ok || data.success === false) {
-        const error = new Error(data.error || data.message || 'Access session invalid.');
-        error.status = response.status;
-        throw error;
-    }
-    return data;
+    return window.KMDataClient.getAccessSession(token);
 }
 
-async function safeJson(response) {
-    try {
-        return await response.json();
-    } catch (error) {
-        return {};
-    }
-}
 
 function getStoredAccessToken() {
     try {
@@ -322,7 +295,6 @@ function updateAccessVisibility() {
         }
     });
     setAdminMenuVisibility();
-    setRegistryFilterState();
 }
 
 function normalizeAccessLevel(value) {
@@ -437,15 +409,6 @@ function setAdminMenuVisibility() {
         toggle?.setAttribute('aria-expanded', 'false');
         panel?.setAttribute('aria-hidden', 'true');
     }
-}
-
-function setRegistryFilterState() {
-    const filter = document.getElementById('registryFilter');
-    if (!filter) {
-        return;
-    }
-    const allowed = hasAccess(ACCESS_LEVELS.family);
-    filter.disabled = !allowed;
 }
 
 // Navigation
@@ -603,14 +566,7 @@ function setupGuestLookup() {
         setLookupState('Looking up your party...', 'info');
 
         try {
-            const apiBase = resolveApiBaseUrl();
-            const response = await fetch(`${apiBase}/api/guests/search?name=${encodeURIComponent(query)}`);
-
-            if (!response.ok) {
-                throw new Error('Search request failed');
-            }
-
-            const data = await response.json();
+            const data = await window.KMDataClient.searchGuestGroups(query);
 
             if (!data.success || !Array.isArray(data.results) || !data.results.length) {
                 setLookupState('We could not find a party with that name. Double-check the spelling or reach out to us.', 'error');
@@ -879,24 +835,18 @@ function normalizeGuestStatus(value) {
     return null;
 }
 
-function handleAddressSubmit(form) {
+async function handleAddressSubmit(form) {
     const formData = new FormData(form);
     const data = Object.fromEntries(formData);
-    
-    // In a real application, this would send data to a backend
-    // For now, we'll simulate a successful submission
-    console.log('Address submitted:', data);
-    
-    // Store in localStorage for demo purposes
-    const addresses = JSON.parse(localStorage.getItem('addresses') || '[]');
-    addresses.push({
-        ...data,
-        submittedAt: new Date().toISOString()
-    });
-    localStorage.setItem('addresses', JSON.stringify(addresses));
-    
-    showMessage('addressMessage', 'Thank you! Your address has been saved.', 'success');
-    form.reset();
+
+    try {
+        const result = await window.KMDataClient.submitAddress(data);
+        showMessage('addressMessage', result.message || 'Thank you! Your address has been saved.', 'success');
+        form.reset();
+    } catch (error) {
+        console.error('Unable to save address:', error);
+        showMessage('addressMessage', 'We could not save your address right now. Please try again later.', 'error');
+    }
 }
 
 async function handleRSVPSubmit(form) {
@@ -934,21 +884,11 @@ async function handleRSVPSubmit(form) {
         payload.guestCount = attendingCount;
     }
 
-    const apiBase = resolveApiBaseUrl();
     submitButton?.setAttribute('disabled', 'disabled');
     submitButton?.classList.add('is-loading');
 
     try {
-        const response = await fetch(`${apiBase}/api/rsvp`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        const result = await response.json();
-        if (!response.ok || !result.success) {
-            throw new Error(result.error || 'Submission failed');
-        }
+        const result = await window.KMDataClient.submitRsvp(payload);
 
         showMessage('rsvpMessage', result.message || 'Thank you for your RSVP!', 'success');
         form.reset();
@@ -974,301 +914,16 @@ function showMessage(elementId, message, type) {
 }
 
 // Registry Management
-async function initRegistry() {
-    await loadRegistryConfig();
-
-    const registryFilter = document.getElementById('registryFilter');
-
-    if (!registryFilter) {
-        return;
-    }
-
-    registryFilter.addEventListener('change', (event) => {
-        loadRegistryItems(event.target.value || 'all');
-    });
-
-    registryFilter.value = 'all';
-    registryFilter.disabled = !document.body.dataset.accessLevel || document.body.dataset.accessLevel === ACCESS_LEVELS.locked;
-
-    // Load all items initially and build filter options
-    await loadRegistryItems('all', { refreshFilters: true });
-    setupRegistryFastPollListener();
-}
-
-async function loadRegistryConfig() {
-    try {
-        const response = await fetch('registry.config.json', { cache: 'no-store' });
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        const data = await response.json();
-        const registries = Array.isArray(data.registries)
-            ? data.registries
-                .map(entry => ({
-                    ...entry,
-                    store: (entry.store || '').toLowerCase()
-                }))
-                .filter(entry => entry.store)
-            : [];
-        registryConfig = {
-            apiBaseUrl: data.apiBaseUrl || '',
-            registries
-        };
-    } catch (error) {
-        console.warn('Unable to load registry.config.json, falling back to defaults.', error);
-        registryConfig = {
-            apiBaseUrl: '',
-            registries: []
-        };
-    }
-
-    return registryConfig;
-}
-
-async function loadRegistryItems(filter, options = {}) {
-    const registryContainer = document.getElementById('registryItems');
-    const loadingEl = document.getElementById('registryLoading');
-    
-    // Show loading
-    loadingEl.style.display = 'block';
-    registryContainer.innerHTML = '';
-    
-    try {
-        const endpoint = buildRegistryEndpoint(filter);
-        const fetchOptions = getRegistryFetchOptions(filter);
-        const response = await fetch(endpoint, fetchOptions);
-        
-        if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.items) {
-            if (options.refreshFilters || filter === 'all') {
-                updateRegistryFilterOptions(data.items);
-            }
-            displayRegistryItems(data.items);
-        } else {
-            throw new Error('Invalid response format');
-        }
-    } catch (error) {
-        console.error('Error loading registry items:', error);
-        // Show error message - no fallback to mock data
-        displayRegistryItems([]);
-        showRegistryError('Unable to load registry items. Please ensure valid registry IDs are configured.');
-        resetRegistryFilterOptions();
-    } finally {
-        loadingEl.style.display = 'none';
+function initRegistry() {
+    const registryLink = document.querySelector('.registry-direct-link a');
+    if (registryLink) {
+        registryLink.href = getRegistryPageUrl();
     }
 }
 
-function updateRegistryFilterOptions(items) {
-    const registryFilter = document.getElementById('registryFilter');
-    if (!registryFilter) {
-        return;
-    }
-
-    const previousValue = registryFilter.value;
-
-    // Remove existing store options except "all"
-    Array.from(registryFilter.querySelectorAll('option:not([value="all"])')).forEach(option => option.remove());
-
-    const storeCounts = items.reduce((acc, item) => {
-        const key = (item.store || '').toLowerCase().trim();
-        if (!key) {
-            return acc;
-        }
-        acc[key] = (acc[key] || 0) + 1;
-        return acc;
-    }, {});
-
-    const storesWithItems = Object.entries(storeCounts)
-        .filter(([, count]) => count > 0)
-        .sort((a, b) => capitalizeStore(a[0]).localeCompare(capitalizeStore(b[0])));
-
-    storesWithItems.forEach(([store]) => {
-        const option = document.createElement('option');
-        option.value = store;
-        option.textContent = capitalizeStore(store);
-        registryFilter.appendChild(option);
-    });
-
-    const canKeepPrevious = previousValue !== 'all' && storesWithItems.some(([store]) => store === previousValue);
-    registryFilter.value = canKeepPrevious ? previousValue : 'all';
-    registryFilter.disabled = registryFilter.options.length <= 1;
-}
-
-function setupRegistryFastPollListener() {
-    const registryContainer = document.getElementById('registryItems');
-    if (!registryContainer) {
-        return;
-    }
-    registryContainer.addEventListener('click', (event) => {
-        const link = event.target.closest('.registry-item-link');
-        if (!link) {
-            return;
-        }
-        const cacheId = link.dataset.cacheId;
-        if (cacheId) {
-            flagRegistryItemForFastPoll(cacheId);
-        }
-    });
-}
-
-function resetRegistryFilterOptions() {
-    const registryFilter = document.getElementById('registryFilter');
-    if (!registryFilter) {
-        return;
-    }
-    Array.from(registryFilter.querySelectorAll('option:not([value="all"])')).forEach(option => option.remove());
-    registryFilter.value = 'all';
-    registryFilter.disabled = true;
-}
-
-function showRegistryError(message) {
-    const registryContainer = document.getElementById('registryItems');
-    const errorDiv = document.createElement('div');
-    errorDiv.className = 'registry-error';
-    errorDiv.style.cssText = 'grid-column: 1/-1; text-align: center; padding: 20px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; color: #856404;';
-    errorDiv.textContent = message;
-    registryContainer.insertBefore(errorDiv, registryContainer.firstChild);
-}
-
-
-function displayRegistryItems(items) {
-    const registryContainer = document.getElementById('registryItems');
-    
-    if (items.length === 0) {
-        registryContainer.innerHTML = '<p style="text-align: center; grid-column: 1/-1; padding: 40px 20px; color: var(--slate-gray);">No registry items available. Registry IDs must be configured to display items.</p>';
-        return;
-    }
-    
-    registryContainer.innerHTML = items.map(item => {
-        const purchased = formatQuantityValue(item.purchasedQuantity);
-        const wanted = formatQuantityValue(item.wantedQuantity);
-        const refreshLabel = item.fastPollActive ? 'Live refresh (2 min)' : 'Hourly refresh';
-        const refreshClass = item.fastPollActive ? 'registry-item-refresh is-live' : 'registry-item-refresh';
-        const priceDisplay = formatRegistryPrice(item.price);
-        const cacheIdAttr = item.cacheId ? ` data-cache-id="${item.cacheId}"` : '';
-        const imageSrc = item.image || 'https://via.placeholder.com/300x300/D4A373/FFFFFF?text=Registry+Item';
-        return `
-        <div class="registry-item"${cacheIdAttr}>
-            <img src="${imageSrc}" alt="${item.name}" class="registry-item-image">
-            <div class="registry-item-details">
-                <div class="registry-item-name">${item.name}</div>
-                <div class="registry-item-store">${capitalizeStore(item.store)}</div>
-                <div class="registry-item-price">${priceDisplay}</div>
-                <div class="registry-item-quantities">
-                    <span class="registry-item-qty">${purchased} / ${wanted} purchased</span>
-                    <span class="${refreshClass}">${refreshLabel}</span>
-                </div>
-                <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="registry-item-link"${cacheIdAttr}>
-                    View on ${capitalizeStore(item.store)}
-                </a>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-function capitalizeStore(store) {
-    const storeNames = {
-        'amazon': 'Amazon',
-        'target': 'Target',
-        'crateandbarrel': 'Crate & Barrel',
-        'potterybarn': 'Pottery Barn',
-        'williamsonoma': 'Williams-Sonoma',
-        'rei': 'REI',
-        'zola': 'Zola',
-        'heathceramics': 'Heath Ceramics'
-    };
-    return storeNames[store] || store;
-}
-
-function findRegistryConfig(filter) {
-    if (!registryConfig.registries.length || filter === 'all') {
-        return null;
-    }
-    return registryConfig.registries.find(entry => entry.store === filter) || null;
-}
-
-function buildRegistryEndpoint(filter) {
-    const config = findRegistryConfig(filter);
-
-    if (config?.endpoint) {
-        const hasQuery = config.endpoint.includes('?');
-        const params = new URLSearchParams();
-
-        if (config.registryId) {
-            params.set('registry', config.registryId);
-        }
-        if (config.token) {
-            params.set('token', config.token);
-        }
-
-        const query = params.toString();
-        if (query) {
-            return `${config.endpoint}${hasQuery ? '&' : '?'}${query}`;
-        }
-        return config.endpoint;
-    }
-
-    const baseUrl = config?.apiBaseUrl || registryConfig.apiBaseUrl;
-    if (baseUrl) {
-        return filter === 'all'
-            ? `${baseUrl.replace(/\/$/, '')}/api/registry`
-            : `${baseUrl.replace(/\/$/, '')}/api/registry/${filter}`;
-    }
-
-    const defaultBase = resolveApiBaseUrl().replace(/\/$/, '');
-    return filter === 'all'
-        ? `${defaultBase}/api/registry`
-        : `${defaultBase}/api/registry/${filter}`;
-}
-
-function getRegistryFetchOptions(filter) {
-    const config = findRegistryConfig(filter);
-    if (!config || !config.headers) {
-        return {};
-    }
-
-    const headers = {};
-    Object.entries(config.headers).forEach(([key, value]) => {
-        if (typeof value === 'string' && value.trim()) {
-            headers[key] = value;
-        }
-    });
-
-    return { headers };
-}
-
-async function flagRegistryItemForFastPoll(cacheId) {
-    const now = Date.now();
-    const lastClick = registryFastPollClicks.get(cacheId);
-    if (lastClick && (now - lastClick) < REGISTRY_FAST_POLL_CLICK_THROTTLE_MS) {
-        return;
-    }
-    registryFastPollClicks.set(cacheId, now);
-    try {
-        const apiBase = resolveApiBaseUrl();
-        await fetch(`${apiBase}/api/registry/items/${cacheId}/fast-poll`, { method: 'POST' });
-    } catch (error) {
-        console.warn('Unable to schedule fast poll for item', cacheId, error);
-    }
-}
-
-function formatRegistryPrice(price) {
-    if (typeof price === 'number' && Number.isFinite(price)) {
-        return `$${price.toFixed(2)}`;
-    }
-    return '—';
-}
-
-function formatQuantityValue(value) {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-        return value;
-    }
-    return '—';
+function getRegistryPageUrl() {
+    const config = window.KMSiteConfig?.getSync?.();
+    return config?.registryPageUrl || window.KMSiteConfig?.DEFAULT_CONFIG?.registryPageUrl || '';
 }
 
 // Accommodation map + interactions
@@ -1571,89 +1226,6 @@ function initAccommodationScrollHint() {
     list.addEventListener('scroll', updateHintVisibility);
     window.addEventListener('resize', updateHintVisibility);
     updateHintVisibility();
-}
-
-// Registry Scraping Functions (for real implementation)
-// Note: In a production environment, you would need a backend service to handle
-// actual scraping due to CORS and authentication requirements
-
-/**
- * Scrapes registry items from various stores via backend API
- * This function communicates with the backend server which handles
- * actual scraping to avoid CORS and authentication issues
- */
-async function scrapeRegistry(store, registryId) {
-    try {
-        const apiUrl = getApiUrl();
-        const endpoint = `${apiUrl}/api/registry/${store}`;
-        
-        const response = await fetch(endpoint);
-        
-        if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.items) {
-            return data.items;
-        }
-        
-        return [];
-    } catch (error) {
-        console.error(`Error scraping ${store}:`, error);
-        return [];
-    }
-}
-
-/**
- * Aggregates items from multiple registries via backend API
- */
-async function aggregateRegistries(registries) {
-    try {
-        const apiUrl = getApiUrl();
-        const endpoint = `${apiUrl}/api/registry?store=all`;
-        
-        const response = await fetch(endpoint);
-        
-        if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.items) {
-            // Sort by name
-            return data.items.sort((a, b) => a.name.localeCompare(b.name));
-        }
-        
-        return [];
-    } catch (error) {
-        console.error('Error aggregating registries:', error);
-        return [];
-    }
-}
-
-// For production use, you would call these functions with actual registry IDs:
-// const registries = [
-//     { store: 'amazon', id: 'YOUR_AMAZON_REGISTRY_ID' },
-//     { store: 'target', id: 'YOUR_TARGET_REGISTRY_ID' },
-//     { store: 'crateandbarrel', id: 'YOUR_CB_REGISTRY_ID' }
-// ];
-// aggregateRegistries(registries).then(displayRegistryItems);
-
-function resolveApiBaseUrl() {
-    if (registryConfig.apiBaseUrl) {
-        return registryConfig.apiBaseUrl.replace(/\/$/, '');
-    }
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return 'http://localhost:3000';
-    }
-    return window.location.origin;
-}
-
-function getApiUrl() {
-    return resolveApiBaseUrl();
 }
 
 function escapeHtml(value) {
