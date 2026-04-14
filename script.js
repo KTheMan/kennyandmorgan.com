@@ -13,9 +13,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     await initAccessControl().catch(error => {
         console.error('Access control failed to initialize:', error);
     });
-    await initRegistry().catch(error => {
+    try {
+        initRegistry();
+    } catch (error) {
         console.error('Unable to initialize registry link:', error);
-    });
+    }
     await initAccommodationsMap().catch(error => {
         console.error('Unable to load accommodations map:', error);
     });
