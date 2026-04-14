@@ -15,7 +15,7 @@
     }
 
     function canUseLocalFallback(config = window.KMSiteConfig.getSync()) {
-        return window.KMSiteConfig.isLocalhost() && !shouldUseSupabase(config);
+        return window.KMSiteConfig.isLocalhost();
     }
 
     async function callSupabaseRpc(fn, params = {}) {
@@ -100,10 +100,16 @@
     async function loginAccess(password) {
         const config = await ensureConfig();
         if (shouldUseSupabase(config)) {
-            return callSupabaseRpc('login_access', {
-                candidate_password: password,
-                session_ttl_ms: config.supabase.sessionTtlMs || 1000 * 60 * 60
-            });
+            try {
+                return await callSupabaseRpc('login_access', {
+                    candidate_password: password,
+                    session_ttl_ms: config.supabase.sessionTtlMs || 1000 * 60 * 60
+                });
+            } catch (error) {
+                if (!canUseLocalFallback(config)) {
+                    throw error;
+                }
+            }
         }
 
         try {
@@ -131,9 +137,15 @@
     async function getAccessSession(token) {
         const config = await ensureConfig();
         if (shouldUseSupabase(config)) {
-            return callSupabaseRpc('get_access_session', {
-                session_token: token
-            });
+            try {
+                return await callSupabaseRpc('get_access_session', {
+                    session_token: token
+                });
+            } catch (error) {
+                if (!canUseLocalFallback(config)) {
+                    throw error;
+                }
+            }
         }
 
         try {
@@ -159,9 +171,15 @@
     async function logoutAccess(token) {
         const config = await ensureConfig();
         if (shouldUseSupabase(config)) {
-            return callSupabaseRpc('logout_access', {
-                session_token: token
-            });
+            try {
+                return await callSupabaseRpc('logout_access', {
+                    session_token: token
+                });
+            } catch (error) {
+                if (!canUseLocalFallback(config)) {
+                    throw error;
+                }
+            }
         }
 
         try {
