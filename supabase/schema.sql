@@ -155,7 +155,7 @@ begin
     values (
         encode(digest(raw_token, 'sha256'), 'hex'),
         matched_level,
-        timezone('utc', now()) + make_interval(secs => (greatest(session_ttl_ms, 60000)::numeric / 1000))
+        timezone('utc', now()) + interval '1 millisecond' * greatest(session_ttl_ms, 60000)
     );
 
     return jsonb_build_object(
@@ -189,7 +189,10 @@ begin
         raise exception 'Unauthorized';
     end if;
 
-    expires_in_ms := greatest(0, floor(extract(epoch from (session_expiry - timezone('utc', now()))) * 1000));
+    expires_in_ms := greatest(
+        0,
+        floor((extract(epoch from session_expiry) - extract(epoch from timezone('utc', now()))) * 1000)
+    );
 
     return jsonb_build_object(
         'success', true,

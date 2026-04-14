@@ -93,6 +93,8 @@ Run the Playwright suite:
 npm test
 ```
 
+The Playwright config starts its own static server on port `4173`, so you do not need to start a separate server before running the test suite.
+
 ## Free-tier fallback if Supabase is not a fit
 
 Best alternative: **Cloudflare Pages + Workers + D1**.
