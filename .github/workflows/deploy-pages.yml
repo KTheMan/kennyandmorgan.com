@@ -23,9 +23,70 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/configure-pages@v5
+      - name: Prepare deploy artifact
+        run: |
+          mkdir -p dist
+          cp index.html admin.html script.js admin.js styles.css site-config.js data-client.js .nojekyll dist/
+          cp -R vendor dist/vendor
+      - name: Generate runtime config
+        env:
+          SITE_REGISTRY_PAGE_URL: ${{ vars.SITE_REGISTRY_PAGE_URL }}
+          SITE_SUPABASE_URL: ${{ vars.SITE_SUPABASE_URL }}
+          SITE_SUPABASE_ANON_KEY: ${{ secrets.SITE_SUPABASE_ANON_KEY }}
+          SITE_SUPABASE_SESSION_TTL_MS: ${{ vars.SITE_SUPABASE_SESSION_TTL_MS || '3600000' }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+
+          required = (
+              'SITE_REGISTRY_PAGE_URL',
+              'SITE_SUPABASE_URL',
+              'SITE_SUPABASE_ANON_KEY',
+          )
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              sys.stderr.write(
+                  'Missing required GitHub Actions configuration: '
+                  + ', '.join(missing)
+                  + '\n'
+              )
+              raise SystemExit(1)
+
+          try:
+              session_ttl_ms = int(os.environ.get('SITE_SUPABASE_SESSION_TTL_MS', '3600000'))
+          except ValueError as error:
+              sys.stderr.write(f'Invalid SITE_SUPABASE_SESSION_TTL_MS: {error}\n')
+              raise SystemExit(1)
+
+          if session_ttl_ms <= 0:
+              sys.stderr.write('SITE_SUPABASE_SESSION_TTL_MS must be a positive integer.\n')
+              raise SystemExit(1)
+
+          config = {
+              'registryPageUrl': os.environ['SITE_REGISTRY_PAGE_URL'],
+              'supabase': {
+                  'url': os.environ['SITE_SUPABASE_URL'],
+                  'anonKey': os.environ['SITE_SUPABASE_ANON_KEY'],
+                  'sessionTtlMs': session_ttl_ms,
+              },
+              'localFallbackAccess': {
+                  'familyPassword': '',
+                  'partyPassword': '',
+                  'adminPassword': '',
+              },
+          }
+
+          with open('dist/site.config.json', 'w', encoding='utf-8') as file:
+              json.dump(config, file, indent=2)
+              file.write('\n')
+          PY
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: dist
       - id: deployment
         uses: actions/deploy-pages@v4

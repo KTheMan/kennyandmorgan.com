@@ -49,6 +49,8 @@ npm install
 cp site.config.example.json site.config.json
 ```
 
+`site.config.json` is for local use only and is ignored by Git. Do not commit populated local fallback passwords or other sensitive values.
+
 3. In Supabase:
 - run `supabase/schema.sql`
 - run `supabase/seed.example.sql` after replacing the sample passwords
@@ -62,6 +64,9 @@ npx http-server . -p 8000
 ## Runtime config
 
 `site.config.json` is the runtime config file used by the static site.
+
+- **Local development:** create it from `site.config.example.json`
+- **GitHub Pages:** the deploy workflow generates it from GitHub Actions variables and secrets
 
 ```json
 {
@@ -79,11 +84,13 @@ npx http-server . -p 8000
 }
 ```
 
-`localFallbackAccess` only exists to make localhost previews/tests usable when Supabase is unavailable.
+`localFallbackAccess` only exists to make localhost previews/tests usable when Supabase is unavailable and should never be committed or deployed.
 
 ## Deployment
 
 GitHub Pages deployment is handled by `.github/workflows/deploy-pages.yml`.
+
+Before deploying from a public repository, configure the required GitHub Actions variables/secrets and follow `SECURITY.md`.
 
 ## Testing
 

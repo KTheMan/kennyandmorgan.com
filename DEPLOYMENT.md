@@ -23,7 +23,18 @@ Start from:
 cp site.config.example.json site.config.json
 ```
 
-The checked-in config already contains the provided Supabase URL and publishable key.
+`site.config.json` is now a local-only file and is ignored by Git.
+
+For GitHub Pages deployments, the workflow generates `site.config.json` from GitHub Actions variables and secrets.
+
+Required configuration:
+
+- **Repository variables**
+  - `SITE_REGISTRY_PAGE_URL`
+  - `SITE_SUPABASE_URL`
+  - `SITE_SUPABASE_SESSION_TTL_MS`
+- **Repository secrets**
+  - `SITE_SUPABASE_ANON_KEY`
 
 ## GitHub Pages
 
@@ -33,7 +44,11 @@ In GitHub:
 
 1. Open **Settings → Pages**
 2. Choose **GitHub Actions** as the source
-3. Push to `main`
+3. Open **Settings → Secrets and variables → Actions**
+4. Add the required variables and secret listed above
+5. Push to `main` or run the workflow manually
+
+See `SECURITY.md` for the full public-repository hardening checklist and secret migration walkthrough.
 
 ## Local preview
 
