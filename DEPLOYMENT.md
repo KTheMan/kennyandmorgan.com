@@ -20,7 +20,8 @@ The wedding registry itself now points guests to the single aggregated MyRegistr
 1. Create or open the Supabase project.
 2. Run `supabase/schema.sql` in the Supabase SQL editor.
 3. Run `supabase/seed.example.sql` after replacing the sample passwords.
-4. Optionally add preview rows to `public.registry_items` if you want the site to show saved registry cards before linking guests out to MyRegistry.
+4. Verify Row Level Security is still enabled on each table before publishing with the anon key.
+5. Optionally add preview rows to `public.registry_items` if you want the site to show saved registry cards before linking guests out to MyRegistry.
 
 ## 2. Configure the static runtime file
 

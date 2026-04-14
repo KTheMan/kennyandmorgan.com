@@ -33,7 +33,6 @@ let activeGuestParty = null;
 const guestResponseState = new Map();
 const registryFastPollClicks = new Map();
 const REGISTRY_FAST_POLL_CLICK_THROTTLE_MS = 60 * 1000;
-const DEFAULT_REGISTRY_PAGE_URL = 'https://www.myregistry.com/giftlist/morganandkenny';
 const ACCESS_LEVELS = {
     locked: 'locked',
     family: 'family',
@@ -1203,7 +1202,7 @@ async function flagRegistryItemForFastPoll(cacheId) {
 
 function getRegistryPageUrl() {
     const config = window.KMSiteConfig?.getSync?.();
-    return config?.registryPageUrl || DEFAULT_REGISTRY_PAGE_URL;
+    return config?.registryPageUrl || window.KMSiteConfig?.DEFAULT_CONFIG?.registryPageUrl || '';
 }
 
 function formatRegistryPrice(price) {

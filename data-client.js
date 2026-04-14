@@ -328,14 +328,14 @@
             row = [];
         };
 
-        for (let index = 0; index < text.length; index += 1) {
-            const char = text[index];
-            const next = text[index + 1];
+        for (let charIndex = 0; charIndex < text.length; charIndex += 1) {
+            const char = text[charIndex];
+            const next = text[charIndex + 1];
 
             if (char === '"') {
                 if (inQuotes && next === '"') {
                     current += '"';
-                    index += 1;
+                    charIndex += 1;
                 } else {
                     inQuotes = !inQuotes;
                 }
@@ -349,7 +349,7 @@
 
             if ((char === '\n' || char === '\r') && !inQuotes) {
                 if (char === '\r' && next === '\n') {
-                    index += 1;
+                    charIndex += 1;
                 }
                 pushValue();
                 pushRow();

@@ -100,6 +100,7 @@ cp site.config.example.json site.config.json
 3. **Set up Supabase**
    - Open the SQL editor in Supabase and run `supabase/schema.sql`
    - Seed your access passwords (and optional registry preview rows) with `supabase/seed.example.sql`
+   - Verify Row Level Security stays enabled on each Supabase table before publishing with the anon key
    - `site.config.json` already points at the provided Supabase project URL and publishable key, so GitHub Pages can use it at runtime
 
 4. **Enable GitHub Pages**
