@@ -1171,15 +1171,20 @@ textarea {
 
 /* Registry Section */
 .registry-direct-link {
-    margin: 1.5rem 0 0;
+    margin: 2.5rem 0 0;
     text-align: center;
 }
 
-.registry-note {
+.registry-error {
     max-width: 620px;
-    margin: 1.5rem auto 0;
+    margin: 0 auto 1.5rem;
     text-align: center;
-    color: var(--slate-gray);
+    font-size: 0.9rem;
+    color: var(--muted-sage);
+    padding: 0.75rem 1rem;
+    border: 1px solid rgba(0,0,0,0.1);
+    border-radius: 4px;
+    background: rgba(0,0,0,0.03);
 }
 
 .loading {
@@ -1210,6 +1215,116 @@ textarea {
 .hidden {
     display: none;
 }
+
+/* Registry item grid */
+.registry-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.5rem;
+    margin: 0 0 2.5rem;
+}
+
+.registry-card {
+    background: var(--soft-white);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    transition: var(--transition);
+}
+
+.registry-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.1);
+}
+
+.registry-card--purchased {
+    opacity: 0.65;
+}
+
+.registry-card-media {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: var(--light-gray);
+    overflow: hidden;
+}
+
+.registry-card-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 0.5rem;
+}
+
+.registry-card-img--placeholder {
+    background: var(--light-gray);
+}
+
+.registry-card-badge {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    background: var(--deep-charcoal);
+    color: var(--text-light);
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+.registry-card-body {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.registry-card-store {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--accent-gold);
+    margin-bottom: 0.4rem;
+}
+
+.registry-card-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 0.5rem;
+    line-height: 1.35;
+}
+
+.registry-card-price {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--deep-green);
+    margin-bottom: 0.4rem;
+}
+
+.registry-card-qty {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--muted-sage);
+    margin-bottom: 0.75rem;
+}
+
+.registry-card-btn {
+    margin-top: auto;
+    display: inline-block;
+    text-align: center;
+    text-decoration: none;
+    font-size: 0.7rem;
+    padding: 0.7rem 1rem;
+}
+
 
 .form-group--inline {
     display: flex;
@@ -1886,7 +2001,8 @@ footer p {
     }
 
     .party-briefing-grid,
-    .wedding-party-grid {
+    .wedding-party-grid,
+    .registry-grid {
         grid-template-columns: 1fr;
     }
 }

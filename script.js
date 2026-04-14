@@ -13,11 +13,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     await initAccessControl().catch(error => {
         console.error('Access control failed to initialize:', error);
     });
-    try {
-        initRegistry();
-    } catch (error) {
-        console.error('Unable to initialize registry link:', error);
-    }
+    await initRegistry().catch(error => {
+        console.error('Unable to initialize registry:', error);
+    });
     await initAccommodationsMap().catch(error => {
         console.error('Unable to load accommodations map:', error);
     });
@@ -914,11 +912,100 @@ function showMessage(elementId, message, type) {
 }
 
 // Registry Management
-function initRegistry() {
+async function initRegistry() {
     const registryLink = document.querySelector('.registry-direct-link a');
     if (registryLink) {
         registryLink.href = getRegistryPageUrl();
     }
+
+    const config = window.KMSiteConfig?.getSync?.();
+    if (!window.KMSiteConfig?.isSupabaseConfigured?.(config)) {
+        return;
+    }
+
+    const loadingEl = document.getElementById('registryLoading');
+    const errorEl = document.getElementById('registryError');
+    const gridEl = document.getElementById('registryGrid');
+
+    if (!gridEl) return;
+
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (errorEl) errorEl.classList.add('hidden');
+
+    try {
+        const result = await window.KMDataClient.getRegistryItems();
+        if (loadingEl) loadingEl.style.display = 'none';
+
+        if (!result.items || result.items.length === 0) {
+            if (!result.success && errorEl) {
+                errorEl.textContent = 'Registry items could not be loaded right now. Please use the link below.';
+                errorEl.classList.remove('hidden');
+            }
+            return;
+        }
+
+        gridEl.innerHTML = result.items.map(renderRegistryCard).join('');
+
+        if (!result.success && errorEl) {
+            errorEl.textContent = 'Showing cached registry items — live refresh is temporarily unavailable.';
+            errorEl.classList.remove('hidden');
+        }
+    } catch (error) {
+        if (loadingEl) loadingEl.style.display = 'none';
+        console.warn('Registry items unavailable:', error);
+        if (errorEl) {
+            errorEl.textContent = 'Registry items could not be loaded right now. Please use the link below.';
+            errorEl.classList.remove('hidden');
+        }
+    }
+}
+
+function renderRegistryCard(item) {
+    const purchased = item.is_purchased;
+    const price = typeof item.price === 'number' ? `$${item.price.toFixed(2)}` : '';
+    const storeName = item.store_name ? escapeHtml(item.store_name) : '';
+    const itemName = escapeHtml(item.name || '');
+    const itemUrl = item.product_url || getRegistryPageUrl();
+    const safeUrl = escapeHtml(itemUrl);
+
+    let quantityBadge = '';
+    if (
+        typeof item.quantity_requested === 'number' &&
+        typeof item.quantity_purchased === 'number' &&
+        item.quantity_requested > 1
+    ) {
+        const remaining = Math.max(0, item.quantity_requested - item.quantity_purchased);
+        quantityBadge = `<span class="registry-card-qty">${remaining} of ${item.quantity_requested} remaining</span>`;
+    }
+
+    const imageHtml = item.image_url
+        ? `<img src="${escapeHtml(item.image_url)}" alt="${itemName}" class="registry-card-img" loading="lazy" onerror="this.style.display='none'">`
+        : `<div class="registry-card-img registry-card-img--placeholder" aria-hidden="true"></div>`;
+
+    return `<article class="registry-card${purchased ? ' registry-card--purchased' : ''}" aria-label="${itemName}${purchased ? ' (purchased)' : ''}">
+        <div class="registry-card-media">
+            ${imageHtml}
+            ${purchased ? '<span class="registry-card-badge">Purchased</span>' : ''}
+        </div>
+        <div class="registry-card-body">
+            <p class="registry-card-store">${storeName}</p>
+            <h3 class="registry-card-name">${itemName}</h3>
+            ${price ? `<p class="registry-card-price">${price}</p>` : ''}
+            ${quantityBadge}
+            <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary registry-card-btn"${purchased ? ' aria-label="' + itemName + ' has been purchased"' : ''}>
+                ${purchased ? 'View Item' : 'View &amp; Purchase'}
+            </a>
+        </div>
+    </article>`;
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function getRegistryPageUrl() {

@@ -577,11 +577,60 @@ begin
 end;
 $$;
 
+create table if not exists public.registry_items (
+    id text primary key,
+    name text not null,
+    description text,
+    price numeric,
+    quantity_requested integer,
+    quantity_purchased integer,
+    image_url text,
+    store_name text,
+    product_url text,
+    category text,
+    is_purchased boolean not null default false,
+    fetched_at timestamptz not null default timezone('utc', now())
+);
+
+create or replace function public.get_registry_items()
+returns table (
+    id text,
+    name text,
+    description text,
+    price numeric,
+    quantity_requested integer,
+    quantity_purchased integer,
+    image_url text,
+    store_name text,
+    product_url text,
+    category text,
+    is_purchased boolean,
+    fetched_at timestamptz
+)
+language sql
+security definer
+set search_path = public
+as $$
+    select
+        id, name, description, price,
+        quantity_requested, quantity_purchased,
+        image_url, store_name, product_url, category,
+        is_purchased, fetched_at
+    from public.registry_items
+    order by is_purchased asc, name asc;
+$$;
+
 alter table public.access_passwords enable row level security;
 alter table public.access_sessions enable row level security;
 alter table public.guests enable row level security;
 alter table public.rsvp_submissions enable row level security;
 alter table public.address_submissions enable row level security;
+alter table public.registry_items enable row level security;
+
+create policy "Public read registry items"
+    on public.registry_items for select
+    to anon, authenticated
+    using (true);
 
 revoke all on public.access_passwords from anon, authenticated;
 revoke all on public.access_sessions from anon, authenticated;
@@ -599,3 +648,4 @@ grant execute on function public.list_admin_guests(text) to anon, authenticated;
 grant execute on function public.admin_upsert_guest(text, bigint, jsonb) to anon, authenticated;
 grant execute on function public.admin_delete_guest(text, bigint) to anon, authenticated;
 grant execute on function public.admin_import_guests(text, jsonb) to anon, authenticated;
+grant execute on function public.get_registry_items() to anon, authenticated;
