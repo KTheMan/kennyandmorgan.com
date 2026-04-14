@@ -944,12 +944,7 @@ async function initRegistry() {
             return;
         }
 
-        gridEl.innerHTML = result.items.map(renderRegistryCard).join('');
-
-        // Attach image error handlers out-of-line (avoids inline JS / CSP issues)
-        gridEl.querySelectorAll('img.registry-card-img').forEach(img => {
-            img.addEventListener('error', () => { img.style.display = 'none'; });
-        });
+        gridEl.replaceChildren(...result.items.map(renderRegistryCard));
 
         if (!result.success && errorEl) {
             errorEl.textContent = 'Showing cached registry items — live refresh is temporarily unavailable.';
@@ -966,56 +961,91 @@ async function initRegistry() {
 }
 
 function renderRegistryCard(item) {
-    const purchased = item.is_purchased;
-    const price = typeof item.price === 'number' ? `$${item.price.toFixed(2)}` : '';
-    const storeName = item.store_name ? escapeHtml(item.store_name) : '';
-    const itemName = escapeHtml(item.name || '');
+    const purchased = Boolean(item.is_purchased);
+    const itemName = String(item.name || '');
     const itemUrl = item.product_url || getRegistryPageUrl();
-    const safeUrl = escapeHtml(itemUrl);
+    const price = typeof item.price === 'number' ? `$${item.price.toFixed(2)}` : '';
 
-    let quantityBadge = '';
+    const article = document.createElement('article');
+    article.className = `registry-card${purchased ? ' registry-card--purchased' : ''}`;
+    article.setAttribute('aria-label', itemName + (purchased ? ' (purchased)' : ''));
+
+    // Media section
+    const media = document.createElement('div');
+    media.className = 'registry-card-media';
+
+    if (item.image_url) {
+        const img = document.createElement('img');
+        img.src = String(item.image_url);
+        img.alt = itemName;
+        img.className = 'registry-card-img';
+        img.loading = 'lazy';
+        img.addEventListener('error', () => { img.style.display = 'none'; });
+        media.appendChild(img);
+    } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'registry-card-img registry-card-img--placeholder';
+        placeholder.setAttribute('aria-hidden', 'true');
+        media.appendChild(placeholder);
+    }
+
+    if (purchased) {
+        const badge = document.createElement('span');
+        badge.className = 'registry-card-badge';
+        badge.textContent = 'Purchased';
+        media.appendChild(badge);
+    }
+
+    article.appendChild(media);
+
+    // Body section
+    const body = document.createElement('div');
+    body.className = 'registry-card-body';
+
+    if (item.store_name) {
+        const storeEl = document.createElement('p');
+        storeEl.className = 'registry-card-store';
+        storeEl.textContent = String(item.store_name);
+        body.appendChild(storeEl);
+    }
+
+    const nameEl = document.createElement('h3');
+    nameEl.className = 'registry-card-name';
+    nameEl.textContent = itemName;
+    body.appendChild(nameEl);
+
+    if (price) {
+        const priceEl = document.createElement('p');
+        priceEl.className = 'registry-card-price';
+        priceEl.textContent = price;
+        body.appendChild(priceEl);
+    }
+
     if (
         typeof item.quantity_requested === 'number' &&
         typeof item.quantity_purchased === 'number' &&
         item.quantity_requested > 1
     ) {
         const remaining = Math.max(0, item.quantity_requested - item.quantity_purchased);
-        quantityBadge = `<span class="registry-card-qty">${remaining} of ${item.quantity_requested} remaining</span>`;
+        const qtyEl = document.createElement('span');
+        qtyEl.className = 'registry-card-qty';
+        qtyEl.textContent = `${remaining} of ${item.quantity_requested} remaining`;
+        body.appendChild(qtyEl);
     }
 
-    const imageHtml = item.image_url
-        ? `<img src="${escapeHtml(item.image_url)}" alt="${itemName}" class="registry-card-img" loading="lazy">`
-        : `<div class="registry-card-img registry-card-img--placeholder" aria-hidden="true"></div>`;
+    const link = document.createElement('a');
+    link.href = itemUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.className = 'btn btn-secondary registry-card-btn';
+    link.textContent = purchased ? 'View Item' : 'View & Purchase';
+    if (purchased) {
+        link.setAttribute('aria-label', itemName + ' has been purchased');
+    }
+    body.appendChild(link);
 
-    const articleLabel = itemName + (purchased ? ' (purchased)' : '');
-    const btnAriaLabel = purchased
-        ? ` aria-label="${escapeHtml(String(item.name || '') + ' has been purchased')}"`
-        : '';
-
-    return `<article class="registry-card${purchased ? ' registry-card--purchased' : ''}" aria-label="${articleLabel}">
-        <div class="registry-card-media">
-            ${imageHtml}
-            ${purchased ? '<span class="registry-card-badge">Purchased</span>' : ''}
-        </div>
-        <div class="registry-card-body">
-            <p class="registry-card-store">${storeName}</p>
-            <h3 class="registry-card-name">${itemName}</h3>
-            ${price ? `<p class="registry-card-price">${price}</p>` : ''}
-            ${quantityBadge}
-            <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary registry-card-btn"${btnAriaLabel}>
-                ${purchased ? 'View Item' : 'View &amp; Purchase'}
-            </a>
-        </div>
-    </article>`;
-}
-
-function escapeHtml(str) {
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+    article.appendChild(body);
+    return article;
 }
 
 function getRegistryPageUrl() {
