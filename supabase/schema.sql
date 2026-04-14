@@ -155,7 +155,7 @@ begin
     values (
         encode(digest(raw_token, 'sha256'), 'hex'),
         matched_level,
-        timezone('utc', now()) + make_interval(secs => greatest(session_ttl_ms, 60000) / 1000)
+        timezone('utc', now()) + make_interval(secs => (greatest(session_ttl_ms, 60000)::numeric / 1000))
     );
 
     return jsonb_build_object(

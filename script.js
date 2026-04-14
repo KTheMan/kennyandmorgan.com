@@ -1238,13 +1238,3 @@ function escapeHtml(value) {
 function escapeHtmlAttr(value) {
     return escapeHtml(value).replace(/"/g, '&quot;');
 }
-function escapeHtml(value) {
-    return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-}
-
-function escapeHtmlAttr(value) {
-    return escapeHtml(value).replace(/"/g, '&quot;');
-}
