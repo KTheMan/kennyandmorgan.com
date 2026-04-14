@@ -1,6 +1,7 @@
 (function(window) {
     const DEFAULT_CONFIG = {
         apiBaseUrl: '',
+        registryPageUrl: 'https://www.myregistry.com/giftlist/morganandkenny',
         supabase: {
             url: '',
             anonKey: '',

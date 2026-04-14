@@ -19,6 +19,8 @@
   "author": "Kenny & Morgan",
   "license": "MIT",
   "dependencies": {
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.103.0",
     "axios": "^1.12.0",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^12.5.0",
@@ -32,6 +34,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
-    "http-server": "^14.1.1"
+    "http-server": "^14.1.1",
+    "leaflet": "^1.9.4"
   }
 }

@@ -18,7 +18,7 @@
                 <div class="form-group">
                     <label for="adminPassword">Password</label>
                     <input type="password" id="adminPassword" name="password" required>
-                    <p class="form-hint">This password is configured in the server's <code>.env</code> file.</p>
+                    <p class="form-hint">This password comes from the configured Supabase access table (or the local fallback when previewing on localhost).</p>
                 </div>
                 <button type="submit" class="btn btn-primary">Sign In</button>
             </form>
@@ -172,6 +172,9 @@
     </main>
 
     <div id="adminToastStack" class="admin-toast-stack" aria-live="polite" aria-atomic="true"></div>
+    <script src="vendor/supabase/supabase.js"></script>
+    <script src="site-config.js"></script>
+    <script src="data-client.js"></script>
     <script src="admin.js"></script>
 </body>
 </html>

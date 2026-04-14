@@ -1,5 +1,6 @@
 {
   "apiBaseUrl": "",
+  "registryPageUrl": "https://www.myregistry.com/giftlist/morganandkenny",
   "supabase": {
     "url": "https://YOUR_PROJECT.supabase.co",
     "anonKey": "YOUR_SUPABASE_ANON_KEY",

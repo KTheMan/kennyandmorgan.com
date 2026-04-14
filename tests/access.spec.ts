@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:8000';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://127.0.0.1:4173';
 const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD_ADMIN || 'Binx123!';
 
 test.describe('Access overlay', () => {

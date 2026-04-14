@@ -1170,6 +1170,11 @@ textarea {
 }
 
 /* Registry Section */
+.registry-direct-link {
+    margin: 1.5rem 0 0;
+    text-align: center;
+}
+
 .registry-filter {
     display: flex;
     flex-direction: column;

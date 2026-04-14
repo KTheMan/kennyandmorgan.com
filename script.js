@@ -1,15 +1,22 @@
 // Navigation functionality
-document.addEventListener('DOMContentLoaded', () => {
-    initAccessControl().catch(error => {
-        console.error('Access control failed to initialize:', error);
-    });
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        await window.KMSiteConfig.load();
+    } catch (error) {
+        console.warn('Unable to load site config, continuing with defaults.', error);
+    }
+
     initNavigation();
     initCountdown();
     initForms();
-    initRegistry().catch(error => {
+
+    await initAccessControl().catch(error => {
+        console.error('Access control failed to initialize:', error);
+    });
+    await initRegistry().catch(error => {
         console.error('Unable to initialize registry filters:', error);
     });
-    initAccommodationsMap().catch(error => {
+    await initAccommodationsMap().catch(error => {
         console.error('Unable to load accommodations map:', error);
     });
     initAccommodationScrollHint();
@@ -26,6 +33,7 @@ let activeGuestParty = null;
 const guestResponseState = new Map();
 const registryFastPollClicks = new Map();
 const REGISTRY_FAST_POLL_CLICK_THROTTLE_MS = 60 * 1000;
+const DEFAULT_REGISTRY_PAGE_URL = 'https://www.myregistry.com/giftlist/morganandkenny';
 const ACCESS_LEVELS = {
     locked: 'locked',
     family: 'family',
@@ -211,33 +219,11 @@ async function resumeAccessSession() {
 }
 
 async function authenticateAccessPassword(password) {
-    const apiBase = resolveApiBaseUrl();
-    const response = await fetch(`${apiBase}/api/access/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
-    });
-    const data = await safeJson(response);
-    if (!response.ok || data.success === false) {
-        const error = new Error(data.error || data.message || 'Unable to authenticate.');
-        error.status = response.status;
-        throw error;
-    }
-    return data;
+    return window.KMDataClient.loginAccess(password);
 }
 
 async function fetchAccessSession(token) {
-    const apiBase = resolveApiBaseUrl();
-    const response = await fetch(`${apiBase}/api/access/session`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
-    const data = await safeJson(response);
-    if (!response.ok || data.success === false) {
-        const error = new Error(data.error || data.message || 'Access session invalid.');
-        error.status = response.status;
-        throw error;
-    }
-    return data;
+    return window.KMDataClient.getAccessSession(token);
 }
 
 async function safeJson(response) {
@@ -603,14 +589,7 @@ function setupGuestLookup() {
         setLookupState('Looking up your party...', 'info');
 
         try {
-            const apiBase = resolveApiBaseUrl();
-            const response = await fetch(`${apiBase}/api/guests/search?name=${encodeURIComponent(query)}`);
-
-            if (!response.ok) {
-                throw new Error('Search request failed');
-            }
-
-            const data = await response.json();
+            const data = await window.KMDataClient.searchGuestGroups(query);
 
             if (!data.success || !Array.isArray(data.results) || !data.results.length) {
                 setLookupState('We could not find a party with that name. Double-check the spelling or reach out to us.', 'error');
@@ -879,24 +858,18 @@ function normalizeGuestStatus(value) {
     return null;
 }
 
-function handleAddressSubmit(form) {
+async function handleAddressSubmit(form) {
     const formData = new FormData(form);
     const data = Object.fromEntries(formData);
-    
-    // In a real application, this would send data to a backend
-    // For now, we'll simulate a successful submission
-    console.log('Address submitted:', data);
-    
-    // Store in localStorage for demo purposes
-    const addresses = JSON.parse(localStorage.getItem('addresses') || '[]');
-    addresses.push({
-        ...data,
-        submittedAt: new Date().toISOString()
-    });
-    localStorage.setItem('addresses', JSON.stringify(addresses));
-    
-    showMessage('addressMessage', 'Thank you! Your address has been saved.', 'success');
-    form.reset();
+
+    try {
+        const result = await window.KMDataClient.submitAddress(data);
+        showMessage('addressMessage', result.message || 'Thank you! Your address has been saved.', 'success');
+        form.reset();
+    } catch (error) {
+        console.error('Unable to save address:', error);
+        showMessage('addressMessage', 'We could not save your address right now. Please try again later.', 'error');
+    }
 }
 
 async function handleRSVPSubmit(form) {
@@ -934,21 +907,11 @@ async function handleRSVPSubmit(form) {
         payload.guestCount = attendingCount;
     }
 
-    const apiBase = resolveApiBaseUrl();
     submitButton?.setAttribute('disabled', 'disabled');
     submitButton?.classList.add('is-loading');
 
     try {
-        const response = await fetch(`${apiBase}/api/rsvp`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        const result = await response.json();
-        if (!response.ok || !result.success) {
-            throw new Error(result.error || 'Submission failed');
-        }
+        const result = await window.KMDataClient.submitRsvp(payload);
 
         showMessage('rsvpMessage', result.message || 'Thank you for your RSVP!', 'success');
         form.reset();
@@ -996,31 +959,20 @@ async function initRegistry() {
 }
 
 async function loadRegistryConfig() {
-    try {
-        const response = await fetch('registry.config.json', { cache: 'no-store' });
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        const data = await response.json();
-        const registries = Array.isArray(data.registries)
-            ? data.registries
-                .map(entry => ({
-                    ...entry,
-                    store: (entry.store || '').toLowerCase()
-                }))
-                .filter(entry => entry.store)
-            : [];
-        registryConfig = {
-            apiBaseUrl: data.apiBaseUrl || '',
-            registries
-        };
-    } catch (error) {
-        console.warn('Unable to load registry.config.json, falling back to defaults.', error);
-        registryConfig = {
-            apiBaseUrl: '',
-            registries: []
-        };
-    }
+    const data = await window.KMSiteConfig.load();
+    const registries = Array.isArray(data.registries)
+        ? data.registries
+            .map(entry => ({
+                ...entry,
+                store: (entry.store || '').toLowerCase()
+            }))
+            .filter(entry => entry.store)
+        : [];
+
+    registryConfig = {
+        apiBaseUrl: data.apiBaseUrl || '',
+        registries
+    };
 
     return registryConfig;
 }
@@ -1034,16 +986,8 @@ async function loadRegistryItems(filter, options = {}) {
     registryContainer.innerHTML = '';
     
     try {
-        const endpoint = buildRegistryEndpoint(filter);
-        const fetchOptions = getRegistryFetchOptions(filter);
-        const response = await fetch(endpoint, fetchOptions);
-        
-        if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
+        const data = await window.KMDataClient.listRegistryItems(filter);
+
         if (data.success && data.items) {
             if (options.refreshFilters || filter === 'all') {
                 updateRegistryFilterOptions(data.items);
@@ -1056,7 +1000,7 @@ async function loadRegistryItems(filter, options = {}) {
         console.error('Error loading registry items:', error);
         // Show error message - no fallback to mock data
         displayRegistryItems([]);
-        showRegistryError('Unable to load registry items. Please ensure valid registry IDs are configured.');
+        showRegistryError(`Unable to load preview items right now. You can still view the full registry at ${getRegistryPageUrl()}.`);
         resetRegistryFilterOptions();
     } finally {
         loadingEl.style.display = 'none';
@@ -1140,7 +1084,7 @@ function displayRegistryItems(items) {
     const registryContainer = document.getElementById('registryItems');
     
     if (items.length === 0) {
-        registryContainer.innerHTML = '<p style="text-align: center; grid-column: 1/-1; padding: 40px 20px; color: var(--slate-gray);">No registry items available. Registry IDs must be configured to display items.</p>';
+        registryContainer.innerHTML = `<p style="text-align: center; grid-column: 1/-1; padding: 40px 20px; color: var(--slate-gray);">Preview items are not available yet. You can still browse the full registry on <a href="${getRegistryPageUrl()}" target="_blank" rel="noopener noreferrer">MyRegistry</a>.</p>`;
         return;
     }
     
@@ -1180,7 +1124,8 @@ function capitalizeStore(store) {
         'williamsonoma': 'Williams-Sonoma',
         'rei': 'REI',
         'zola': 'Zola',
-        'heathceramics': 'Heath Ceramics'
+        'heathceramics': 'Heath Ceramics',
+        'myregistry': 'MyRegistry'
     };
     return storeNames[store] || store;
 }
@@ -1250,11 +1195,15 @@ async function flagRegistryItemForFastPoll(cacheId) {
     }
     registryFastPollClicks.set(cacheId, now);
     try {
-        const apiBase = resolveApiBaseUrl();
-        await fetch(`${apiBase}/api/registry/items/${cacheId}/fast-poll`, { method: 'POST' });
+        await window.KMDataClient.flagRegistryItemForFastPoll(cacheId);
     } catch (error) {
         console.warn('Unable to schedule fast poll for item', cacheId, error);
     }
+}
+
+function getRegistryPageUrl() {
+    const config = window.KMSiteConfig?.getSync?.();
+    return config?.registryPageUrl || DEFAULT_REGISTRY_PAGE_URL;
 }
 
 function formatRegistryPrice(price) {
@@ -1646,10 +1595,7 @@ function resolveApiBaseUrl() {
     if (registryConfig.apiBaseUrl) {
         return registryConfig.apiBaseUrl.replace(/\/$/, '');
     }
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return 'http://localhost:3000';
-    }
-    return window.location.origin;
+    return window.KMSiteConfig.getApiBaseUrl(window.KMSiteConfig.getSync());
 }
 
 function getApiUrl() {
