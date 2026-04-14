@@ -102,7 +102,7 @@ create or replace function public.require_session(session_token text, required_l
 returns text
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
     session_level text;
@@ -132,7 +132,7 @@ create or replace function public.login_access(candidate_password text, session_
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
     matched_level text;
@@ -171,7 +171,7 @@ create or replace function public.get_access_session(session_token text)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
     session_level text;
@@ -206,7 +206,7 @@ create or replace function public.logout_access(session_token text)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 begin
     delete from public.access_sessions

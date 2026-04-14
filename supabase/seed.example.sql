@@ -1,3 +1,5 @@
+set search_path = public, extensions;
+
 insert into public.access_passwords (level, password_hash)
 values
     ('family', crypt('family-password-here', gen_salt('bf'))),

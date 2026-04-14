@@ -9,7 +9,7 @@
 ## Supabase setup
 
 1. Open the Supabase SQL editor.
-2. Run `supabase/schema.sql`.
+2. Run or re-run `supabase/schema.sql` to create/update the RPCs and supporting functions.
 3. Run `supabase/seed.example.sql` after replacing the sample passwords.
 4. Verify Row Level Security is enabled on every table.
 
