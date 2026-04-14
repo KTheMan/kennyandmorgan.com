@@ -207,7 +207,7 @@ Deno.serve(async (req: Request) => {
             const freshItems = await fetchFromMyRegistry();
 
             // Replace all cached items with the freshly fetched set
-            await supabase.from('registry_items').delete().neq('id', '');
+            await supabase.from('registry_items').delete().lte('fetched_at', new Date().toISOString());
             const { error: insertError } = await supabase.from('registry_items').insert(freshItems);
             if (insertError) {
                 throw new Error(`Failed to cache registry items: ${insertError.message}`);

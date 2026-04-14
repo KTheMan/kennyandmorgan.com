@@ -946,6 +946,11 @@ async function initRegistry() {
 
         gridEl.innerHTML = result.items.map(renderRegistryCard).join('');
 
+        // Attach image error handlers out-of-line (avoids inline JS / CSP issues)
+        gridEl.querySelectorAll('img.registry-card-img').forEach(img => {
+            img.addEventListener('error', () => { img.style.display = 'none'; });
+        });
+
         if (!result.success && errorEl) {
             errorEl.textContent = 'Showing cached registry items — live refresh is temporarily unavailable.';
             errorEl.classList.remove('hidden');
@@ -979,10 +984,15 @@ function renderRegistryCard(item) {
     }
 
     const imageHtml = item.image_url
-        ? `<img src="${escapeHtml(item.image_url)}" alt="${itemName}" class="registry-card-img" loading="lazy" onerror="this.style.display='none'">`
+        ? `<img src="${escapeHtml(item.image_url)}" alt="${itemName}" class="registry-card-img" loading="lazy">`
         : `<div class="registry-card-img registry-card-img--placeholder" aria-hidden="true"></div>`;
 
-    return `<article class="registry-card${purchased ? ' registry-card--purchased' : ''}" aria-label="${itemName}${purchased ? ' (purchased)' : ''}">
+    const articleLabel = itemName + (purchased ? ' (purchased)' : '');
+    const btnAriaLabel = purchased
+        ? ` aria-label="${escapeHtml(String(item.name || '') + ' has been purchased')}"`
+        : '';
+
+    return `<article class="registry-card${purchased ? ' registry-card--purchased' : ''}" aria-label="${articleLabel}">
         <div class="registry-card-media">
             ${imageHtml}
             ${purchased ? '<span class="registry-card-badge">Purchased</span>' : ''}
@@ -992,7 +1002,7 @@ function renderRegistryCard(item) {
             <h3 class="registry-card-name">${itemName}</h3>
             ${price ? `<p class="registry-card-price">${price}</p>` : ''}
             ${quantityBadge}
-            <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary registry-card-btn"${purchased ? ' aria-label="' + itemName + ' has been purchased"' : ''}>
+            <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary registry-card-btn"${btnAriaLabel}>
                 ${purchased ? 'View Item' : 'View &amp; Purchase'}
             </a>
         </div>
