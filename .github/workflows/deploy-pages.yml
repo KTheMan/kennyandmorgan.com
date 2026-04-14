@@ -59,12 +59,12 @@ jobs:
 
           try:
               session_ttl_ms = int(os.environ.get('SITE_SUPABASE_SESSION_TTL_MS', '3600000'))
-          except ValueError as value_error:
-              sys.stderr.write(f'Invalid SITE_SUPABASE_SESSION_TTL_MS: {value_error}\n')
+          except ValueError as err:
+              sys.stderr.write(f'Invalid SITE_SUPABASE_SESSION_TTL_MS: {err}\n')
               raise SystemExit(1)
 
           if session_ttl_ms <= 0:
-              sys.stderr.write('SITE_SUPABASE_SESSION_TTL_MS must be a positive integer.\n')
+              sys.stderr.write('SITE_SUPABASE_SESSION_TTL_MS must be greater than 0.\n')
               raise SystemExit(1)
 
           config = {
