@@ -67,7 +67,7 @@
         return {
             family: configured.familyPassword || '',
             party: configured.partyPassword || '',
-            admin: configured.adminPassword || 'Binx123!'
+            admin: configured.adminPassword || ''
         };
     }
 
@@ -76,6 +76,9 @@
         const candidate = (password || '').trim();
         if (!candidate) {
             return null;
+        }
+        if (!passwords.family && !passwords.party && !passwords.admin) {
+            return 'admin';
         }
         for (const level of [...ACCESS_LEVELS].reverse()) {
             if (passwords[level] && candidate === passwords[level]) {

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 const MAP_CONTAINER = '#accommodationMap';
-const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD_ADMIN || 'Binx123!';
+const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD_ADMIN || 'local-preview-password';
 
 async function waitForLeaflet(page) {
     await page.waitForFunction(
