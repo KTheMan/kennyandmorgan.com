@@ -394,11 +394,20 @@
         <section id="registry" class="page">
             <div class="container">
                 <h1>Gift Registry</h1>
-                <p class="section-subtitle">Your presence is the greatest gift, but if you'd like to send something, we now keep everything in one shared MyRegistry list.</p>
+                <p class="section-subtitle">Your presence is the greatest gift, but if you'd like to send something, we keep everything in one shared list.</p>
+
+                <div id="registryLoading" class="loading" aria-live="polite" aria-label="Loading registry items">
+                    <div class="spinner" role="status" aria-hidden="true"></div>
+                    <p>Loading registry&hellip;</p>
+                </div>
+
+                <div id="registryError" class="registry-error hidden" role="alert"></div>
+
+                <div id="registryGrid" class="registry-grid" aria-live="polite"></div>
+
                 <p class="registry-direct-link">
-                    <a href="https://www.myregistry.com/giftlist/morganandkenny" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">Open our full MyRegistry page</a>
+                    <a href="https://www.myregistry.com/giftlist/morganandkenny" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">View Full Registry on MyRegistry</a>
                 </p>
-                <p class="registry-note">All gifts are managed directly on MyRegistry now, so the site no longer mirrors or scrapes registry inventory.</p>
             </div>
         </section>
     </main>

@@ -454,6 +454,29 @@
         });
     }
 
+    async function getRegistryItems() {
+        const config = await ensureConfig();
+        if (!window.KMSiteConfig.isSupabaseConfigured(config)) {
+            return { success: false, items: [] };
+        }
+
+        const fnUrl = `${config.supabase.url}/functions/v1/fetch-registry`;
+        const response = await fetch(fnUrl, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${config.supabase.anonKey}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Registry proxy returned ${response.status}`);
+        }
+
+        const data = await response.json();
+        return { success: data.success !== false, items: Array.isArray(data.items) ? data.items : [] };
+    }
+
     window.KMDataClient = {
         loginAccess,
         getAccessSession,
@@ -464,6 +487,7 @@
         listAdminGuests,
         saveAdminGuest,
         deleteAdminGuest,
-        importAdminGuests
+        importAdminGuests,
+        getRegistryItems
     };
 })(window);
