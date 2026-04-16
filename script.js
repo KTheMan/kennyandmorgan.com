@@ -1,7 +1,10 @@
-function initRegistry(result) {
+function initRegistry() {
     const visibleItems = result.items.filter(item => {
-        const { quantity_requested, quantity_purchased, is_purchased } = item;
-        return (typeof quantity_requested === 'number' && quantity_purchased < quantity_requested) || (!is_purchased);
+        if (typeof item.quantity_requested === 'number') {
+            return item.quantity_purchased < item.quantity_requested;
+        } else {
+            return !item.is_purchased;
+        }
     });
 
     if (visibleItems.length === 0) {
@@ -9,22 +12,34 @@ function initRegistry(result) {
         return;
     }
 
-    renderRegistry(visibleItems);
+    gridEl.replaceChildren(...visibleItems.map(renderRegistryCard));
 }
 
 function renderRegistryCard(item) {
-    const desired = item.quantity_requested;
-    const purchasedCount = item.quantity_purchased || 0;
-    const remaining = Math.max(desired - purchasedCount, 0);
-    
+    // Existing rendering logic...
+
+    const desired = typeof item.quantity_requested === 'number' ? item.quantity_requested : null;
+    const purchasedCount = typeof item.quantity_purchased === 'number' ? item.quantity_purchased : 0;
+    const remaining = desired !== null ? Math.max(0, desired - purchasedCount) : null;
+
     if (desired !== null) {
-        const qtyInfo = document.createElement('div');
-        qtyInfo.classList.add('registry-card-qty-wrap');
+        const qtyWrap = document.createElement('div');
+        qtyWrap.className = 'registry-card-qty-wrap';
+
         if (remaining > 0) {
-            qtyInfo.innerHTML = `<span class="registry-card-qty">${remaining} still needed</span>`;
+            const qty = document.createElement('span');
+            qty.className = 'registry-card-qty';
+            qty.textContent = `${remaining} still needed`;
+            qtyWrap.appendChild(qty);
         }
-        qtyInfo.innerHTML += `<span class="registry-card-qty-detail">${purchasedCount} purchased / ${desired} desired</span>`;
-        cardElement.appendChild(qtyInfo);
+
+        const qtyDetail = document.createElement('span');
+        qtyDetail.className = 'registry-card-qty-detail';
+        qtyDetail.textContent = `${purchasedCount} purchased / ${desired} desired`;
+        qtyWrap.appendChild(qtyDetail);
+
+        document.body.appendChild(qtyWrap);
     }
-    // Preserve other existing card rendering logic...
+
+    // Remaining rendering logic...
 }
