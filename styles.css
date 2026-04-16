@@ -1120,20 +1120,8 @@ textarea {
     background-color: #B0E0E6;
 }
 
-.color-swatch.color-brown {
-    background-color: #7FB3D5;
-}
-
-.color-swatch.color-slate {
-    background-color: #D7ECFA;
-}
-
 .color-swatch.color-antique {
     background-color: #FFFFFF;
-}
-
-.color-swatch.color-olive {
-    background-color: #1F4D3A;
 }
 
 .color-swatch:hover {
