@@ -1309,11 +1309,24 @@ textarea {
     margin-bottom: 0.4rem;
 }
 
+.registry-card-qty-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+}
+
 .registry-card-qty {
     display: block;
-    font-size: 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--deep-green);
+}
+
+.registry-card-qty-detail {
+    display: block;
+    font-size: 0.85rem;
     color: var(--muted-sage);
-    margin-bottom: 0.75rem;
 }
 
 .registry-card-btn {
@@ -1325,6 +1338,12 @@ textarea {
     padding: 0.7rem 1rem;
 }
 
+.registry-empty {
+    text-align: center;
+    font-size: 1rem;
+    color: var(--muted-sage);
+    padding: 2rem 1rem;
+}
 
 .form-group--inline {
     display: flex;
