@@ -9,8 +9,8 @@
     /* Penelope Color Palette - High Contrast */
     --deep-charcoal: #2A2A2A;
     --soft-white: #FFFFFF;
-    --deep-green: #1B3A2F;
-    --deep-green-transparent: rgba(27, 58, 47, 0.1);
+    --deep-green: #1F4D3A;
+    --deep-green-transparent: rgba(31, 77, 58, 0.1);
     --accent-gold: #C9A961;
     --venue-blue: #0F77FF;
     --muted-sage: #8A9A8E;
@@ -1116,24 +1116,12 @@ textarea {
     transition: var(--transition);
 }
 
-.color-swatch.color-tan {
-    background-color: #D4A373;
+.color-swatch.color-powder-blue {
+    background-color: #B0E0E6;
 }
 
-.color-swatch.color-brown {
-    background-color: #8B4513;
-}
-
-.color-swatch.color-slate {
-    background-color: #2F4F4F;
-}
-
-.color-swatch.color-antique {
-    background-color: #FAEBD7;
-}
-
-.color-swatch.color-olive {
-    background-color: #556B2F;
+.color-swatch.color-white {
+    background-color: #FFFFFF;
 }
 
 .color-swatch:hover {
