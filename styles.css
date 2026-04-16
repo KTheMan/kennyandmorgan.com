@@ -1116,11 +1116,11 @@ textarea {
     transition: var(--transition);
 }
 
-.color-swatch.color-tan {
+.color-swatch.color-powder-blue {
     background-color: #B0E0E6;
 }
 
-.color-swatch.color-antique {
+.color-swatch.color-white {
     background-color: #FFFFFF;
 }
 
