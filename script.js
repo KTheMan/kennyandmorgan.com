@@ -944,8 +944,24 @@ async function initRegistry() {
             return;
         }
 
-        gridEl.replaceChildren(...result.items.map(renderRegistryCard));
-
+        const visibleItems = result.items.filter(item => {
+            const desired = typeof item.quantity_requested === 'number' ? item.quantity_requested : null;
+            const purchasedCount = typeof item.quantity_purchased === 'number' ? item.quantity_purchased : 0;
+        
+            if (desired === null) {
+                return !item.is_purchased;
+            }
+        
+            return purchasedCount < desired;
+        });
+        
+        if (visibleItems.length === 0) {
+            gridEl.innerHTML = '<p class="registry-empty">All registry items have been fulfilled. Thank you!</p>';
+            return;
+        }
+        
+        gridEl.replaceChildren(...visibleItems.map(renderRegistryCard));
+        
         if (!result.success && errorEl) {
             errorEl.textContent = 'Showing cached registry items — live refresh is temporarily unavailable.';
             errorEl.classList.remove('hidden');
@@ -1021,16 +1037,27 @@ function renderRegistryCard(item) {
         body.appendChild(priceEl);
     }
 
-    if (
-        typeof item.quantity_requested === 'number' &&
-        typeof item.quantity_purchased === 'number' &&
-        item.quantity_requested > 1
-    ) {
-        const remaining = Math.max(0, item.quantity_requested - item.quantity_purchased);
-        const qtyEl = document.createElement('span');
-        qtyEl.className = 'registry-card-qty';
-        qtyEl.textContent = `${remaining} of ${item.quantity_requested} remaining`;
-        body.appendChild(qtyEl);
+    const desired = typeof item.quantity_requested === 'number' ? item.quantity_requested : null;
+    const purchasedCount = typeof item.quantity_purchased === 'number' ? item.quantity_purchased : 0;
+    const remaining = desired !== null ? Math.max(0, desired - purchasedCount) : null;
+    
+    if (desired !== null) {
+        const qtyWrap = document.createElement('div');
+        qtyWrap.className = 'registry-card-qty-wrap';
+    
+        if (remaining > 0) {
+            const remainingEl = document.createElement('span');
+            remainingEl.className = 'registry-card-qty';
+            remainingEl.textContent = `${remaining} still needed`;
+            qtyWrap.appendChild(remainingEl);
+        }
+    
+        const detailEl = document.createElement('span');
+        detailEl.className = 'registry-card-qty-detail';
+        detailEl.textContent = `${purchasedCount} purchased / ${desired} desired`;
+        qtyWrap.appendChild(detailEl);
+    
+        body.appendChild(qtyWrap);
     }
 
     const link = document.createElement('a');
