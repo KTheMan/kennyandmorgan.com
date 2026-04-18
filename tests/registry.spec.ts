@@ -91,6 +91,7 @@ test.describe('Registry rendering', () => {
 
         const productCard = page.locator('#registryGrid .registry-card').filter({ hasText: 'Toaster' });
         await expect(productCard).toBeVisible();
+        await expect(productCard.locator('.registry-card-store')).toHaveText('Target');
         await expect(productCard.locator('.registry-card-price')).toHaveText('$49.99');
         await expect(productCard.locator('.registry-card-qty')).toHaveText('1 still needed');
         await expect(productCard.locator('.registry-card-qty-detail')).toHaveText('0 purchased / 1 desired');
