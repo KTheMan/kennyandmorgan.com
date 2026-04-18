@@ -133,8 +133,11 @@ function getImageUrlFromHtml(html: string): string | null {
 
 function getImageAltTextFromHtml(html: string, className: string): string | null {
     const escaped = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const match = html.match(new RegExp(`<[^>]*class=["'][^"']*\\b${escaped}\\b[^"']*["'][^>]*>[\\s\\S]*?<img[^>]*alt=["']([^"']+)["']`, 'i'));
-    return stripHtml(match?.[1] ?? null);
+    const containerMatch = html.match(
+        new RegExp(`<[^>]*class=["'][^"']*\\b${escaped}\\b[^"']*["'][^>]*>([\\s\\S]*?)</[^>]+>`, 'i'),
+    );
+    const imgAltMatch = containerMatch?.[1]?.match(/<img[^>]*alt=["']([^"']+)["']/i);
+    return stripHtml(imgAltMatch?.[1] ?? null);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -392,7 +395,6 @@ function parseItemsFromJsonLd(html: string, fetchedAt: string): RegistryItem[] {
                 category: toTextValue(node.category ?? itemOffered.category),
                 item_type: inferredType,
                 action_label: inferredType === 'fund' ? 'Contribute' : null,
-                isPurchased: String(offers.availability || '').toLowerCase().includes('outofstock'),
             });
         }
     }
@@ -465,8 +467,8 @@ function mergeRegistryItems(primaryItems: RegistryItem[], fallbackItems: Registr
         }
 
         merged.set(fallback.id, {
-            ...fallback,
-            ...current,
+            id: current.id,
+            name: current.name || fallback.name,
             description: current.description ?? fallback.description,
             price: current.price ?? fallback.price,
             quantity_requested: current.quantity_requested ?? fallback.quantity_requested,
@@ -476,6 +478,7 @@ function mergeRegistryItems(primaryItems: RegistryItem[], fallbackItems: Registr
             product_url: current.product_url ?? fallback.product_url,
             category: current.category ?? fallback.category,
             is_purchased: current.is_purchased || fallback.is_purchased,
+            fetched_at: current.fetched_at || fallback.fetched_at,
             item_type: current.item_type ?? fallback.item_type,
             action_label: current.action_label ?? fallback.action_label,
         });
