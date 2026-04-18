@@ -592,6 +592,10 @@ create table if not exists public.registry_items (
     fetched_at timestamptz not null default timezone('utc', now())
 );
 
+alter table public.registry_items
+    add column if not exists item_type text,
+    add column if not exists action_label text;
+
 create or replace function public.get_registry_items()
 returns table (
     id text,
@@ -605,7 +609,9 @@ returns table (
     product_url text,
     category text,
     is_purchased boolean,
-    fetched_at timestamptz
+    fetched_at timestamptz,
+    item_type text,
+    action_label text
 )
 language sql
 security definer
@@ -615,7 +621,8 @@ as $$
         id, name, description, price,
         quantity_requested, quantity_purchased,
         image_url, store_name, product_url, category,
-        is_purchased, fetched_at
+        is_purchased, fetched_at,
+        item_type, action_label
     from public.registry_items
     order by is_purchased asc, name asc;
 $$;

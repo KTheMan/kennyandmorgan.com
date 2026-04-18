@@ -17,7 +17,7 @@
 
 The `fetch-registry` Edge Function proxies registry data from MyRegistry, caches it in the
 `registry_items` table, and returns the items to the static site. It refreshes the cache
-whenever it is more than one hour old (configurable via the `REGISTRY_CACHE_TTL_SECONDS`
+whenever it is older than 10 minutes by default (configurable via the `REGISTRY_CACHE_TTL_SECONDS`
 environment variable on the Edge Function).
 
 ### First-time setup
@@ -49,7 +49,7 @@ Set these environment variables on the `fetch-registry` function in the Supabase
 | Variable | Default | Description |
 |---|---|---|
 | `MYREGISTRY_URL` | `https://www.myregistry.com/giftlist/morganandkenny` | Full gift list URL |
-| `REGISTRY_CACHE_TTL_SECONDS` | `3600` | How long (seconds) to cache items before re-fetching |
+| `REGISTRY_CACHE_TTL_SECONDS` | `600` | How long (seconds) to cache items before re-fetching |
 
 ## Runtime config
 
