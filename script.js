@@ -929,8 +929,19 @@ function isFundRegistryItem(item) {
     if (type === 'fund' || type === 'cash_gift' || type === 'cashgift') {
         return true;
     }
-    const actionLabel = String(item?.action_label || '').toLowerCase();
-    return actionLabel.includes('contribute');
+    const hints = [
+        item?.action_label,
+        item?.category,
+        item?.store_name,
+        item?.storeName,
+        item?.name
+    ]
+        .map(value => String(value || '').toLowerCase());
+    return hints.some(value =>
+        value.includes('contribute') ||
+        value.includes('cash gift') ||
+        value.includes('fund')
+    );
 }
 
 function shouldDisplayRegistryItem(item) {
