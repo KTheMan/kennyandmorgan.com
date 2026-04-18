@@ -596,7 +596,9 @@ alter table public.registry_items
     add column if not exists item_type text,
     add column if not exists action_label text;
 
-create or replace function public.get_registry_items()
+drop function if exists public.get_registry_items();
+
+create function public.get_registry_items()
 returns table (
     id text,
     name text,
@@ -633,6 +635,8 @@ alter table public.guests enable row level security;
 alter table public.rsvp_submissions enable row level security;
 alter table public.address_submissions enable row level security;
 alter table public.registry_items enable row level security;
+
+drop policy if exists "Public read registry items" on public.registry_items;
 
 create policy "Public read registry items"
     on public.registry_items for select

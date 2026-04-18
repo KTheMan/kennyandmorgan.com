@@ -109,7 +109,7 @@ function stripHtml(value: string | null): string | null {
 }
 
 function getTagText(html: string, className: string): string | null {
-    const escaped = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escaped = className.replace(/[|\\{}()[\]^$+*?.\-]/g, '\\$&');
     const pattern = CLASS_TEXT_CAPTURE_TEMPLATE.replace('%s', escaped);
     const match = html.match(new RegExp(pattern, 'i'));
     return stripHtml(match?.[1] ?? null);
@@ -123,9 +123,40 @@ function getBackgroundImageUrl(html: string): string | null {
 }
 
 function getImageUrlFromHtml(html: string): string | null {
+    // Product cards use CSS background images for the item photo and nested <img> tags for store logos.
+    const backgroundImageUrl = getBackgroundImageUrl(html);
+    if (backgroundImageUrl) return backgroundImageUrl;
+
     const imgMatch = html.match(/<img[^>]*src=["']([^"']+)["'][^>]*>/i);
     if (imgMatch?.[1]) return imgMatch[1].trim() || null;
-    return getBackgroundImageUrl(html);
+    return null;
+}
+
+function getImageAltTextByClassName(html: string, className: string): string | null {
+    const escaped = className.replace(/[|\\{}()[\]^$+*?.\-]/g, '\\$&');
+    const containerMatch = html.match(
+        new RegExp(`<[^>]*class=["'][^"']*\\b${escaped}\\b[^"']*["'][^>]*>([\\s\\S]*?)</[^>]+>`, 'i'),
+    );
+    const imgAltMatch = containerMatch?.[1]?.match(/<img[^>]*alt=["']([^"']+)["']/i);
+    return stripHtml(imgAltMatch?.[1] ?? null);
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+    return value && typeof value === 'object' && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : null;
+}
+
+function getRegistryItemIdFromUrl(value: unknown): string | null {
+    const urlText = toTextValue(value);
+    if (!urlText) return null;
+
+    try {
+        const url = new URL(urlText);
+        return url.searchParams.get('giftid') || url.searchParams.get('cashgiftid');
+    } catch {
+        return null;
+    }
 }
 
 function getFirstHref(html: string): string | null {
@@ -159,30 +190,54 @@ function inferItemType(raw: Record<string, unknown>): 'product' | 'fund' {
 
 function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): RegistryItem | null {
     const id = String(
-        raw.id ?? raw.itemId ?? raw.giftItemId ?? raw.productId ?? raw.registryItemId ?? '',
+        raw.id ??
+            raw.itemId ??
+            raw.giftItemId ??
+            raw.productId ??
+            raw.registryItemId ??
+            getRegistryItemIdFromUrl(raw.productUrl) ??
+            getRegistryItemIdFromUrl(raw.product_url) ??
+            getRegistryItemIdFromUrl(raw.url) ??
+            getRegistryItemIdFromUrl(raw.purchaseUrl) ??
+            '',
     );
     const name = String(raw.name ?? raw.title ?? raw.productName ?? raw.itemName ?? '').trim();
 
     if (!id || !name) return null;
 
     const itemType = inferItemType(raw);
-    const quantityRequested = toInt(raw.quantityRequested ?? raw.qtyRequested ?? raw.quantity ?? raw.qty);
+    const quantityRequested = toInt(
+        raw.quantityRequested ?? raw.quantity_requested ?? raw.qtyRequested ?? raw.quantity ?? raw.qty,
+    );
     const quantityPurchased = toInt(
-        raw.quantityPurchased ?? raw.qtyFulfilled ?? raw.purchased ?? raw.fulfilled ?? raw.qtyReceived,
+        raw.quantityPurchased ??
+            raw.quantity_purchased ??
+            raw.qtyFulfilled ??
+            raw.purchased ??
+            raw.fulfilled ??
+            raw.qtyReceived,
     );
 
-    let isPurchased = Boolean(raw.isPurchased ?? raw.isFulfilled ?? raw.fulfilled ?? false);
+    let isPurchased = Boolean(raw.isPurchased ?? raw.is_purchased ?? raw.isFulfilled ?? raw.fulfilled ?? false);
     if (!isPurchased && quantityRequested !== null && quantityPurchased !== null && quantityRequested > 0) {
         isPurchased = quantityPurchased >= quantityRequested;
     }
 
     const imageUrl = String(
-        raw.imageUrl ?? raw.image ?? raw.imgUrl ?? raw.thumbnailUrl ?? raw.thumbnail ?? raw.productImageUrl ?? '',
+        raw.imageUrl ??
+            raw.image_url ??
+            raw.image ??
+            raw.imgUrl ??
+            raw.thumbnailUrl ??
+            raw.thumbnail ??
+            raw.productImageUrl ??
+            '',
     ).trim() || null;
 
     const productUrl = String(
-        raw.productUrl ?? raw.url ?? raw.link ?? raw.itemUrl ?? raw.purchaseUrl ?? '',
+        raw.productUrl ?? raw.product_url ?? raw.url ?? raw.link ?? raw.itemUrl ?? raw.purchaseUrl ?? '',
     ).trim() || null;
+    const rawActionLabel = String(raw.action_label ?? raw.actionLabel ?? '').trim() || null;
 
     return {
         id,
@@ -193,14 +248,14 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
         quantity_purchased: quantityPurchased,
         image_url: imageUrl,
         store_name:
-            String(raw.storeName ?? raw.retailer ?? raw.store ?? raw.retailerName ?? '').trim() || null,
+            String(raw.storeName ?? raw.store_name ?? raw.retailer ?? raw.store ?? raw.retailerName ?? '').trim() ||
+            null,
         product_url: productUrl,
         category: String(raw.category ?? raw.categoryName ?? raw.department ?? '').trim() || null,
         is_purchased: isPurchased,
         fetched_at: fetchedAt,
         item_type: itemType,
-        action_label:
-            String(raw.action_label ?? raw.actionLabel ?? '').trim() || (itemType === 'fund' ? 'Contribute' : null),
+        action_label: itemType === 'fund' ? rawActionLabel ?? 'Contribute' : null,
     };
 }
 
@@ -304,30 +359,40 @@ function parseItemsFromJsonLd(html: string, fetchedAt: string): RegistryItem[] {
         for (const entry of itemListElements) {
             if (!entry || typeof entry !== 'object') continue;
             const entryRecord = entry as Record<string, unknown>;
-            const node = (entryRecord.item && typeof entryRecord.item === 'object')
-                ? entryRecord.item as Record<string, unknown>
-                : entryRecord;
-            const offers = (node.offers && typeof node.offers === 'object') ? node.offers as Record<string, unknown> : {};
-            const seller = (offers.seller && typeof offers.seller === 'object')
-                ? offers.seller as Record<string, unknown>
-                : {};
-            const imageValue = Array.isArray(node.image) ? node.image[0] : node.image;
+            const node = asRecord(entryRecord.item) ?? entryRecord;
+            const itemOffered = asRecord(node.itemOffered) ?? {};
+            const offers = asRecord(node.offers) ?? asRecord(itemOffered.offers) ?? {};
+            const seller = asRecord(offers.seller) ?? {};
+            const eligibleQuantity = asRecord(node.eligibleQuantity) ?? {};
+            const imageSource = itemOffered.image ?? node.image;
+            const imageValue = Array.isArray(imageSource) ? imageSource[0] : imageSource;
             generatedId += 1;
             const fallbackId = `jsonld-${generatedId}`;
             const inferredType = inferItemType({
                 ...node,
+                ...itemOffered,
                 category: node.category,
-                action_label: node.potentialAction ? 'Contribute' : null,
             });
             items.push({
-                id: toTextValue(node.identifier ?? node.sku ?? node['@id'] ?? node.url) ?? fallbackId,
-                name: toTextValue(node.name) ?? toTextValue(entryRecord.name) ?? '',
+                id: toTextValue(
+                    node.identifier ??
+                        itemOffered.identifier ??
+                        node.sku ??
+                        itemOffered.sku ??
+                        getRegistryItemIdFromUrl(offers.url) ??
+                        getRegistryItemIdFromUrl(node.url) ??
+                        node['@id'] ??
+                        node.url,
+                ) ?? fallbackId,
+                name: toTextValue(node.name ?? itemOffered.name) ?? toTextValue(entryRecord.name) ?? '',
                 description: toTextValue(node.description ?? entryRecord.description),
-                price: offers.price ?? offers.lowPrice ?? offers.highPrice ?? node.price,
+                price: offers.price ?? offers.lowPrice ?? offers.highPrice ?? itemOffered.price ?? node.price,
+                quantityRequested: eligibleQuantity.maxValue ?? null,
+                quantityPurchased: eligibleQuantity.value ?? null,
                 imageUrl: toTextValue(imageValue),
-                productUrl: toTextValue(node.url ?? offers.url),
+                productUrl: toTextValue(offers.url ?? node.url),
                 storeName: toTextValue(seller.name),
-                category: toTextValue(node.category),
+                category: toTextValue(node.category ?? itemOffered.category),
                 item_type: inferredType,
                 action_label: inferredType === 'fund' ? 'Contribute' : null,
             });
@@ -356,15 +421,17 @@ function parseItemsFromHtmlMarkup(html: string, fetchedAt: string): RegistryItem
         if (!id || !name) continue;
 
         const actionLabel = getTagText(block, 'btnGiveCash') ?? getTagText(block, 'btn-give-cash') ?? null;
-        const storeName = getTagText(block, 'gift-store');
+        const storeName = getTagText(block, 'gift-store') ?? getImageAltTextByClassName(block, 'gift-websitelogo');
         const priceText = getTagText(block, 'gift-price');
+        const desiredQtyText = getTagText(block, 'desiredQty');
+        const receivedQtyText = getTagText(block, 'receivedQty');
         const rawItem: Record<string, unknown> = {
             id,
             name,
             description: getTagText(block, 'gift-description'),
             price: priceText,
-            quantityRequested: null,
-            quantityPurchased: null,
+            quantityRequested: desiredQtyText,
+            quantityPurchased: receivedQtyText,
             imageUrl: getImageUrlFromHtml(block),
             storeName,
             productUrl: getFirstHref(block),
@@ -383,6 +450,46 @@ function parseItemsFromHtmlMarkup(html: string, fetchedAt: string): RegistryItem
     }
 
     return normalizeItems(rawItems, fetchedAt);
+}
+
+function mergeRegistryItems(primaryItems: RegistryItem[], fallbackItems: RegistryItem[]): RegistryItem[] {
+    const merged = new Map<string, RegistryItem>();
+
+    for (const item of primaryItems) {
+        merged.set(item.id, item);
+    }
+
+    for (const fallback of fallbackItems) {
+        const current = merged.get(fallback.id);
+        if (!current) {
+            merged.set(fallback.id, fallback);
+            continue;
+        }
+
+        const itemType = current.item_type ?? fallback.item_type;
+        const actionLabel = itemType === 'fund'
+            ? current.action_label ?? fallback.action_label ?? 'Contribute'
+            : null;
+
+        merged.set(fallback.id, {
+            id: current.id,
+            name: current.name ?? fallback.name,
+            description: current.description ?? fallback.description,
+            price: current.price ?? fallback.price,
+            quantity_requested: current.quantity_requested ?? fallback.quantity_requested,
+            quantity_purchased: current.quantity_purchased ?? fallback.quantity_purchased,
+            image_url: current.image_url ?? fallback.image_url,
+            store_name: current.store_name ?? fallback.store_name,
+            product_url: current.product_url ?? fallback.product_url,
+            category: current.category ?? fallback.category,
+            is_purchased: current.is_purchased,
+            fetched_at: current.fetched_at || fallback.fetched_at,
+            item_type: itemType,
+            action_label: actionLabel,
+        });
+    }
+
+    return [...merged.values()];
 }
 
 async function fetchFromMyRegistry(): Promise<RegistryItem[]> {
@@ -409,11 +516,12 @@ async function fetchFromMyRegistry(): Promise<RegistryItem[]> {
     }
 
     const jsonLdItems = parseItemsFromJsonLd(htmlForParsing, fetchedAt);
+    const htmlMarkupItems = parseItemsFromHtmlMarkup(htmlForParsing, fetchedAt);
+
     if (jsonLdItems.length > 0) {
-        return jsonLdItems;
+        return mergeRegistryItems(jsonLdItems, htmlMarkupItems);
     }
 
-    const htmlMarkupItems = parseItemsFromHtmlMarkup(htmlForParsing, fetchedAt);
     if (htmlMarkupItems.length > 0) {
         return htmlMarkupItems;
     }
