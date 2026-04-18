@@ -482,6 +482,8 @@ function parseItemsFromJsonLd(html: string, fetchedAt: string, registryId: strin
                 quantityRequested: eligibleQuantity.maxValue ?? null,
                 quantityPurchased: eligibleQuantity.value ?? null,
                 imageUrl: toTextValue(imageValue),
+                // Prefer MyRegistry's purchase flow URL over direct retailer URLs so guests stay in
+                // the assistant workflow that supports contribution/purchase tracking.
                 productUrl: toTextValue(node.url ?? offers.url),
                 storeName: toTextValue(seller.name),
                 category: toTextValue(node.category ?? itemOffered.category),
