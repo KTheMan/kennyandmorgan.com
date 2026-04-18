@@ -176,6 +176,7 @@ function inferItemType(raw: Record<string, unknown>): 'product' | 'fund' {
     const explicit = String(raw.item_type ?? raw.itemType ?? raw.type ?? '').toLowerCase();
     const hints = [
         explicit,
+        String(raw.action_label ?? raw.actionLabel ?? '').toLowerCase(),
         String(raw.category ?? '').toLowerCase(),
         String(raw.storeName ?? raw.store_name ?? '').toLowerCase(),
         String(raw.name ?? raw.title ?? '').toLowerCase(),
@@ -467,7 +468,7 @@ function mergeRegistryItems(primaryItems: RegistryItem[], fallbackItems: Registr
 
         merged.set(fallback.id, {
             id: current.id,
-            name: current.name || fallback.name,
+            name: current.name ?? fallback.name,
             description: current.description ?? fallback.description,
             price: current.price ?? fallback.price,
             quantity_requested: current.quantity_requested ?? fallback.quantity_requested,
