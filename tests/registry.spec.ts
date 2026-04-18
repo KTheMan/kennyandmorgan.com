@@ -38,9 +38,7 @@ test.describe('Registry rendering', () => {
                             product_url: 'https://www.myregistry.com/giftlist/morganandkenny',
                             category: null,
                             is_purchased: true,
-                            fetched_at: new Date().toISOString(),
-                            item_type: 'fund',
-                            action_label: 'Contribute'
+                            fetched_at: new Date().toISOString()
                         },
                         {
                             id: 'item-1',

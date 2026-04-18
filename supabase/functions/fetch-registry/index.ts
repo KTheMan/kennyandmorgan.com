@@ -29,6 +29,9 @@ interface RegistryItem {
     action_label?: string | null;
 }
 
+const OPTIONAL_REGISTRY_COLUMNS = ['item_type', 'action_label'] as const;
+const MAX_SCHEMA_COMPATIBILITY_ATTEMPTS = OPTIONAL_REGISTRY_COLUMNS.length + 1;
+
 const CORS_HEADERS: Record<string, string> = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -233,6 +236,42 @@ function toTextValue(value: unknown): string | null {
     return null;
 }
 
+function normalizeCachedItems(rawItems: unknown[] | null | undefined): RegistryItem[] {
+    if (!Array.isArray(rawItems)) return [];
+
+    const items: RegistryItem[] = [];
+    for (const raw of rawItems) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+        const fetchedAt = toTextValue((raw as Record<string, unknown>).fetched_at) ?? new Date().toISOString();
+        const normalized = normalizeItem(raw as Record<string, unknown>, fetchedAt);
+        if (normalized) items.push(normalized);
+    }
+    return items;
+}
+
+function getMissingRegistrySchemaCacheColumns(message: string): Set<(typeof OPTIONAL_REGISTRY_COLUMNS)[number]> {
+    const unsupportedColumns = new Set<(typeof OPTIONAL_REGISTRY_COLUMNS)[number]>();
+    for (const column of OPTIONAL_REGISTRY_COLUMNS) {
+        if (message.includes(`Could not find the '${column}' column of 'registry_items' in the schema cache`)) {
+            unsupportedColumns.add(column);
+        }
+    }
+    return unsupportedColumns;
+}
+
+function stripUnsupportedRegistryColumns(
+    items: RegistryItem[],
+    unsupportedColumns: Set<(typeof OPTIONAL_REGISTRY_COLUMNS)[number]>,
+): Record<string, unknown>[] {
+    return items.map(item => {
+        const row = { ...item } as Record<string, unknown>;
+        for (const column of unsupportedColumns) {
+            delete row[column];
+        }
+        return row;
+    });
+}
+
 function parseItemsFromJsonLd(html: string, fetchedAt: string): RegistryItem[] {
     const items: Record<string, unknown>[] = [];
     const htmlChunk = html.slice(0, JSON_LD_SCAN_BYTES);
@@ -384,6 +423,55 @@ async function fetchFromMyRegistry(): Promise<RegistryItem[]> {
     );
 }
 
+async function getCachedRegistryItems(supabase: ReturnType<typeof createClient>): Promise<RegistryItem[]> {
+    const { data, error } = await supabase
+        .from('registry_items')
+        .select('*')
+        .order('is_purchased', { ascending: true })
+        .order('name', { ascending: true });
+
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    return normalizeCachedItems(data as unknown[] | null | undefined);
+}
+
+async function cacheRegistryItems(
+    supabase: ReturnType<typeof createClient>,
+    items: RegistryItem[],
+): Promise<void> {
+    const unsupportedColumns = new Set<(typeof OPTIONAL_REGISTRY_COLUMNS)[number]>();
+
+    for (let retryAttempt = 0; retryAttempt < MAX_SCHEMA_COMPATIBILITY_ATTEMPTS; retryAttempt += 1) {
+        const payload = stripUnsupportedRegistryColumns(items, unsupportedColumns);
+        const { error } = await supabase.from('registry_items').insert(payload);
+        if (!error) {
+            if (unsupportedColumns.size > 0) {
+                console.warn(
+                    `[fetch-registry] Cached registry items without optional columns: ${Array.from(unsupportedColumns).join(', ')}`,
+                );
+            }
+            return;
+        }
+
+        const missingColumns = getMissingRegistrySchemaCacheColumns(error.message);
+        const newUnsupportedColumns = [...missingColumns].filter(column => !unsupportedColumns.has(column));
+        if (newUnsupportedColumns.length === 0) {
+            throw new Error(`Failed to cache registry items: ${error.message}`);
+        }
+
+        for (const column of newUnsupportedColumns) {
+            unsupportedColumns.add(column);
+        }
+    }
+
+    const unsupportedColumnList = Array.from(unsupportedColumns).join(', ') || 'none';
+    throw new Error(
+        `Failed to cache registry items: exhausted ${MAX_SCHEMA_COMPATIBILITY_ATTEMPTS} compatibility retries (unsupported columns: ${unsupportedColumnList}).`,
+    );
+}
+
 Deno.serve(async (req: Request) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: CORS_HEADERS });
@@ -413,28 +501,20 @@ Deno.serve(async (req: Request) => {
             ? Date.now() - new Date(latestRow.fetched_at).getTime()
             : Infinity;
         const isStale = ageMs > CACHE_TTL_SECONDS * 1000;
+        let items: RegistryItem[] = [];
 
         if (isStale) {
             const freshItems = await fetchFromMyRegistry();
 
             // Replace all cached items with the freshly fetched set
             await supabase.from('registry_items').delete().lte('fetched_at', new Date().toISOString());
-            const { error: insertError } = await supabase.from('registry_items').insert(freshItems);
-            if (insertError) {
-                throw new Error(`Failed to cache registry items: ${insertError.message}`);
-            }
+            await cacheRegistryItems(supabase, freshItems);
+            items = freshItems;
+        } else {
+            items = await getCachedRegistryItems(supabase);
         }
 
-        // Return all items from the cache
-        const { data: items, error: selectError } = await supabase
-            .from('registry_items')
-            .select('*')
-            .order('is_purchased', { ascending: true })
-            .order('name', { ascending: true });
-
-        if (selectError) throw new Error(selectError.message);
-
-        return new Response(JSON.stringify({ success: true, items: items ?? [] }), {
+        return new Response(JSON.stringify({ success: true, items }), {
             headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
         });
     } catch (err) {
@@ -442,11 +522,7 @@ Deno.serve(async (req: Request) => {
         console.error('[fetch-registry]', message);
 
         // On error, try to return whatever is cached rather than an empty response
-        const { data: cachedItems } = await supabase
-            .from('registry_items')
-            .select('*')
-            .order('is_purchased', { ascending: true })
-            .order('name', { ascending: true });
+        const cachedItems = await getCachedRegistryItems(supabase).catch(() => []);
 
         return new Response(
             JSON.stringify({
