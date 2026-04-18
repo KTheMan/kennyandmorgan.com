@@ -443,7 +443,7 @@ async function cacheRegistryItems(
 ): Promise<void> {
     const unsupportedColumns = new Set<(typeof OPTIONAL_REGISTRY_COLUMNS)[number]>();
 
-    for (let attempt = 0; attempt < MAX_SCHEMA_COMPATIBILITY_ATTEMPTS; attempt += 1) {
+    for (let compatibilityAttempt = 0; compatibilityAttempt < MAX_SCHEMA_COMPATIBILITY_ATTEMPTS; compatibilityAttempt += 1) {
         const payload = stripUnsupportedRegistryColumns(items, unsupportedColumns);
         const { error } = await supabase.from('registry_items').insert(payload);
         if (!error) {
@@ -511,7 +511,7 @@ Deno.serve(async (req: Request) => {
             items = await getCachedRegistryItems(supabase);
         }
 
-        return new Response(JSON.stringify({ success: true, items: items ?? [] }), {
+        return new Response(JSON.stringify({ success: true, items }), {
             headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
         });
     } catch (err) {
