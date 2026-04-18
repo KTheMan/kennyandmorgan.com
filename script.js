@@ -43,6 +43,19 @@ const MEAL_OPTIONS = [
     { value: 'steak', label: 'Steak' },
     { value: 'vegetarian', label: 'Vegetarian' }
 ];
+const REGISTRY_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+const REGISTRY_ACTIVITY_COOLDOWN_MS = 90 * 1000;
+const REGISTRY_VISIBILITY_COOLDOWN_MS = 60 * 1000;
+const REGISTRY_VISIBILITY_THRESHOLD = 0.2;
+const REGISTRY_ACTIVITY_EVENTS = ['scroll', 'pointerdown', 'touchstart', 'keydown'];
+const registryRefreshState = {
+    initialized: false,
+    sectionVisible: false,
+    inFlight: null,
+    lastRefreshAttemptAt: 0,
+    intervalId: null,
+    observer: null
+};
 
 const weddingPartyMembers = [
     {
@@ -911,6 +924,198 @@ function showMessage(elementId, message, type) {
     }, 5000);
 }
 
+function isFundRegistryItem(item) {
+    const type = String(item?.item_type || '').toLowerCase();
+    if (type === 'fund' || type === 'cash_gift' || type === 'cashgift') {
+        return true;
+    }
+    const actionLabel = String(item?.action_label || '').toLowerCase();
+    return actionLabel.includes('contribute');
+}
+
+function shouldDisplayRegistryItem(item) {
+    if (isFundRegistryItem(item)) {
+        return true;
+    }
+
+    const desired = typeof item.quantity_requested === 'number' ? item.quantity_requested : null;
+    const purchasedCount = typeof item.quantity_purchased === 'number' ? item.quantity_purchased : 0;
+
+    if (desired === null) {
+        return !item.is_purchased;
+    }
+
+    return purchasedCount < desired;
+}
+
+function isRegistrySectionRelevant() {
+    if (registryRefreshState.sectionVisible) {
+        return true;
+    }
+    if (window.location.hash === '#registry') {
+        return true;
+    }
+    const section = document.getElementById('registry');
+    if (!section) {
+        return false;
+    }
+    const rect = section.getBoundingClientRect();
+    return rect.bottom > 0 && rect.top < window.innerHeight;
+}
+
+function getRegistryItemActionLabel(item, purchased, isFund) {
+    if (item.action_label) {
+        return String(item.action_label);
+    }
+    if (isFund) {
+        return 'Contribute';
+    }
+    return purchased ? 'View Item' : 'View & Purchase';
+}
+
+async function refreshRegistryItems({ reason = 'manual', showLoading = false, minIntervalMs = 0, force = false } = {}) {
+    const loadingEl = document.getElementById('registryLoading');
+    const errorEl = document.getElementById('registryError');
+    const gridEl = document.getElementById('registryGrid');
+    if (!gridEl) return;
+
+    if (registryRefreshState.inFlight) {
+        return registryRefreshState.inFlight;
+    }
+
+    const now = Date.now();
+    if (!force && now - registryRefreshState.lastRefreshAttemptAt < minIntervalMs) {
+        return;
+    }
+
+    registryRefreshState.lastRefreshAttemptAt = now;
+    registryRefreshState.inFlight = (async () => {
+        if (showLoading) {
+            loadingEl?.style.setProperty('display', 'block');
+        }
+        errorEl?.classList.add('hidden');
+
+        try {
+            const result = await window.KMDataClient.getRegistryItems();
+            loadingEl?.style.setProperty('display', 'none');
+
+            if (!result.items || result.items.length === 0) {
+                if (!result.success) {
+                    if (errorEl) {
+                        errorEl.textContent = 'Registry items could not be loaded right now. Please use the link below.';
+                        errorEl.classList.remove('hidden');
+                    }
+                } else {
+                    gridEl.innerHTML = '<p class="registry-empty">All registry items have been fulfilled. Thank you!</p>';
+                }
+                return;
+            }
+
+            const visibleItems = result.items.filter(shouldDisplayRegistryItem);
+
+            if (visibleItems.length === 0) {
+                gridEl.innerHTML = '<p class="registry-empty">All registry items have been fulfilled. Thank you!</p>';
+                return;
+            }
+
+            gridEl.replaceChildren(...visibleItems.map(renderRegistryCard));
+
+            if (!result.success && errorEl) {
+                errorEl.textContent = 'Showing cached registry items — live refresh is temporarily unavailable.';
+                errorEl.classList.remove('hidden');
+            }
+        } catch (error) {
+            loadingEl?.style.setProperty('display', 'none');
+            console.warn(`Registry items unavailable (${reason}):`, error);
+            if (errorEl) {
+                errorEl.textContent = 'Registry items could not be loaded right now. Please use the link below.';
+                errorEl.classList.remove('hidden');
+            }
+        } finally {
+            registryRefreshState.inFlight = null;
+        }
+    })();
+
+    return registryRefreshState.inFlight;
+}
+
+function initRegistryRefreshTriggers() {
+    if (registryRefreshState.initialized) return;
+    registryRefreshState.initialized = true;
+
+    const registrySection = document.getElementById('registry');
+    if (registrySection && 'IntersectionObserver' in window) {
+        registryRefreshState.observer = new IntersectionObserver(entries => {
+            for (const entry of entries) {
+                registryRefreshState.sectionVisible = entry.isIntersecting;
+                if (entry.isIntersecting) {
+                    refreshRegistryItems({
+                        reason: 'section-visible',
+                        minIntervalMs: REGISTRY_VISIBILITY_COOLDOWN_MS
+                    }).catch(error => {
+                        console.warn('Registry visibility refresh failed:', error);
+                    });
+                }
+            }
+        }, { threshold: REGISTRY_VISIBILITY_THRESHOLD });
+        registryRefreshState.observer.observe(registrySection);
+    }
+
+    const throttledActivityRefresh = () => {
+        if (Date.now() - registryRefreshState.lastRefreshAttemptAt < REGISTRY_ACTIVITY_COOLDOWN_MS) {
+            return;
+        }
+        if (!isRegistrySectionRelevant()) {
+            return;
+        }
+        refreshRegistryItems({
+            reason: 'activity',
+            minIntervalMs: REGISTRY_ACTIVITY_COOLDOWN_MS
+        }).catch(error => {
+            console.warn('Registry activity refresh failed:', error);
+        });
+    };
+
+    REGISTRY_ACTIVITY_EVENTS.forEach(eventName => {
+        window.addEventListener(eventName, throttledActivityRefresh, { passive: true });
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') {
+            return;
+        }
+        if (!isRegistrySectionRelevant()) {
+            return;
+        }
+        refreshRegistryItems({
+            reason: 'tab-visible',
+            minIntervalMs: REGISTRY_VISIBILITY_COOLDOWN_MS
+        }).catch(error => {
+            console.warn('Registry tab visibility refresh failed:', error);
+        });
+    });
+
+    registryRefreshState.intervalId = window.setInterval(() => {
+        refreshRegistryItems({
+            reason: 'interval',
+            force: true
+        }).catch(error => {
+            console.warn('Registry interval refresh failed:', error);
+        });
+    }, REGISTRY_REFRESH_INTERVAL_MS);
+
+    window.addEventListener('pagehide', () => {
+        if (registryRefreshState.intervalId) {
+            window.clearInterval(registryRefreshState.intervalId);
+            registryRefreshState.intervalId = null;
+        }
+        if (registryRefreshState.observer) {
+            registryRefreshState.observer.disconnect();
+            registryRefreshState.observer = null;
+        }
+    }, { once: true });
+}
+
 // Registry Management
 async function initRegistry() {
     const registryLink = document.querySelector('.registry-direct-link a');
@@ -923,61 +1128,16 @@ async function initRegistry() {
         return;
     }
 
-    const loadingEl = document.getElementById('registryLoading');
-    const errorEl = document.getElementById('registryError');
     const gridEl = document.getElementById('registryGrid');
 
     if (!gridEl) return;
-
-    if (loadingEl) loadingEl.style.display = 'block';
-    if (errorEl) errorEl.classList.add('hidden');
-
-    try {
-        const result = await window.KMDataClient.getRegistryItems();
-        if (loadingEl) loadingEl.style.display = 'none';
-
-        if (!result.items || result.items.length === 0) {
-            if (!result.success && errorEl) {
-                errorEl.textContent = 'Registry items could not be loaded right now. Please use the link below.';
-                errorEl.classList.remove('hidden');
-            }
-            return;
-        }
-
-        const visibleItems = result.items.filter(item => {
-            const desired = typeof item.quantity_requested === 'number' ? item.quantity_requested : null;
-            const purchasedCount = typeof item.quantity_purchased === 'number' ? item.quantity_purchased : 0;
-        
-            if (desired === null) {
-                return !item.is_purchased;
-            }
-        
-            return purchasedCount < desired;
-        });
-        
-        if (visibleItems.length === 0) {
-            gridEl.innerHTML = '<p class="registry-empty">All registry items have been fulfilled. Thank you!</p>';
-            return;
-        }
-        
-        gridEl.replaceChildren(...visibleItems.map(renderRegistryCard));
-        
-        if (!result.success && errorEl) {
-            errorEl.textContent = 'Showing cached registry items — live refresh is temporarily unavailable.';
-            errorEl.classList.remove('hidden');
-        }
-    } catch (error) {
-        if (loadingEl) loadingEl.style.display = 'none';
-        console.warn('Registry items unavailable:', error);
-        if (errorEl) {
-            errorEl.textContent = 'Registry items could not be loaded right now. Please use the link below.';
-            errorEl.classList.remove('hidden');
-        }
-    }
+    initRegistryRefreshTriggers();
+    await refreshRegistryItems({ reason: 'initial', showLoading: true, force: true });
 }
 
 function renderRegistryCard(item) {
     const purchased = Boolean(item.is_purchased);
+    const isFund = isFundRegistryItem(item);
     const itemName = String(item.name || '');
     const itemUrl = item.product_url || getRegistryPageUrl();
     const price = typeof item.price === 'number' ? `$${item.price.toFixed(2)}` : '';
@@ -1023,6 +1183,11 @@ function renderRegistryCard(item) {
         storeEl.className = 'registry-card-store';
         storeEl.textContent = String(item.store_name);
         body.appendChild(storeEl);
+    } else if (isFund) {
+        const typeEl = document.createElement('p');
+        typeEl.className = 'registry-card-store';
+        typeEl.textContent = 'Cash Fund';
+        body.appendChild(typeEl);
     }
 
     const nameEl = document.createElement('h3');
@@ -1065,7 +1230,7 @@ function renderRegistryCard(item) {
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.className = 'btn btn-secondary registry-card-btn';
-    link.textContent = purchased ? 'View Item' : 'View & Purchase';
+    link.textContent = getRegistryItemActionLabel(item, purchased, isFund);
     if (purchased) {
         link.setAttribute('aria-label', itemName + ' has been purchased');
     }
