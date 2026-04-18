@@ -441,8 +441,9 @@ async function cacheRegistryItems(
     items: RegistryItem[],
 ): Promise<void> {
     const unsupportedColumns = new Set<(typeof OPTIONAL_REGISTRY_COLUMNS)[number]>();
+    const maxAttempts = OPTIONAL_REGISTRY_COLUMNS.length + 1;
 
-    for (let attempt = 0; attempt <= OPTIONAL_REGISTRY_COLUMNS.length; attempt += 1) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const payload = stripUnsupportedRegistryColumns(items, unsupportedColumns);
         const { error } = await supabase.from('registry_items').insert(payload);
         if (!error) {

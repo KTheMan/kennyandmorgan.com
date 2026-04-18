@@ -935,8 +935,7 @@ function isFundRegistryItem(item) {
         item?.store_name,
         item?.storeName,
         item?.name
-    ]
-        .map(value => String(value || '').toLowerCase());
+    ].map(value => String(value || '').toLowerCase());
     return hints.some(value =>
         value.includes('contribute') ||
         value.includes('cash gift') ||
