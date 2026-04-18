@@ -175,6 +175,7 @@ function getRegistryIdFromUrl(value: unknown): string | null {
 
     try {
         const url = new URL(urlText);
+        if (url.origin !== MYREGISTRY_ORIGIN) return null;
         const searchParamValue = getUrlSearchParamCaseInsensitive(url, 'registryid');
         if (searchParamValue) return searchParamValue;
         const pathSegments = url.pathname.split('/').filter(Boolean);
@@ -240,9 +241,13 @@ function resolveRegistryProductUrl(
         return buildMyRegistryFlowUrl(itemType, registryId, itemId) ?? flowUrl;
     }
 
-    const registryId = toTextValue(raw.registryId ?? raw.registry_id) ||
-        urlCandidates.map(getRegistryIdFromUrl).find((value): value is string => Boolean(value)) ||
-        null;
+    let registryId = toTextValue(raw.registryId ?? raw.registry_id) || null;
+    if (!registryId) {
+        for (const urlCandidate of urlCandidates) {
+            registryId = getRegistryIdFromUrl(urlCandidate);
+            if (registryId) break;
+        }
+    }
     const itemId = itemType === 'fund'
         ? toTextValue(raw.cashGiftId ?? raw.cashgiftid ?? raw.id)
         : toTextValue(raw.giftId ?? raw.giftid ?? raw.id);
