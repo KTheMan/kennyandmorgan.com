@@ -123,6 +123,7 @@ function getBackgroundImageUrl(html: string): string | null {
 }
 
 function getImageUrlFromHtml(html: string): string | null {
+    // Product cards use CSS background images for the item photo and nested <img> tags for store logos.
     const backgroundImageUrl = getBackgroundImageUrl(html);
     if (backgroundImageUrl) return backgroundImageUrl;
 
@@ -131,7 +132,7 @@ function getImageUrlFromHtml(html: string): string | null {
     return null;
 }
 
-function getImageAltTextFromHtml(html: string, className: string): string | null {
+function getImageAltTextByClassName(html: string, className: string): string | null {
     const escaped = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const containerMatch = html.match(
         new RegExp(`<[^>]*class=["'][^"']*\\b${escaped}\\b[^"']*["'][^>]*>([\\s\\S]*?)</[^>]+>`, 'i'),
@@ -388,7 +389,7 @@ function parseItemsFromJsonLd(html: string, fetchedAt: string): RegistryItem[] {
                 description: toTextValue(node.description ?? entryRecord.description),
                 price: offers.price ?? offers.lowPrice ?? offers.highPrice ?? itemOffered.price ?? node.price,
                 quantityRequested: eligibleQuantity.maxValue ?? null,
-                quantityPurchased: eligibleQuantity.value,
+                quantityPurchased: eligibleQuantity.value ?? null,
                 imageUrl: toTextValue(imageValue),
                 productUrl: toTextValue(offers.url ?? node.url),
                 storeName: toTextValue(seller.name),
@@ -421,7 +422,7 @@ function parseItemsFromHtmlMarkup(html: string, fetchedAt: string): RegistryItem
         if (!id || !name) continue;
 
         const actionLabel = getTagText(block, 'btnGiveCash') ?? getTagText(block, 'btn-give-cash') ?? null;
-        const storeName = getTagText(block, 'gift-store') ?? getImageAltTextFromHtml(block, 'gift-websitelogo');
+        const storeName = getTagText(block, 'gift-store') ?? getImageAltTextByClassName(block, 'gift-websitelogo');
         const priceText = getTagText(block, 'gift-price');
         const desiredQtyText = getTagText(block, 'desiredQty');
         const receivedQtyText = getTagText(block, 'receivedQty');
