@@ -9,6 +9,7 @@ const JSON_LD_SCAN_BYTES = 500_000;
 const CLASS_TEXT_CAPTURE_TEMPLATE = `<[^>]*class=["'][^"']*\\b%s\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/[^>]+>`;
 const HREF_ATTR_REGEX = /<a[^>]*href=["']([^"']+)["'][^>]*>/gi;
 const ITEM_TYPE_HINTS = ['fund', 'cash gift', 'contribute'];
+const MYREGISTRY_ORIGIN = 'https://www.myregistry.com';
 const REGISTRY_URL =
     Deno.env.get('MYREGISTRY_URL') ?? 'https://www.myregistry.com/giftlist/morganandkenny';
 
@@ -147,16 +148,106 @@ function asRecord(value: unknown): Record<string, unknown> | null {
         : null;
 }
 
+function getUrlSearchParamCaseInsensitive(url: URL, paramName: string): string | null {
+    const target = paramName.toLowerCase();
+    for (const [key, value] of url.searchParams.entries()) {
+        if (key.toLowerCase() === target) return value;
+    }
+    return null;
+}
+
 function getRegistryItemIdFromUrl(value: unknown): string | null {
     const urlText = toTextValue(value);
     if (!urlText) return null;
 
     try {
         const url = new URL(urlText);
-        return url.searchParams.get('giftid') || url.searchParams.get('cashgiftid');
+        return getUrlSearchParamCaseInsensitive(url, 'giftid') ||
+            getUrlSearchParamCaseInsensitive(url, 'cashgiftid');
     } catch {
         return null;
     }
+}
+
+function getRegistryIdFromUrl(value: unknown): string | null {
+    const urlText = toTextValue(value);
+    if (!urlText) return null;
+
+    try {
+        const url = new URL(urlText);
+        const searchParamValue = getUrlSearchParamCaseInsensitive(url, 'registryid');
+        if (searchParamValue) return searchParamValue;
+        const pathSegments = url.pathname.split('/').filter(Boolean);
+        for (let index = pathSegments.length - 1; index >= 0; index -= 1) {
+            if (/^\d+$/.test(pathSegments[index])) return pathSegments[index];
+        }
+    } catch {
+        return null;
+    }
+    return null;
+}
+
+function getRegistryPageIdFromHtml(html: string): string | null {
+    const registryIdMatch = html.match(/[?&]registryId=(\d+)/i);
+    return registryIdMatch?.[1] ?? null;
+}
+
+function buildMyRegistryFlowUrl(
+    itemType: 'product' | 'fund',
+    registryId: string | null,
+    itemId: string | null,
+): string | null {
+    if (!registryId || !itemId) return null;
+    const path = itemType === 'fund'
+        ? '/Visitors/Giftlist/CashGiftProcess.aspx'
+        : '/Visitors/Giftlist/PurchaseAssistant.aspx';
+    const itemKey = itemType === 'fund' ? 'cashGiftId' : 'giftId';
+    const url = new URL(path, MYREGISTRY_ORIGIN);
+    url.searchParams.set(itemKey, itemId);
+    url.searchParams.set('registryId', registryId);
+    return url.toString();
+}
+
+function isMyRegistryFlowUrl(value: string): boolean {
+    try {
+        const url = new URL(value);
+        return url.origin === MYREGISTRY_ORIGIN &&
+            /\/Visitors\/Giftlist\/(?:PurchaseAssistant|CashGiftProcess)\.aspx$/i.test(url.pathname);
+    } catch {
+        return false;
+    }
+}
+
+function resolveRegistryProductUrl(
+    raw: Record<string, unknown>,
+    itemType: 'product' | 'fund',
+): string | null {
+    const urlCandidates = [
+        raw.productUrl,
+        raw.product_url,
+        raw.purchaseUrl,
+        raw.url,
+        raw.link,
+        raw.itemUrl,
+    ]
+        .map(toTextValue)
+        .filter((value): value is string => Boolean(value));
+
+    const flowUrl = urlCandidates.find(isMyRegistryFlowUrl);
+    if (flowUrl) {
+        const registryId = getRegistryIdFromUrl(flowUrl);
+        const itemId = getRegistryItemIdFromUrl(flowUrl);
+        return buildMyRegistryFlowUrl(itemType, registryId, itemId) ?? flowUrl;
+    }
+
+    const registryId = toTextValue(raw.registryId ?? raw.registry_id) ||
+        urlCandidates.map(getRegistryIdFromUrl).find((value): value is string => Boolean(value)) ||
+        null;
+    const itemId = itemType === 'fund'
+        ? toTextValue(raw.cashGiftId ?? raw.cashgiftid ?? raw.id)
+        : toTextValue(raw.giftId ?? raw.giftid ?? raw.id);
+
+    return buildMyRegistryFlowUrl(itemType, registryId, itemId) ?? urlCandidates[0] ?? null;
 }
 
 function getFirstHref(html: string): string | null {
@@ -234,10 +325,8 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
             '',
     ).trim() || null;
 
-    const productUrl = String(
-        raw.productUrl ?? raw.product_url ?? raw.url ?? raw.link ?? raw.itemUrl ?? raw.purchaseUrl ?? '',
-    ).trim() || null;
     const rawActionLabel = String(raw.action_label ?? raw.actionLabel ?? '').trim() || null;
+    const productUrl = resolveRegistryProductUrl(raw, itemType);
 
     return {
         id,
@@ -327,7 +416,7 @@ function stripUnsupportedRegistryColumns(
     });
 }
 
-function parseItemsFromJsonLd(html: string, fetchedAt: string): RegistryItem[] {
+function parseItemsFromJsonLd(html: string, fetchedAt: string, registryId: string | null): RegistryItem[] {
     const items: Record<string, unknown>[] = [];
     const htmlChunk = html.slice(0, JSON_LD_SCAN_BYTES);
     const matches = [...htmlChunk.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
@@ -390,9 +479,11 @@ function parseItemsFromJsonLd(html: string, fetchedAt: string): RegistryItem[] {
                 quantityRequested: eligibleQuantity.maxValue ?? null,
                 quantityPurchased: eligibleQuantity.value ?? null,
                 imageUrl: toTextValue(imageValue),
-                productUrl: toTextValue(offers.url ?? node.url),
+                productUrl: toTextValue(node.url ?? offers.url),
+                purchaseUrl: toTextValue(node.url),
                 storeName: toTextValue(seller.name),
                 category: toTextValue(node.category ?? itemOffered.category),
+                registryId,
                 item_type: inferredType,
                 action_label: inferredType === 'fund' ? 'Contribute' : null,
             });
@@ -401,7 +492,7 @@ function parseItemsFromJsonLd(html: string, fetchedAt: string): RegistryItem[] {
     return normalizeItems(items, fetchedAt);
 }
 
-function parseItemsFromHtmlMarkup(html: string, fetchedAt: string): RegistryItem[] {
+function parseItemsFromHtmlMarkup(html: string, fetchedAt: string, registryId: string | null): RegistryItem[] {
     const openTagRegex =
         /<div[^>]*class=["'][^"']*\bitemGiftVisitorList\b[^"']*["'][^>]*>/gi;
     const matches = [...html.matchAll(openTagRegex)];
@@ -437,6 +528,7 @@ function parseItemsFromHtmlMarkup(html: string, fetchedAt: string): RegistryItem
             productUrl: getFirstHref(block),
             category: getTagText(block, 'gift-category'),
             isPurchased: /\bpurchased\b/i.test(block) && !/\bnot purchased\b/i.test(block),
+            registryId,
             item_type: isFund ? 'fund' : null,
             action_label: actionLabel,
             cashgiftid: cashGiftId,
@@ -509,14 +601,15 @@ async function fetchFromMyRegistry(): Promise<RegistryItem[]> {
     const html = await response.text();
     const htmlForParsing = html.length > MAX_PARSABLE_HTML_BYTES ? html.slice(0, MAX_PARSABLE_HTML_BYTES) : html;
     const fetchedAt = new Date().toISOString();
+    const registryId = getRegistryPageIdFromHtml(htmlForParsing);
 
     const nextDataItems = parseItemsFromNextData(htmlForParsing, fetchedAt);
     if (nextDataItems.length > 0) {
         return nextDataItems;
     }
 
-    const jsonLdItems = parseItemsFromJsonLd(htmlForParsing, fetchedAt);
-    const htmlMarkupItems = parseItemsFromHtmlMarkup(htmlForParsing, fetchedAt);
+    const jsonLdItems = parseItemsFromJsonLd(htmlForParsing, fetchedAt, registryId);
+    const htmlMarkupItems = parseItemsFromHtmlMarkup(htmlForParsing, fetchedAt, registryId);
 
     if (jsonLdItems.length > 0) {
         return mergeRegistryItems(jsonLdItems, htmlMarkupItems);
