@@ -1,14 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// Default cache TTL aligns with the frontend's 10-minute refresh cadence.
-const CACHE_TTL_SECONDS = parseInt(Deno.env.get('REGISTRY_CACHE_TTL_SECONDS') ?? '600', 10);
-// Cap parser input to avoid expensive regex work on unexpectedly large pages.
-const MAX_PARSABLE_HTML_BYTES = 2_000_000;
-// JSON-LD scripts are typically near the top of the page; scan only an initial chunk.
-const JSON_LD_SCAN_BYTES = 500_000;
-const CLASS_TEXT_CAPTURE_TEMPLATE = `<[^>]*class=["'][^"']*\\b%s\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/[^>]+>`;
-const HREF_ATTR_REGEX = /<a[^>]*href=["']([^"']+)["'][^>]*>/gi;
-const ITEM_TYPE_HINTS = ['fund', 'cash gift', 'contribute'];
+const CACHE_TTL_SECONDS = parseInt(Deno.env.get('REGISTRY_CACHE_TTL_SECONDS') ?? '3600', 10);
 const REGISTRY_URL =
     Deno.env.get('MYREGISTRY_URL') ?? 'https://www.myregistry.com/giftlist/morganandkenny';
 
@@ -25,8 +17,6 @@ interface RegistryItem {
     category: string | null;
     is_purchased: boolean;
     fetched_at: string;
-    item_type?: 'product' | 'fund';
-    action_label?: string | null;
 }
 
 const CORS_HEADERS: Record<string, string> = {
@@ -90,70 +80,6 @@ function toInt(value: unknown): number | null {
     return n !== null ? Math.round(n) : null;
 }
 
-function decodeHtmlEntities(value: string): string {
-    return value
-        .replace(/&#(\d+);/g, (_full, code) => String.fromCharCode(parseInt(code, 10)))
-        .replace(/&#x([0-9a-f]+);/gi, (_full, code) => String.fromCharCode(parseInt(code, 16)))
-        .replace(/&nbsp;/gi, ' ')
-        .replace(/&quot;/gi, '"')
-        .replace(/&#39;|&apos;/gi, "'");
-}
-
-function stripHtml(value: string | null): string | null {
-    if (!value) return null;
-    const stripped = decodeHtmlEntities(value.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
-    return stripped || null;
-}
-
-function getTagText(html: string, className: string): string | null {
-    const escaped = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = CLASS_TEXT_CAPTURE_TEMPLATE.replace('%s', escaped);
-    const match = html.match(new RegExp(pattern, 'i'));
-    return stripHtml(match?.[1] ?? null);
-}
-
-function getBackgroundImageUrl(html: string): string | null {
-    const match = html.match(
-        /background-image\s*:\s*url\((['"]?)([^'")]+)\1\)/i,
-    );
-    return (match?.[2] || '').trim() || null;
-}
-
-function getImageUrlFromHtml(html: string): string | null {
-    const imgMatch = html.match(/<img[^>]*src=["']([^"']+)["'][^>]*>/i);
-    if (imgMatch?.[1]) return imgMatch[1].trim() || null;
-    return getBackgroundImageUrl(html);
-}
-
-function getFirstHref(html: string): string | null {
-    HREF_ATTR_REGEX.lastIndex = 0;
-    let match: RegExpExecArray | null = HREF_ATTR_REGEX.exec(html);
-    while (match) {
-        const href = (match[1] || '').trim();
-        if (href && href !== '#' && !/^(javascript|data|vbscript|file):/i.test(href)) {
-            return href;
-        }
-        match = HREF_ATTR_REGEX.exec(html);
-    }
-    return null;
-}
-
-function inferItemType(raw: Record<string, unknown>): 'product' | 'fund' {
-    const explicit = String(raw.item_type ?? raw.itemType ?? raw.type ?? '').toLowerCase();
-    const hints = [
-        explicit,
-        String(raw.action_label ?? raw.actionLabel ?? '').toLowerCase(),
-        String(raw.category ?? '').toLowerCase(),
-        String(raw.storeName ?? raw.store_name ?? '').toLowerCase(),
-        String(raw.name ?? raw.title ?? '').toLowerCase(),
-    ];
-    if ('cashgiftid' in raw || 'cashGiftId' in raw) return 'fund';
-    if (hints.some(value => ITEM_TYPE_HINTS.some(hint => value.includes(hint)))) {
-        return 'fund';
-    }
-    return 'product';
-}
-
 function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): RegistryItem | null {
     const id = String(
         raw.id ?? raw.itemId ?? raw.giftItemId ?? raw.productId ?? raw.registryItemId ?? '',
@@ -162,7 +88,6 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
 
     if (!id || !name) return null;
 
-    const itemType = inferItemType(raw);
     const quantityRequested = toInt(raw.quantityRequested ?? raw.qtyRequested ?? raw.quantity ?? raw.qty);
     const quantityPurchased = toInt(
         raw.quantityPurchased ?? raw.qtyFulfilled ?? raw.purchased ?? raw.fulfilled ?? raw.qtyReceived,
@@ -195,155 +120,7 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
         category: String(raw.category ?? raw.categoryName ?? raw.department ?? '').trim() || null,
         is_purchased: isPurchased,
         fetched_at: fetchedAt,
-        item_type: itemType,
-        action_label:
-            String(raw.action_label ?? raw.actionLabel ?? '').trim() || (itemType === 'fund' ? 'Contribute' : null),
     };
-}
-
-function normalizeItems(rawItems: Record<string, unknown>[], fetchedAt: string): RegistryItem[] {
-    const items: RegistryItem[] = [];
-    for (const raw of rawItems) {
-        const normalized = normalizeItem(raw, fetchedAt);
-        if (normalized) items.push(normalized);
-    }
-    return items;
-}
-
-function parseItemsFromNextData(html: string, fetchedAt: string): RegistryItem[] {
-    const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
-    if (!nextDataMatch) return [];
-
-    let nextData: unknown;
-    try {
-        nextData = JSON.parse(nextDataMatch[1]);
-    } catch (error) {
-        const parseMessage = error instanceof Error ? error.message : String(error);
-        throw new Error(`Failed to parse __NEXT_DATA__ JSON from MyRegistry page: ${parseMessage}`);
-    }
-
-    const rawItems = findItemsArray(nextData);
-    if (!rawItems || rawItems.length === 0) return [];
-    return normalizeItems(rawItems as Record<string, unknown>[], fetchedAt);
-}
-
-function toTextValue(value: unknown): string | null {
-    if (typeof value === 'string') return value.trim() || null;
-    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-    return null;
-}
-
-function parseItemsFromJsonLd(html: string, fetchedAt: string): RegistryItem[] {
-    const items: Record<string, unknown>[] = [];
-    const htmlChunk = html.slice(0, JSON_LD_SCAN_BYTES);
-    const matches = [...htmlChunk.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
-    let generatedId = 0;
-
-    const collectNodes = (node: unknown, output: unknown[]) => {
-        if (!node || typeof node !== 'object') return;
-        if (Array.isArray(node)) {
-            for (const child of node) collectNodes(child, output);
-            return;
-        }
-        const record = node as Record<string, unknown>;
-        const list = record.itemListElement;
-        if (Array.isArray(list)) output.push(...list);
-        for (const value of Object.values(record)) {
-            if (value && typeof value === 'object') collectNodes(value, output);
-        }
-    };
-
-    for (const match of matches) {
-        let parsed: unknown;
-        try {
-            parsed = JSON.parse((match[1] || '').trim());
-        } catch {
-            continue;
-        }
-        const itemListElements: unknown[] = [];
-        collectNodes(parsed, itemListElements);
-        for (const entry of itemListElements) {
-            if (!entry || typeof entry !== 'object') continue;
-            const entryRecord = entry as Record<string, unknown>;
-            const node = (entryRecord.item && typeof entryRecord.item === 'object')
-                ? entryRecord.item as Record<string, unknown>
-                : entryRecord;
-            const offers = (node.offers && typeof node.offers === 'object') ? node.offers as Record<string, unknown> : {};
-            const seller = (offers.seller && typeof offers.seller === 'object')
-                ? offers.seller as Record<string, unknown>
-                : {};
-            const imageValue = Array.isArray(node.image) ? node.image[0] : node.image;
-            generatedId += 1;
-            const fallbackId = `jsonld-${generatedId}`;
-            const inferredType = inferItemType({
-                ...node,
-                category: node.category,
-                action_label: node.potentialAction ? 'Contribute' : null,
-            });
-            items.push({
-                id: toTextValue(node.identifier ?? node.sku ?? node['@id'] ?? node.url) ?? fallbackId,
-                name: toTextValue(node.name) ?? toTextValue(entryRecord.name) ?? '',
-                description: toTextValue(node.description ?? entryRecord.description),
-                price: offers.price ?? offers.lowPrice ?? offers.highPrice ?? node.price,
-                imageUrl: toTextValue(imageValue),
-                productUrl: toTextValue(node.url ?? offers.url),
-                storeName: toTextValue(seller.name),
-                category: toTextValue(node.category),
-                item_type: inferredType,
-                action_label: inferredType === 'fund' ? 'Contribute' : null,
-            });
-        }
-    }
-    return normalizeItems(items, fetchedAt);
-}
-
-function parseItemsFromHtmlMarkup(html: string, fetchedAt: string): RegistryItem[] {
-    const openTagRegex =
-        /<div[^>]*class=["'][^"']*\bitemGiftVisitorList\b[^"']*["'][^>]*>/gi;
-    const matches = [...html.matchAll(openTagRegex)];
-    const rawItems: Record<string, unknown>[] = [];
-
-    for (let i = 0; i < matches.length; i++) {
-        const current = matches[i];
-        const blockStart = current.index ?? 0;
-        const blockEnd = i + 1 < matches.length ? (matches[i + 1].index ?? html.length) : html.length;
-        const block = html.slice(blockStart, blockEnd);
-        const openingTag = current[0];
-        const giftId = openingTag.match(/\bgiftid=["']?([^"'\s>]+)["']?/i)?.[1] || null;
-        const cashGiftId = openingTag.match(/\bcashgiftid=["']?([^"'\s>]+)["']?/i)?.[1] || null;
-        const isFund = /\bcashgift\b/i.test(openingTag) || Boolean(cashGiftId);
-        const id = cashGiftId || giftId;
-        const name = getTagText(block, 'gift-title');
-        if (!id || !name) continue;
-
-        const actionLabel = getTagText(block, 'btnGiveCash') ?? getTagText(block, 'btn-give-cash') ?? null;
-        const storeName = getTagText(block, 'gift-store');
-        const priceText = getTagText(block, 'gift-price');
-        const rawItem: Record<string, unknown> = {
-            id,
-            name,
-            description: getTagText(block, 'gift-description'),
-            price: priceText,
-            quantityRequested: null,
-            quantityPurchased: null,
-            imageUrl: getImageUrlFromHtml(block),
-            storeName,
-            productUrl: getFirstHref(block),
-            category: getTagText(block, 'gift-category'),
-            isPurchased: /\bpurchased\b/i.test(block) && !/\bnot purchased\b/i.test(block),
-            item_type: isFund ? 'fund' : null,
-            action_label: actionLabel,
-            cashgiftid: cashGiftId,
-        };
-        const inferredType = inferItemType(rawItem);
-        rawItem.item_type = inferredType;
-        if (inferredType === 'fund' && !rawItem.action_label) {
-            rawItem.action_label = 'Contribute';
-        }
-        rawItems.push(rawItem);
-    }
-
-    return normalizeItems(rawItems, fetchedAt);
 }
 
 async function fetchFromMyRegistry(): Promise<RegistryItem[]> {
@@ -361,27 +138,39 @@ async function fetchFromMyRegistry(): Promise<RegistryItem[]> {
     }
 
     const html = await response.text();
-    const htmlForParsing = html.length > MAX_PARSABLE_HTML_BYTES ? html.slice(0, MAX_PARSABLE_HTML_BYTES) : html;
+
+    // Primary: Next.js embedded JSON state
+    const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+    if (!nextDataMatch) {
+        throw new Error('Could not find __NEXT_DATA__ in the MyRegistry page. The site structure may have changed.');
+    }
+
+    let nextData: unknown;
+    try {
+        nextData = JSON.parse(nextDataMatch[1]);
+    } catch {
+        throw new Error('Failed to parse __NEXT_DATA__ JSON from MyRegistry page.');
+    }
+
+    const rawItems = findItemsArray(nextData);
+    if (!rawItems || rawItems.length === 0) {
+        throw new Error(
+            'No registry items found in MyRegistry page data. The data structure may have changed.',
+        );
+    }
+
     const fetchedAt = new Date().toISOString();
-
-    const nextDataItems = parseItemsFromNextData(htmlForParsing, fetchedAt);
-    if (nextDataItems.length > 0) {
-        return nextDataItems;
+    const items: RegistryItem[] = [];
+    for (const raw of rawItems) {
+        const normalized = normalizeItem(raw as Record<string, unknown>, fetchedAt);
+        if (normalized) items.push(normalized);
     }
 
-    const jsonLdItems = parseItemsFromJsonLd(htmlForParsing, fetchedAt);
-    if (jsonLdItems.length > 0) {
-        return jsonLdItems;
+    if (items.length === 0) {
+        throw new Error('Registry items were found in page data but none could be normalized.');
     }
 
-    const htmlMarkupItems = parseItemsFromHtmlMarkup(htmlForParsing, fetchedAt);
-    if (htmlMarkupItems.length > 0) {
-        return htmlMarkupItems;
-    }
-
-    throw new Error(
-        'No registry items found from __NEXT_DATA__, JSON-LD, or HTML markup. The MyRegistry page structure may have changed.',
-    );
+    return items;
 }
 
 Deno.serve(async (req: Request) => {
