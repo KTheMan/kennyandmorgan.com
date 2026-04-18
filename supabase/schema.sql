@@ -636,6 +636,8 @@ alter table public.rsvp_submissions enable row level security;
 alter table public.address_submissions enable row level security;
 alter table public.registry_items enable row level security;
 
+drop policy if exists "Public read registry items" on public.registry_items;
+
 create policy "Public read registry items"
     on public.registry_items for select
     to anon, authenticated
