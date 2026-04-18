@@ -442,7 +442,7 @@ async function cacheRegistryItems(
 ): Promise<void> {
     const unsupportedColumns = new Set<(typeof OPTIONAL_REGISTRY_COLUMNS)[number]>();
 
-    while (true) {
+    for (let attempt = 0; attempt <= OPTIONAL_REGISTRY_COLUMNS.length; attempt += 1) {
         const payload = stripUnsupportedRegistryColumns(items, unsupportedColumns);
         const { error } = await supabase.from('registry_items').insert(payload);
         if (!error) {
@@ -464,6 +464,8 @@ async function cacheRegistryItems(
             unsupportedColumns.add(column);
         }
     }
+
+    throw new Error('Failed to cache registry items: exhausted compatibility retries.');
 }
 
 Deno.serve(async (req: Request) => {
