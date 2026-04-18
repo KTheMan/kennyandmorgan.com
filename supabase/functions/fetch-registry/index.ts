@@ -357,7 +357,7 @@ function normalizeItems(rawItems: Record<string, unknown>[], fetchedAt: string):
     return items;
 }
 
-function parseItemsFromNextData(html: string, fetchedAt: string): RegistryItem[] {
+function parseItemsFromNextData(html: string, fetchedAt: string, registryId: string | null): RegistryItem[] {
     const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
     if (!nextDataMatch) return [];
 
@@ -371,7 +371,10 @@ function parseItemsFromNextData(html: string, fetchedAt: string): RegistryItem[]
 
     const rawItems = findItemsArray(nextData);
     if (!rawItems || rawItems.length === 0) return [];
-    return normalizeItems(rawItems as Record<string, unknown>[], fetchedAt);
+    return normalizeItems(
+        (rawItems as Record<string, unknown>[]).map(item => ({ ...item, registryId })),
+        fetchedAt,
+    );
 }
 
 function toTextValue(value: unknown): string | null {
@@ -603,7 +606,7 @@ async function fetchFromMyRegistry(): Promise<RegistryItem[]> {
     const fetchedAt = new Date().toISOString();
     const registryId = getRegistryPageIdFromHtml(htmlForParsing);
 
-    const nextDataItems = parseItemsFromNextData(htmlForParsing, fetchedAt);
+    const nextDataItems = parseItemsFromNextData(htmlForParsing, fetchedAt, registryId);
     if (nextDataItems.length > 0) {
         return nextDataItems;
     }
