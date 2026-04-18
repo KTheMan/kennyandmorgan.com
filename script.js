@@ -933,7 +933,6 @@ function isFundRegistryItem(item) {
         item?.action_label,
         item?.category,
         item?.store_name,
-        item?.storeName,
         item?.name
     ].map(value => String(value || '').toLowerCase());
     return hints.some(value =>

@@ -30,6 +30,7 @@ interface RegistryItem {
 }
 
 const OPTIONAL_REGISTRY_COLUMNS = ['item_type', 'action_label'] as const;
+const MAX_SCHEMA_COMPATIBILITY_ATTEMPTS = OPTIONAL_REGISTRY_COLUMNS.length + 1;
 
 const CORS_HEADERS: Record<string, string> = {
     'Access-Control-Allow-Origin': '*',
@@ -441,9 +442,8 @@ async function cacheRegistryItems(
     items: RegistryItem[],
 ): Promise<void> {
     const unsupportedColumns = new Set<(typeof OPTIONAL_REGISTRY_COLUMNS)[number]>();
-    const maxAttempts = OPTIONAL_REGISTRY_COLUMNS.length + 1;
 
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    for (let attempt = 0; attempt < MAX_SCHEMA_COMPATIBILITY_ATTEMPTS; attempt += 1) {
         const payload = stripUnsupportedRegistryColumns(items, unsupportedColumns);
         const { error } = await supabase.from('registry_items').insert(payload);
         if (!error) {
