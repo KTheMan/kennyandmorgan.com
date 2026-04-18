@@ -178,8 +178,8 @@ function getRegistryIdFromUrl(value: unknown): string | null {
         const searchParamValue = getUrlSearchParamCaseInsensitive(url, 'registryid');
         if (searchParamValue) return searchParamValue;
         const pathSegments = url.pathname.split('/').filter(Boolean);
-        for (let index = pathSegments.length - 1; index >= 0; index -= 1) {
-            if (/^\d+$/.test(pathSegments[index])) return pathSegments[index];
+        for (let segmentIndex = pathSegments.length - 1; segmentIndex >= 0; segmentIndex -= 1) {
+            if (/^\d+$/.test(pathSegments[segmentIndex])) return pathSegments[segmentIndex];
         }
     } catch {
         return null;
@@ -483,7 +483,6 @@ function parseItemsFromJsonLd(html: string, fetchedAt: string, registryId: strin
                 quantityPurchased: eligibleQuantity.value ?? null,
                 imageUrl: toTextValue(imageValue),
                 productUrl: toTextValue(node.url ?? offers.url),
-                purchaseUrl: toTextValue(node.url),
                 storeName: toTextValue(seller.name),
                 category: toTextValue(node.category ?? itemOffered.category),
                 registryId,
