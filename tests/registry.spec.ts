@@ -46,7 +46,7 @@ test.describe('Registry rendering', () => {
                             price: 49.99,
                             quantity_requested: 1,
                             quantity_purchased: 0,
-                            image_url: null,
+                            image_url: 'https://example.com/toaster.jpg',
                             store_name: 'Target',
                             product_url: 'https://example.com/toaster',
                             category: null,
@@ -88,5 +88,12 @@ test.describe('Registry rendering', () => {
         await expect(fundCard.locator('.registry-card-btn')).toHaveText('Contribute');
         await expect(fundCard.locator('.registry-card-store')).toHaveText('Cash Fund');
         await expect(fundCard.locator('.registry-card-qty-wrap')).toHaveCount(0);
+
+        const productCard = page.locator('#registryGrid .registry-card').filter({ hasText: 'Toaster' });
+        await expect(productCard).toBeVisible();
+        await expect(productCard.locator('.registry-card-price')).toHaveText('$49.99');
+        await expect(productCard.locator('.registry-card-qty')).toHaveText('1 still needed');
+        await expect(productCard.locator('.registry-card-qty-detail')).toHaveText('0 purchased / 1 desired');
+        await expect(productCard.locator('.registry-card-img')).toHaveAttribute('src', 'https://example.com/toaster.jpg');
     });
 });

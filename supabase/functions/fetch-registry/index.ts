@@ -166,22 +166,36 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
     if (!id || !name) return null;
 
     const itemType = inferItemType(raw);
-    const quantityRequested = toInt(raw.quantityRequested ?? raw.qtyRequested ?? raw.quantity ?? raw.qty);
+    const quantityRequested = toInt(
+        raw.quantityRequested ?? raw.quantity_requested ?? raw.qtyRequested ?? raw.quantity ?? raw.qty,
+    );
     const quantityPurchased = toInt(
-        raw.quantityPurchased ?? raw.qtyFulfilled ?? raw.purchased ?? raw.fulfilled ?? raw.qtyReceived,
+        raw.quantityPurchased ??
+            raw.quantity_purchased ??
+            raw.qtyFulfilled ??
+            raw.purchased ??
+            raw.fulfilled ??
+            raw.qtyReceived,
     );
 
-    let isPurchased = Boolean(raw.isPurchased ?? raw.isFulfilled ?? raw.fulfilled ?? false);
+    let isPurchased = Boolean(raw.isPurchased ?? raw.is_purchased ?? raw.isFulfilled ?? raw.fulfilled ?? false);
     if (!isPurchased && quantityRequested !== null && quantityPurchased !== null && quantityRequested > 0) {
         isPurchased = quantityPurchased >= quantityRequested;
     }
 
     const imageUrl = String(
-        raw.imageUrl ?? raw.image ?? raw.imgUrl ?? raw.thumbnailUrl ?? raw.thumbnail ?? raw.productImageUrl ?? '',
+        raw.imageUrl ??
+            raw.image_url ??
+            raw.image ??
+            raw.imgUrl ??
+            raw.thumbnailUrl ??
+            raw.thumbnail ??
+            raw.productImageUrl ??
+            '',
     ).trim() || null;
 
     const productUrl = String(
-        raw.productUrl ?? raw.url ?? raw.link ?? raw.itemUrl ?? raw.purchaseUrl ?? '',
+        raw.productUrl ?? raw.product_url ?? raw.url ?? raw.link ?? raw.itemUrl ?? raw.purchaseUrl ?? '',
     ).trim() || null;
 
     return {
@@ -193,7 +207,8 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
         quantity_purchased: quantityPurchased,
         image_url: imageUrl,
         store_name:
-            String(raw.storeName ?? raw.retailer ?? raw.store ?? raw.retailerName ?? '').trim() || null,
+            String(raw.storeName ?? raw.store_name ?? raw.retailer ?? raw.store ?? raw.retailerName ?? '').trim() ||
+            null,
         product_url: productUrl,
         category: String(raw.category ?? raw.categoryName ?? raw.department ?? '').trim() || null,
         is_purchased: isPurchased,
