@@ -109,7 +109,7 @@ function stripHtml(value: string | null): string | null {
 }
 
 function getTagText(html: string, className: string): string | null {
-    const escaped = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escaped = className.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
     const pattern = CLASS_TEXT_CAPTURE_TEMPLATE.replace('%s', escaped);
     const match = html.match(new RegExp(pattern, 'i'));
     return stripHtml(match?.[1] ?? null);
@@ -133,7 +133,7 @@ function getImageUrlFromHtml(html: string): string | null {
 }
 
 function getImageAltTextByClassName(html: string, className: string): string | null {
-    const escaped = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escaped = className.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
     const containerMatch = html.match(
         new RegExp(`<[^>]*class=["'][^"']*\\b${escaped}\\b[^"']*["'][^>]*>([\\s\\S]*?)</[^>]+>`, 'i'),
     );
