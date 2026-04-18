@@ -176,7 +176,6 @@ function inferItemType(raw: Record<string, unknown>): 'product' | 'fund' {
     const explicit = String(raw.item_type ?? raw.itemType ?? raw.type ?? '').toLowerCase();
     const hints = [
         explicit,
-        String(raw.action_label ?? raw.actionLabel ?? '').toLowerCase(),
         String(raw.category ?? '').toLowerCase(),
         String(raw.storeName ?? raw.store_name ?? '').toLowerCase(),
         String(raw.name ?? raw.title ?? '').toLowerCase(),
@@ -237,6 +236,7 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
     const productUrl = String(
         raw.productUrl ?? raw.product_url ?? raw.url ?? raw.link ?? raw.itemUrl ?? raw.purchaseUrl ?? '',
     ).trim() || null;
+    const rawActionLabel = String(raw.action_label ?? raw.actionLabel ?? '').trim() || null;
 
     return {
         id,
@@ -254,8 +254,7 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
         is_purchased: isPurchased,
         fetched_at: fetchedAt,
         item_type: itemType,
-        action_label:
-            String(raw.action_label ?? raw.actionLabel ?? '').trim() || (itemType === 'fund' ? 'Contribute' : null),
+        action_label: itemType === 'fund' ? (rawActionLabel ?? 'Contribute') : null,
     };
 }
 
@@ -372,7 +371,6 @@ function parseItemsFromJsonLd(html: string, fetchedAt: string): RegistryItem[] {
                 ...node,
                 ...itemOffered,
                 category: node.category,
-                action_label: node.potentialAction ? 'Contribute' : null,
             });
             items.push({
                 id: toTextValue(
