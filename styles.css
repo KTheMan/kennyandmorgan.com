@@ -11,6 +11,7 @@
     --deep-green: #2E3A1C;
     --deep-green-transparent: rgba(122, 154, 31, 0.18);
     --accent-gold: #7A9A1F;
+    --hydrangea-green: #C8DC58;
     --venue-blue: #0F77FF;
     --muted-sage: #54604A;
     --light-gray: #F3F0E7;
@@ -165,6 +166,7 @@ header {
 
 nav {
     display: grid;
+    /* logo / navigation / actions */
     grid-template-columns: auto 1fr auto;
     justify-content: space-between;
     align-items: center;
@@ -416,6 +418,7 @@ main {
 
 .hero-layout {
     display: grid;
+    /* Wider copy column keeps the stacked names prominent while the note stays compact. */
     grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.7fr);
     gap: 3rem;
     align-items: end;
@@ -807,6 +810,7 @@ main {
     top: 32px;
     bottom: 32px;
     width: 10px;
+    /* Creates a ticket-style perforation along both vertical form edges. */
     background: radial-gradient(circle, transparent 0 4px, var(--soft-white) 4px 5px, transparent 5px) center/10px 22px repeat-y;
 }
 
@@ -1231,11 +1235,11 @@ textarea {
 }
 
 .color-swatch.color-hydrangea-green {
-    background-color: #C8DC58;
+    background-color: var(--hydrangea-green);
 }
 
 .color-swatch.color-charcoal {
-    background-color: #1A1A1A;
+    background-color: var(--deep-charcoal);
 }
 
 .color-swatch.color-white {
