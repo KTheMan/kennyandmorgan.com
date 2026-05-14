@@ -35,10 +35,11 @@ test.describe('Registry rendering', () => {
                             description: 'Help us make memories',
                             image_url: null,
                             store_name: null,
-                            product_url: 'https://www.myregistry.com/giftlist/morganandkenny',
+                            product_url: 'https://www.myregistry.com/Visitors/Giftlist/CashGiftProcess.aspx?cashGiftId=1303304&registryId=5288389',
                             category: null,
                             is_purchased: true,
-                            fetched_at: new Date().toISOString()
+                            fetched_at: new Date().toISOString(),
+                            item_type: 'fund'
                         },
                         {
                             id: 'item-1',
@@ -48,7 +49,7 @@ test.describe('Registry rendering', () => {
                             quantity_purchased: 0,
                             image_url: 'https://example.com/toaster.jpg',
                             store_name: 'Target',
-                            product_url: 'https://example.com/toaster',
+                            product_url: 'https://www.myregistry.com/Visitors/Giftlist/PurchaseAssistant.aspx?giftId=171073267&registryId=5288389',
                             category: null,
                             is_purchased: false,
                             fetched_at: new Date().toISOString(),
@@ -88,6 +89,8 @@ test.describe('Registry rendering', () => {
         await expect(fundCard.locator('.registry-card-btn')).toHaveText('Contribute');
         await expect(fundCard.locator('.registry-card-store')).toHaveText('Cash Fund');
         await expect(fundCard.locator('.registry-card-qty-wrap')).toHaveCount(0);
+        await expect(fundCard.locator('.registry-card-btn')).toHaveAttribute('href', 'https://www.myregistry.com/Visitors/Giftlist/CashGiftProcess.aspx?cashGiftId=1303304&registryId=5288389');
+        await expect(fundCard.locator('.registry-card-btn')).toHaveAttribute('target', '_blank');
 
         const productCard = page.locator('#registryGrid .registry-card').filter({ hasText: 'Toaster' });
         await expect(productCard).toBeVisible();
@@ -96,6 +99,8 @@ test.describe('Registry rendering', () => {
         await expect(productCard.locator('.registry-card-qty')).toHaveText('1 still needed');
         await expect(productCard.locator('.registry-card-qty-detail')).toHaveText('0 purchased / 1 desired');
         await expect(productCard.locator('.registry-card-btn')).toHaveText('View & Purchase');
+        await expect(productCard.locator('.registry-card-btn')).toHaveAttribute('href', 'https://www.myregistry.com/Visitors/Giftlist/PurchaseAssistant.aspx?giftId=171073267&registryId=5288389');
+        await expect(productCard.locator('.registry-card-btn')).toHaveAttribute('target', '_blank');
         await expect(productCard.locator('.registry-card-img')).toHaveAttribute('src', 'https://example.com/toaster.jpg');
     });
 });
