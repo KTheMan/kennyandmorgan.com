@@ -20,9 +20,11 @@
     --surface-white: #FFFFFF;
     --hero-muted: #9CAA72;
     --border-subtle: rgba(30, 34, 24, 0.18);
+    --hero-note-min-width: 280px;
     --ticket-hole-radius: 4px;
     --ticket-hole-ring: 5px;
     --ticket-hole-spacing: 22px;
+    --ticket-perforation-pattern: radial-gradient(circle, transparent 0 var(--ticket-hole-radius), var(--soft-white) var(--ticket-hole-radius) var(--ticket-hole-ring), transparent var(--ticket-hole-ring));
     --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --accommodation-panel-height: 640px;
 }
@@ -422,7 +424,7 @@ main {
 .hero-layout {
     display: grid;
     /* Wider copy column keeps the stacked names prominent while the note stays compact. */
-    grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.7fr);
+    grid-template-columns: minmax(0, 1.5fr) minmax(var(--hero-note-min-width), 0.7fr);
     gap: 3rem;
     align-items: end;
 }
@@ -814,7 +816,7 @@ main {
     bottom: 32px;
     width: 10px;
     /* Creates a ticket-style perforation: a 4px transparent hole with a 1px paper ring repeated every 22px. */
-    background: radial-gradient(circle, transparent 0 var(--ticket-hole-radius), var(--soft-white) var(--ticket-hole-radius) var(--ticket-hole-ring), transparent var(--ticket-hole-ring)) center/10px var(--ticket-hole-spacing) repeat-y;
+    background: var(--ticket-perforation-pattern) center/10px var(--ticket-hole-spacing) repeat-y;
 }
 
 .form::before {
