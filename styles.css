@@ -20,6 +20,9 @@
     --surface-white: #FFFFFF;
     --hero-muted: #9CAA72;
     --border-subtle: rgba(30, 34, 24, 0.18);
+    --ticket-hole-radius: 4px;
+    --ticket-hole-ring: 5px;
+    --ticket-hole-spacing: 22px;
     --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --accommodation-panel-height: 640px;
 }
@@ -459,7 +462,7 @@ main {
     animation: slideInLeft 0.8s ease-out;
 }
 
-.couple-ampersand {
+.couple-conjunction {
     display: block;
     font-style: italic;
     font-weight: 400;
@@ -810,8 +813,8 @@ main {
     top: 32px;
     bottom: 32px;
     width: 10px;
-    /* Creates a ticket-style perforation along both vertical form edges. */
-    background: radial-gradient(circle, transparent 0 4px, var(--soft-white) 4px 5px, transparent 5px) center/10px 22px repeat-y;
+    /* Creates a ticket-style perforation: a 4px transparent hole with a 1px paper ring repeated every 22px. */
+    background: radial-gradient(circle, transparent 0 var(--ticket-hole-radius), var(--soft-white) var(--ticket-hole-radius) var(--ticket-hole-ring), transparent var(--ticket-hole-ring)) center/10px var(--ticket-hole-spacing) repeat-y;
 }
 
 .form::before {
