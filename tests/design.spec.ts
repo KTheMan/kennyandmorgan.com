@@ -23,7 +23,7 @@ test.describe('Navigation — SiteNavB', () => {
         await expect(tagline).toBeVisible();
         const taglineText = await tagline.textContent();
         expect(taglineText).toMatch(/09.*12.*26/);
-        expect(taglineText?.toLowerCase()).toMatch(/hollins house/i);
+        expect(taglineText).toMatch(/hollins house/i);
 
         // Center: K·M monogram
         const monogram = page.locator('.nav-monogram');
