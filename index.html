@@ -30,7 +30,7 @@
             <ul class="nav-links">
                 <li><a href="#home" class="nav-link active">Home</a></li>
                 <li><a href="#rsvp" class="nav-link">RSVP</a></li>
-                <li><a href="#theme" class="nav-link">Wedding Theme</a></li>
+                <li><a href="#theme" class="nav-link">Details</a></li>
                 <li><a href="#registry" class="nav-link">Registry</a></li>
                 <li class="access-conditional" data-access-visible="party"><a href="#wedding-party" class="nav-link">Wedding Party</a></li>
             </ul>
@@ -55,7 +55,19 @@
         <!-- Home Section -->
         <section id="home" class="page active">
             <div class="hero">
-                <h1 class="couple-names">Kenny & Morgan</h1>
+                <div class="hero-intro">
+                    <p class="hero-kicker">09 · 12 · 26 · Hollins House · Santa Cruz</p>
+                    <div class="hero-layout">
+                        <div class="hero-copy">
+                            <h1 class="couple-names">Kenny <span class="couple-conjunction">and</span> Morgan</h1>
+                            <p class="hero-lede">Join us for a warm, woodsy evening up the hill — ceremony, cocktails, and a packed dance floor to follow.</p>
+                        </div>
+                        <aside class="hero-note">
+                            <p class="hero-note-label">Home · Travel · Stay</p>
+                            <p>Everything you need for the weekend lives here: where to stay, how to get up to Hollins House, and the quick notes to keep handy.</p>
+                        </aside>
+                    </div>
+                </div>
                 <div class="wedding-details">
                     <div class="detail-card">
                         <h2>Save the Date</h2>
@@ -70,23 +82,34 @@
                         <h2>Ceremony</h2>
                         <p class="time">3:00 PM</p>
                     </div>
+                    <div class="detail-card">
+                        <h2>Dress Code</h2>
+                        <p class="time">Cocktail</p>
+                        <p class="address">Festive, polished, and celebration-ready.</p>
+                    </div>
                 </div>
-                <div class="countdown" id="countdown">
-                    <div class="countdown-item">
-                        <span class="countdown-value" id="days">0</span>
-                        <span class="countdown-label">Days</span>
+                <div class="countdown-band">
+                    <div class="countdown-band-header">
+                        <p class="countdown-kicker">The countdown</p>
+                        <p class="countdown-note">until vows</p>
                     </div>
-                    <div class="countdown-item">
-                        <span class="countdown-value" id="hours">0</span>
-                        <span class="countdown-label">Hours</span>
-                    </div>
-                    <div class="countdown-item">
-                        <span class="countdown-value" id="minutes">0</span>
-                        <span class="countdown-label">Minutes</span>
-                    </div>
-                    <div class="countdown-item">
-                        <span class="countdown-value" id="seconds">0</span>
-                        <span class="countdown-label">Seconds</span>
+                    <div class="countdown" id="countdown">
+                        <div class="countdown-item">
+                            <span class="countdown-value" id="days">0</span>
+                            <span class="countdown-label">Days</span>
+                        </div>
+                        <div class="countdown-item">
+                            <span class="countdown-value" id="hours">0</span>
+                            <span class="countdown-label">Hours</span>
+                        </div>
+                        <div class="countdown-item">
+                            <span class="countdown-value" id="minutes">0</span>
+                            <span class="countdown-label">Minutes</span>
+                        </div>
+                        <div class="countdown-item">
+                            <span class="countdown-value" id="seconds">0</span>
+                            <span class="countdown-label">Seconds</span>
+                        </div>
                     </div>
                 </div>
                 
@@ -319,14 +342,20 @@
         <!-- Theme Section -->
         <section id="theme" class="page">
             <div class="container">
-                <h1>Wedding Theme</h1>
-                <p class="section-subtitle">Our wedding color palette</p>
+                <h1>Details</h1>
+                <p class="section-subtitle">Dress code, palette notes, and the look of the day.</p>
                 <div class="theme-content">
                     <div class="color-palette">
                         <h2>Color Palette</h2>
                         <div class="color-swatches">
                             <div class="color-swatch color-powder-blue">
                                 <span class="color-name">Powder Blue</span>
+                            </div>
+                            <div class="color-swatch color-hydrangea-green">
+                                <span class="color-name">Hydrangea Green</span>
+                            </div>
+                            <div class="color-swatch color-charcoal">
+                                <span class="color-name">Charcoal</span>
                             </div>
                             <div class="color-swatch color-white">
                                 <span class="color-name">White</span>
@@ -336,7 +365,8 @@
                     <div class="theme-details">
                         <h2>Dress Code</h2>
                         <p class="dress-code">Cocktail Attire</p>
-                        <p>Please join us in cocktail attire — polished, festive, and celebration-ready. Please avoid powder blue and white, as those colors are reserved for the bride and wedding party.</p>
+                        <p>Please join us in cocktail attire — polished, festive, and celebration-ready.</p>
+                        <p>We love hydrangea green and rich neutrals for guests. Please avoid powder blue and white, as those colors are reserved for the bride and wedding party.</p>
                     </div>
                 </div>
             </div>
@@ -400,8 +430,9 @@
     </main>
 
     <footer>
-        <p>&copy; 2025 Kenny & Morgan. All rights reserved.</p>
-        <p>We can't wait to celebrate with you!</p>
+        <p class="footer-signoff">Until then —</p>
+        <p class="footer-mark">K · M · 09.12.26</p>
+        <p>Hollins House · 20 Clubhouse Rd · Santa Cruz, CA 95060</p>
     </footer>
 
     <script src="vendor/leaflet/leaflet.js"></script>
