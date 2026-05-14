@@ -425,8 +425,6 @@ function setAdminMenuVisibility() {
 // Navigation
 function initNavigation() {
     const navLinks = document.querySelectorAll('.nav-link');
-    const burger = document.querySelector('.burger');
-    const nav = document.querySelector('.nav-links');
 
     const navigate = (link, event) => {
         event?.preventDefault();
@@ -437,17 +435,13 @@ function initNavigation() {
 
         // Update active nav link
         navLinks.forEach(l => l.classList.remove('active'));
-        link.classList.add('active');
+        document.querySelectorAll('.nav-link[href="#' + targetId + '"]').forEach(l => l.classList.add('active'));
 
         // Show target page
         document.querySelectorAll('.page').forEach(page => {
             page.classList.remove('active');
         });
         document.getElementById(targetId)?.classList.add('active');
-
-        // Close mobile menu
-        nav.classList.remove('active');
-        burger.classList.remove('toggle');
 
         // Scroll to top
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -461,19 +455,6 @@ function initNavigation() {
             }
             navigate(link, e);
         });
-    });
-
-    // Mobile menu toggle
-    burger.addEventListener('click', () => {
-        nav.classList.toggle('active');
-        burger.classList.toggle('toggle');
-    });
-
-    burger.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            burger.click();
-        }
     });
 }
 
