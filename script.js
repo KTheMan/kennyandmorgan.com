@@ -9,7 +9,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     initNavigation();
     initCountdown();
     initForms();
+    initHeroCarousel();
     initFaqAccordions();
+    initFaqWeatherWidget();
 
     await initAccessControl().catch(error => {
         console.error('Access control failed to initialize:', error);
@@ -63,103 +65,103 @@ const weddingPartyMembers = [
         name: 'Alexis Miller',
         role: 'Matron of Honor',
         bio: "Morgan's older sister and resident hype queen. The glue that holds the crew together.",
-        photo: 'https://placehold.co/200x200?text=Alexis'
+        photo: 'images/alexis.png'
     },
     {
         name: 'Chayton Whiskey',
         role: 'Best Man',
         bio: "Kenny's best friend since middle school, and all-around goofball who keeps the energy high.",
-        photo: 'https://placehold.co/200x200?text=Chayton'
+        photo: 'images/chayton.png'
     },
     {
         name: 'Najah Izquierdo',
         role: 'Maid of Honor',
         bio: "Morgan's best friend who knows every embarrassing story and still shows up early.",
-        photo: 'https://placehold.co/200x200?text=Najah'
+        photo: 'images/najah.png'
     },
     {
         name: 'Sam Calderon',
         role: 'Groomsman',
         bio: 'D&D game master and Kenny’s partner in crime for all things nerdy and adventurous.',
-        photo: 'https://placehold.co/200x200?text=Sam'
+        photo: 'images/sam.png'
     },
     {
         name: 'Raquel Esquerra',
         role: 'Bridesmaid',
         bio: 'Met Morgan in high school and bonded over late-night study snacks and travel plans.',
-        photo: 'https://placehold.co/200x200?text=Raquel'
+        photo: 'images/raquel.png'
     },
     {
         name: 'Roy Calderon',
         role: 'Groomsman',
         bio: "Kindred spirit to Sam and Kenny, always ready with a joke and a helping hand.",
-        photo: 'https://placehold.co/200x200?text=Roy'
+        photo: 'images/roy.png'
     },
     {
         name: 'Jen Miller',
         role: 'Bridesmaid',
         bio: 'Sister-in-law and supporter for all things wedding planning. She keeps everyone laughing and on time.',
-        photo: 'https://placehold.co/200x200?text=Jen'
+        photo: 'images/jen.png'
     },
     {
         name: 'Weston Cargay',
         role: 'Groomsman',
         bio: "Cousin and adventure partner who’s always been there for the big moments and bonding over the small ones.",
-        photo: 'https://placehold.co/200x200?text=Weston'
+        photo: 'images/weston.png'
     },
     {
         name: 'Alyssa Graham',
         role: 'Bridesmaid',
         bio: 'Work bestie turned every other type of bestie. She’s been there through it all.',
-        photo: 'https://placehold.co/200x200?text=Alyssa'
+        photo: 'images/alyssa.png'
     },
     {
         name: 'Anthony Sacci',
         role: 'Groomsman',
         bio: 'Kindergarten day one friend who has seen it all who can always be counted on for a good time.',
-        photo: 'https://placehold.co/200x200?text=Anthony'
+        photo: 'images/anthony.png'
     },
     {
         name: 'Tim Miller',
         role: 'Bridesman',
         bio: "Morgan's older brother and steadfast supporter through every life chapter.",
-        photo: 'https://placehold.co/200x200?text=Tim'
+        photo: 'images/tim.png'
     },
     {
         name: 'Kelcie Bettencourt',
         role: 'Groomswoman',
         bio: 'Middle school best friend who has been a constant source of support and laughter.',
-        photo: 'https://placehold.co/200x200?text=Kelcie'
+        photo: 'images/kelcie.png'
     },
     {
         name: 'Haley Zimmer',
         role: 'Bridesmaid',
         bio: 'College roommate, meditation partner, and fearless toastmaster.',
-        photo: 'https://placehold.co/200x200?text=Haley'
+        photo: 'images/haley.png'
     },
     {
         name: 'Ryan Gordon',
         role: 'Groomsman',
         bio: "Kenny's older brother who always brings the energy (and the electronics).",
-        photo: 'https://placehold.co/200x200?text=Ryan'
+        photo: 'images/ryan.png'
     },
     {
         name: 'Gabe Lapp',
         role: 'Officiant',
         bio: 'High school partner in crime and lifelong best friend honored with leading this special day.',
-        photo: 'https://placehold.co/200x200?text=Gabe'
+        photo: 'images/gabe.png'
     },
     {
         name: 'Cathy Williams',
         role: 'Mother of the Bride',
         bio: "Morgan's mom, whose love, support, and guidance have shaped everything about this day.",
-        photo: 'https://placehold.co/200x200?text=Cathy'
+        photo: 'images/cathy.png'
     },
     {
         name: 'Therese Gordon',
         role: 'Mother of the Groom',
         bio: "Kenny's mom, whose warmth and kindness have always made everyone feel at home.",
-        photo: 'https://placehold.co/200x200?text=Therese'
+        photo: 'images/therese.png'
     }
 ];
 
@@ -348,7 +350,8 @@ function renderWeddingPartyMembers() {
         return;
     }
     grid.innerHTML = weddingPartyMembers.map(member => {
-        const imageUrl = member.photo || `https://placehold.co/200x200?text=${encodeURIComponent(member.name.split(' ')[0] || 'Friend')}`;
+        const firstName = (member.name.split(' ')[0] || 'friend').toLowerCase();
+        const imageUrl = member.photo || `images/${firstName}.png`;
         return `
             <article class="party-card">
                 <img src="${imageUrl}" alt="${member.name}" loading="lazy">
@@ -358,6 +361,30 @@ function renderWeddingPartyMembers() {
             </article>
         `;
     }).join('');
+}
+
+function initHeroCarousel() {
+    const carousel = document.querySelector('.hero-carousel');
+    if (!carousel) {
+        return;
+    }
+
+    const slides = Array.from(carousel.querySelectorAll('.hero-carousel-image'));
+    if (slides.length <= 1) {
+        return;
+    }
+
+    let activeIndex = slides.findIndex(slide => slide.classList.contains('is-active'));
+    if (activeIndex === -1) {
+        activeIndex = 0;
+        slides[0].classList.add('is-active');
+    }
+
+    setInterval(() => {
+        slides[activeIndex].classList.remove('is-active');
+        activeIndex = (activeIndex + 1) % slides.length;
+        slides[activeIndex].classList.add('is-active');
+    }, 5000);
 }
 
 function initAdminMenu() {
@@ -1600,6 +1627,56 @@ function initFaqAccordions() {
             }
         });
     });
+}
+
+async function initFaqWeatherWidget() {
+    const weatherWidget = document.querySelector('.weather-widget');
+    if (!weatherWidget) {
+        return;
+    }
+
+    const status = weatherWidget.querySelector('.weather-widget-status');
+    const targetDate = weatherWidget.dataset.weatherDate || '2026-09-12';
+    const url = new URL('https://climate-api.open-meteo.com/v1/climate');
+    url.searchParams.set('latitude', '36.9741');
+    url.searchParams.set('longitude', '-122.0308');
+    url.searchParams.set('start_date', targetDate);
+    url.searchParams.set('end_date', targetDate);
+    url.searchParams.set('models', 'MRI_AGCM3_2_S');
+    url.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min,precipitation_sum');
+    url.searchParams.set('temperature_unit', 'fahrenheit');
+    url.searchParams.set('precipitation_unit', 'inch');
+    url.searchParams.set('timezone', 'America/Los_Angeles');
+
+    try {
+        const response = await fetch(url.toString());
+        if (!response.ok) {
+            throw new Error(`Weather request failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        const daily = data?.daily;
+        const maxTemp = daily?.temperature_2m_max?.[0];
+        const minTemp = daily?.temperature_2m_min?.[0];
+        const precipitation = daily?.precipitation_sum?.[0];
+
+        if (
+            typeof maxTemp !== 'number'
+            || typeof minTemp !== 'number'
+            || typeof precipitation !== 'number'
+        ) {
+            throw new Error('Weather data unavailable');
+        }
+
+        if (status) {
+            status.textContent = `Sept 12, 2026 forecast for Santa Cruz: high ${Math.round(maxTemp)}°F, low ${Math.round(minTemp)}°F, and ${precipitation.toFixed(2)}" expected precipitation.`;
+        }
+    } catch (error) {
+        console.error('Unable to load FAQ weather forecast:', error);
+        if (status) {
+            status.textContent = 'Weather forecast data is currently unavailable. Please check again later.';
+        }
+    }
 }
 
 function escapeHtml(value) {
