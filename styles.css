@@ -715,8 +715,8 @@ main { margin-top: 61px; }
 }
 
 .legend-dot.venue {
-    background: var(--venue-blue);
-    border-color: var(--venue-blue);
+    background: var(--deep);
+    border-color: var(--deep);
 }
 
 #accommodationMap {
@@ -1881,4 +1881,589 @@ textarea { resize: vertical; }
     .party-briefing-strip { grid-template-columns: 1fr 1fr; }
     .container { padding: 50px 5%; }
     .registry-grid { grid-template-columns: 1fr; }
+}
+
+/* =====================================================
+   RSVP MENU CARD
+   ===================================================== */
+.rsvp-menu-card {
+    margin-top: 2.5rem;
+    border: 1px solid rgba(200, 220, 88, 0.35);
+    background: rgba(46, 58, 28, 0.6);
+    padding: 1.75rem 2rem;
+}
+
+.rsvp-menu-title {
+    font-family: var(--disp);
+    font-size: 1.5rem;
+    font-style: italic;
+    color: var(--heroAccent);
+    letter-spacing: 0.04em;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid rgba(200, 220, 88, 0.25);
+    padding-bottom: 0.75rem;
+}
+
+.rsvp-menu-items {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    margin-bottom: 1.25rem;
+}
+
+.rsvp-menu-item-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.2rem;
+}
+
+.rsvp-menu-item-name {
+    font-family: var(--serif);
+    font-size: 1.05rem;
+    color: var(--heroInk);
+    font-weight: 700;
+}
+
+.rsvp-menu-item-tag {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: var(--heroAccent);
+    color: var(--deep);
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+}
+
+.rsvp-menu-item-desc {
+    font-size: 0.82rem;
+    color: var(--heroMuted);
+    line-height: 1.55;
+}
+
+.rsvp-menu-note {
+    border-top: 1px solid rgba(200, 220, 88, 0.2);
+    padding-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.rsvp-menu-note p {
+    font-size: 0.8rem;
+    color: var(--heroMuted);
+    line-height: 1.55;
+}
+
+.rsvp-menu-note em {
+    color: var(--heroInk);
+    font-style: italic;
+}
+
+.rsvp-menu-note-kids {
+    font-style: italic;
+}
+
+/* =====================================================
+   FAQ ACCORDION
+   ===================================================== */
+.faq-accordion {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--ink);
+}
+
+.faq-item {
+    border-bottom: 1px solid var(--ink);
+}
+
+.faq-question {
+    width: 100%;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem 0;
+    font-family: var(--serif);
+    font-size: clamp(1rem, 2vw, 1.2rem);
+    font-weight: 400;
+    color: var(--ink);
+    text-align: left;
+    transition: var(--transition);
+}
+
+.faq-question:hover { color: var(--accent); }
+
+.faq-chevron {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform 0.3s ease;
+    margin-top: -4px;
+}
+
+.faq-question[aria-expanded="true"] .faq-chevron {
+    transform: rotate(-135deg);
+    margin-top: 4px;
+}
+
+.faq-answer {
+    padding: 0 0 1.5rem;
+}
+
+.faq-answer p {
+    font-size: 0.95rem;
+    color: var(--inkSoft);
+    line-height: 1.75;
+}
+
+/* =====================================================
+   FAQs PAGE
+   ===================================================== */
+.faqs-page {
+    padding: 120px 5%;
+    background: var(--bg);
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.faqs-page-header {
+    margin-bottom: 3rem;
+}
+
+.faqs-page-heading {
+    font-family: var(--disp);
+    font-size: clamp(2.5rem, 5.5vw, 5.5rem);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    line-height: 1.1;
+    margin-top: 0;
+}
+
+/* =====================================================
+   WEDDING PARTY ADDITIONS
+   ===================================================== */
+.party-suit-note {
+    margin-top: 3rem;
+    padding: 1.5rem 2rem;
+    border: 1px solid var(--ink);
+    background: var(--surface);
+}
+
+.party-suit-text {
+    font-size: 0.95rem;
+    color: var(--inkSoft);
+    line-height: 1.7;
+    margin-top: 0.5rem;
+}
+
+.party-suit-link {
+    color: var(--accent);
+    text-decoration: underline;
+    font-weight: 600;
+}
+
+.party-suit-link:hover { color: var(--deep); }
+
+/* Day-of Timeline */
+.party-timeline {
+    margin-top: 4rem;
+    padding-top: 3rem;
+    border-top: 1px solid rgba(30, 34, 24, 0.12);
+}
+
+.party-timeline-heading {
+    font-family: var(--disp);
+    font-size: clamp(1.75rem, 3.5vw, 3.5rem);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 2.5rem;
+    line-height: 1.15;
+}
+
+.timeline-list {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-left: 2px solid var(--accent);
+    margin-left: 2rem;
+}
+
+.timeline-item {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    padding: 1rem 0 1.5rem 2rem;
+    position: relative;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 1.25rem;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
+.timeline-time {
+    font-family: var(--disp);
+    font-size: 1rem;
+    font-style: italic;
+    color: var(--accent);
+    min-width: 5rem;
+    flex-shrink: 0;
+    padding-top: 0.15rem;
+}
+
+.timeline-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.timeline-label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ink);
+    font-family: var(--sans);
+}
+
+.timeline-desc {
+    font-size: 0.88rem;
+    color: var(--inkSoft);
+    line-height: 1.55;
+}
+
+/* Hair & Makeup Section */
+.party-hmu-section {
+    margin-top: 4rem;
+    padding-top: 3rem;
+    border-top: 1px solid rgba(30, 34, 24, 0.12);
+}
+
+.party-hmu-heading {
+    font-family: var(--disp);
+    font-size: clamp(1.75rem, 3.5vw, 3.5rem);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 1.25rem;
+    line-height: 1.15;
+}
+
+.party-hmu-insta {
+    margin-bottom: 1.25rem;
+}
+
+.party-hmu-insta-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration: none;
+    transition: var(--transition);
+}
+
+.party-hmu-insta-link:hover { color: var(--deep); }
+
+.insta-icon {
+    width: 18px;
+    height: 18px;
+}
+
+.party-hmu-copy {
+    font-size: 0.95rem;
+    color: var(--inkSoft);
+    line-height: 1.75;
+    max-width: 600px;
+    margin-bottom: 2rem;
+}
+
+.party-hmu-form {
+    max-width: 480px;
+    border: 1px solid rgba(30, 34, 24, 0.16);
+    padding: 2rem;
+    background: var(--surface);
+}
+
+.party-hmu-checks {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.hmu-check-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+}
+
+.hmu-check-label input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+}
+
+/* Party FAQ Section */
+.party-faq-section {
+    margin-top: 4rem;
+    padding-top: 3rem;
+    border-top: 1px solid rgba(30, 34, 24, 0.12);
+    max-width: 800px;
+}
+
+.party-faq-heading {
+    font-family: var(--disp);
+    font-size: clamp(1.75rem, 3.5vw, 3.5rem);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 2rem;
+    line-height: 1.15;
+}
+
+/* =====================================================
+   ADMIN HEADER / PAGE
+   ===================================================== */
+.admin-body .site-header {
+    position: fixed;
+    width: 100%;
+    top: 0;
+    z-index: 1000;
+}
+
+.admin-body main.admin-layout {
+    margin-top: 61px;
+    padding: 60px 5%;
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.admin-card {
+    background: var(--surface-white);
+    border: 1px solid rgba(30, 34, 24, 0.12);
+    padding: 2.5rem;
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+.admin-console__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--ink);
+}
+
+.admin-console__header h1 {
+    font-family: var(--disp);
+    font-size: clamp(1.75rem, 3vw, 2.5rem);
+    color: var(--ink);
+    font-weight: 400;
+    margin-bottom: 0.25rem;
+}
+
+.admin-console__header p {
+    font-size: 0.9rem;
+    color: var(--inkSoft);
+}
+
+.admin-panels {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+.admin-panel {
+    background: var(--surface-white);
+    border: 1px solid rgba(30, 34, 24, 0.12);
+    padding: 1.75rem;
+}
+
+.admin-panel--wide {
+    grid-column: 1;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.panel-header h2 {
+    font-family: var(--disp);
+    font-size: 1.35rem;
+    font-weight: 400;
+    color: var(--ink);
+    margin-bottom: 0.2rem;
+}
+
+.panel-subtitle {
+    font-size: 0.85rem;
+    color: var(--inkSoft);
+    margin: 0;
+}
+
+.panel-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.table-filter {
+    display: flex;
+    align-items: center;
+}
+
+.table-filter input[type="search"] {
+    padding: 0.5rem 0.85rem;
+    font-size: 0.85rem;
+    border: 1px solid rgba(30, 34, 24, 0.25);
+    background: var(--soft-white);
+    color: var(--ink);
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+#guestTable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+#guestTable thead th {
+    font-family: var(--sans);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 600;
+    color: var(--inkSoft);
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--ink);
+    text-align: left;
+    white-space: nowrap;
+}
+
+#guestTable tbody td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid rgba(30, 34, 24, 0.08);
+    color: var(--ink);
+    vertical-align: middle;
+}
+
+#guestTable tbody tr:hover td {
+    background: rgba(30, 34, 24, 0.03);
+}
+
+.admin-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.admin-form .form-group {
+    margin-bottom: 1.25rem;
+}
+
+.admin-form label {
+    margin-bottom: 0.4rem;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 600;
+    color: var(--deep-charcoal);
+}
+
+.form-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding-top: 0.5rem;
+}
+
+.field-hint {
+    display: block;
+    font-size: 0.78rem;
+    margin-top: 0.25rem;
+    color: var(--muted-sage);
+}
+
+.field-hint--error {
+    color: #C62828;
+}
+
+.admin-toast-stack {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 340px;
+}
+
+.admin-toast {
+    background: var(--deep-charcoal);
+    color: var(--soft-white);
+    padding: 0.85rem 1.25rem;
+    font-size: 0.9rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    animation: fadeIn 0.25s ease;
+}
+
+.admin-toast--success { background: #2E7D32; }
+.admin-toast--error { background: #C62828; }
+
+@media screen and (max-width: 768px) {
+    .admin-panels { grid-template-columns: 1fr; }
+    .admin-panel--wide { grid-column: 1; }
+    .admin-console__header { flex-direction: column; gap: 1rem; }
+}
+
+/* =====================================================
+   RESPONSIVE — NEW COMPONENTS
+   ===================================================== */
+@media screen and (max-width: 768px) {
+    .faqs-page { padding: 64px 5%; }
+    .faqs-page-heading { font-size: clamp(2rem, 8vw, 2.5rem); }
+    .party-timeline { padding-top: 2rem; }
+    .timeline-list { margin-left: 1rem; }
+    .timeline-item { gap: 1rem; padding-left: 1.5rem; }
+    .timeline-time { min-width: 4.5rem; }
+    .party-hmu-section { padding-top: 2rem; }
+    .rsvp-menu-card { padding: 1.25rem 1.25rem; }
 }

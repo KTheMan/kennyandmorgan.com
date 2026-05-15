@@ -37,17 +37,12 @@
                 <ul class="nav-links">
                     <li><a href="#home" class="nav-link active">Home</a></li>
                     <li><a href="#rsvp" class="nav-link">RSVP</a></li>
+                    <li><a href="#faqs" class="nav-link">FAQs</a></li>
                     <li class="access-conditional" data-access-visible="party"><a href="#wedding-party" class="nav-link">Wedding Party</a></li>
                     <li><a href="#registry" class="nav-link">Registry</a></li>
+                    <li class="access-conditional" data-access-visible="admin"><a href="admin.html" class="nav-link">Admin</a></li>
                 </ul>
                 <div class="nav-actions">
-                    <div class="admin-quick-menu access-conditional" data-access-visible="admin">
-                        <button type="button" id="adminMenuToggle" class="admin-menu-toggle" aria-haspopup="true" aria-expanded="false">
-                            <span class="sr-only">Open admin shortcuts</span>
-                            <span class="admin-menu-icon" aria-hidden="true"></span>
-                        </button>
-                        <div class="admin-menu-panel" id="adminMenuPanel" role="menu" aria-hidden="true"></div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -55,14 +50,16 @@
         <div class="site-nav-mobile-row1">
             <span class="nav-mobile-date">09.12.26</span>
             <span class="nav-monogram-mobile">K &middot; M</span>
-            <span class="nav-mobile-place">Hollins House</span>
+            <span class="nav-mobile-place">The Hollins House</span>
         </div>
         <!-- Mobile row 2: tabs (always visible) -->
         <div class="site-nav-mobile-tabs">
             <a href="#home" class="nav-link active">Home</a>
             <a href="#rsvp" class="nav-link">RSVP</a>
+            <a href="#faqs" class="nav-link">FAQs</a>
             <a href="#wedding-party" class="nav-link access-conditional" data-access-visible="party">Party</a>
             <a href="#registry" class="nav-link">Registry</a>
+            <a href="admin.html" class="nav-link access-conditional" data-access-visible="admin">Admin</a>
         </div>
     </header>
 
@@ -106,7 +103,7 @@
                     <div class="hero-strip-cell">
                         <span class="strip-label">Code</span>
                         <span class="strip-value">Cocktail</span>
-                        <span class="strip-sub">No white, obviously.</span>
+                        <span class="strip-sub">Lots of color encouraged.</span>
                     </div>
                 </div>
             </div>
@@ -116,7 +113,7 @@
                 <div class="countdown-c-left">
                     <p class="section-eyebrow">The countdown</p>
                     <h2 class="countdown-c-heading"><em>Until</em> we say I do.</h2>
-                    <p class="countdown-c-copy">One season away. Set a reminder, we'll see you there.</p>
+                    <p class="countdown-c-copy">Set a reminder, we hope to see you there.</p>
                 </div>
                 <div class="countdown-c-right">
                     <div class="countdown" id="countdown">
@@ -144,7 +141,7 @@
             <div class="accommodations-c">
                 <div class="accommodations-c-header">
                     <p class="section-eyebrow">Where to stay</p>
-                    <h2 class="accommodations-c-heading">A short list <em>of suggestions.</em></h2>
+                    <h2 class="accommodations-c-heading">A short list <em>of suggested accommodations</em></h2>
                     <div></div>
                 </div>
                 <div class="accommodations-c-layout">
@@ -284,7 +281,7 @@
                     <!-- Right col: map + pro tip -->
                     <div class="accommodations-map-col">
                         <div class="accommodation-map-card">
-                            <p class="map-legend"><span class="legend-dot venue"></span>Hollins House Venue</p>
+                            <p class="map-legend"><span class="legend-dot venue"></span>The Hollins House Venue</p>
                             <div id="accommodationMap" aria-label="Map of recommended accommodations"></div>
                         </div>
                         <div class="pro-tip-card">
@@ -298,7 +295,7 @@
             <!-- DirectionsB -->
             <div class="directions-b">
                 <div class="directions-b-left">
-                    <p class="section-eyebrow">03 &middot; Find Us</p>
+                    <p class="section-eyebrow">03 &middot; Getting there</p>
                     <h2 class="directions-b-heading"><em>The drive up<br>to the hill.</em></h2>
                 </div>
                 <div class="directions-b-right">
@@ -438,9 +435,39 @@
         <section id="rsvp" class="page">
             <div class="rsvp-c">
                 <div class="rsvp-c-left">
-                    <p class="rsvp-eyebrow">RSVP &middot; Reply by Aug 1</p>
-                    <h2 class="rsvp-c-heading">Will <em>you</em><br>be there?</h2>
+                    <p class="rsvp-eyebrow">Will you be there? &middot; Let us know by Aug 1</p>
+                    <h2 class="rsvp-c-heading">RSVP</h2>
                     <p class="rsvp-c-copy">Look up your party with the name from your invitation. Mark each guest, pick a meal, and send us a song.</p>
+
+                    <!-- Restaurant-style menu card -->
+                    <div class="rsvp-menu-card">
+                        <p class="rsvp-menu-title">The Menu</p>
+                        <div class="rsvp-menu-items">
+                            <div class="rsvp-menu-item">
+                                <div class="rsvp-menu-item-header">
+                                    <span class="rsvp-menu-item-name">Gnocchi</span>
+                                </div>
+                                <p class="rsvp-menu-item-desc">Baby Spinach, Roasted Mushrooms, Cherry Tomatoes, Caramelized Shallots, Parmesan, Roasted Garlic Cream Sauce</p>
+                            </div>
+                            <div class="rsvp-menu-item">
+                                <div class="rsvp-menu-item-header">
+                                    <span class="rsvp-menu-item-name">Atlantic Salmon</span>
+                                    <span class="rsvp-menu-item-tag">GF</span>
+                                </div>
+                                <p class="rsvp-menu-item-desc">Lemon Risotto, Vanilla Balsamic Reduction</p>
+                            </div>
+                            <div class="rsvp-menu-item">
+                                <div class="rsvp-menu-item-header">
+                                    <span class="rsvp-menu-item-name">Flank Steak</span>
+                                </div>
+                                <p class="rsvp-menu-item-desc">Mashed Potato, Chimichurri, Fried Onion</p>
+                            </div>
+                        </div>
+                        <div class="rsvp-menu-note">
+                            <p>All adult meals served with the <em>Butter Lettuce Salad</em> &mdash; Candied Pecans, Bleu Cheese, Apples, Green Goddess Dressing</p>
+                            <p class="rsvp-menu-note-kids">Children: Chicken Tenders, French Fries, Fresh Fruit</p>
+                        </div>
+                    </div>
                 </div>
                 <div class="rsvp-c-right">
                     <div class="rsvp-ticket">
@@ -510,12 +537,12 @@
                     <div class="party-brief-cell">
                         <span class="brief-label">Rehearsal</span>
                         <span class="brief-value">Fri Sept 11</span>
-                        <span class="brief-sub">5:30 PM &middot; Hollins House</span>
+                        <span class="brief-sub">10 AM &middot; The Hollins House</span>
                     </div>
                     <div class="party-brief-cell">
-                        <span class="brief-label">Rehearsal Dinner</span>
+                        <span class="brief-label">Rehearsal Lunch</span>
                         <span class="brief-value">Shadowbrook</span>
-                        <span class="brief-sub">Following rehearsal &middot; casual</span>
+                        <span class="brief-sub">12&ndash;3 PM &middot; Fri Sept 11</span>
                     </div>
                     <div class="party-brief-cell">
                         <span class="brief-label">Day-Of</span>
@@ -529,6 +556,218 @@
                     </div>
                 </div>
                 <div id="weddingPartyGrid" class="wedding-party-grid" aria-live="polite"></div>
+
+                <!-- Suit Reference -->
+                <div class="party-suit-note">
+                    <p class="section-eyebrow">Attire</p>
+                    <p class="party-suit-text">Groomsmen are wearing the <a href="https://www.indochino.com/product/hexham-black-suit" target="_blank" rel="noopener noreferrer" class="party-suit-link">Hexham Black Suit</a> from Indochino.</p>
+                </div>
+
+                <!-- Day-of Timeline -->
+                <div class="party-timeline">
+                    <p class="section-eyebrow">Day-of Timeline &mdash; Saturday, Sept 12</p>
+                    <h3 class="party-timeline-heading"><em>The day, hour by hour.</em></h3>
+                    <ol class="timeline-list">
+                        <li class="timeline-item">
+                            <span class="timeline-time">9 AM</span>
+                            <div class="timeline-body">
+                                <span class="timeline-label">Hair &amp; Makeup</span>
+                                <span class="timeline-desc">Get-ready time &amp; ordered breakfast at our Seascape Resort suite, Aptos</span>
+                            </div>
+                        </li>
+                        <li class="timeline-item">
+                            <span class="timeline-time">12 PM</span>
+                            <div class="timeline-body">
+                                <span class="timeline-label">Men help with final venue setup</span>
+                                <span class="timeline-desc">At The Hollins House</span>
+                            </div>
+                        </li>
+                        <li class="timeline-item">
+                            <span class="timeline-time">2&ndash;3 PM</span>
+                            <div class="timeline-body">
+                                <span class="timeline-label">Wedding party shifts to venue</span>
+                                <span class="timeline-desc">Women&rsquo;s lounge available for final get-ready &amp; putting on dresses</span>
+                            </div>
+                        </li>
+                        <li class="timeline-item">
+                            <span class="timeline-time">4 PM</span>
+                            <div class="timeline-body">
+                                <span class="timeline-label">Ceremony</span>
+                                <span class="timeline-desc">The Hollins House</span>
+                            </div>
+                        </li>
+                        <li class="timeline-item">
+                            <span class="timeline-time">10 PM</span>
+                            <div class="timeline-body">
+                                <span class="timeline-label">Send-off</span>
+                                <span class="timeline-desc">Reception ends, safe travels!</span>
+                            </div>
+                        </li>
+                    </ol>
+                </div>
+
+                <!-- Hair & Makeup Signup -->
+                <div class="party-hmu-section">
+                    <p class="section-eyebrow">Hair &amp; Makeup</p>
+                    <h3 class="party-hmu-heading"><em>Sign up below if you&rsquo;d like to join.</em></h3>
+                    <div class="party-hmu-insta">
+                        <a href="https://www.instagram.com" target="_blank" rel="noopener noreferrer" class="party-hmu-insta-link">
+                            <svg class="insta-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+                            @hairandmakeup
+                        </a>
+                    </div>
+                    <p class="party-hmu-copy">Do whatever feels most comfortable for your hair and makeup &mdash; this is your day too. Rates are $200 for hair and $200 for makeup. We&rsquo;ll reach out to confirm, but this helps us get a head count.</p>
+                    <form id="hmuForm" class="party-hmu-form">
+                        <div class="form-group">
+                            <label for="hmuName">Your Name *</label>
+                            <input type="text" id="hmuName" name="hmuName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="hmuEmail">Email *</label>
+                            <input type="email" id="hmuEmail" name="hmuEmail" required>
+                        </div>
+                        <div class="party-hmu-checks">
+                            <label class="hmu-check-label">
+                                <input type="checkbox" name="hmuHair" value="yes">
+                                <span>Hair ($200)</span>
+                            </label>
+                            <label class="hmu-check-label">
+                                <input type="checkbox" name="hmuMakeup" value="yes">
+                                <span>Makeup ($200)</span>
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Submit</button>
+                    </form>
+                    <div id="hmuMessage" class="message"></div>
+                </div>
+
+                <!-- Wedding Party FAQ -->
+                <div class="party-faq-section">
+                    <p class="section-eyebrow">FAQ</p>
+                    <h3 class="party-faq-heading"><em>Questions &amp; answers</em></h3>
+                    <div class="faq-accordion">
+                        <div class="faq-item">
+                            <button class="faq-question" aria-expanded="false">
+                                <span>What should I wear for the rehearsal?</span>
+                                <span class="faq-chevron" aria-hidden="true"></span>
+                            </button>
+                            <div class="faq-answer" hidden>
+                                <p>[Answer coming soon]</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" aria-expanded="false">
+                                <span>When do I need to arrive on the wedding day?</span>
+                                <span class="faq-chevron" aria-hidden="true"></span>
+                            </button>
+                            <div class="faq-answer" hidden>
+                                <p>[Answer coming soon]</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" aria-expanded="false">
+                                <span>Where do I park on the day of?</span>
+                                <span class="faq-chevron" aria-hidden="true"></span>
+                            </button>
+                            <div class="faq-answer" hidden>
+                                <p>[Answer coming soon]</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" aria-expanded="false">
+                                <span>What should I do if I have questions day-of?</span>
+                                <span class="faq-chevron" aria-hidden="true"></span>
+                            </button>
+                            <div class="faq-answer" hidden>
+                                <p>[Answer coming soon]</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== FAQs PAGE ==================== -->
+        <section id="faqs" class="page">
+            <div class="faqs-page">
+                <div class="faqs-page-header">
+                    <p class="section-eyebrow">Frequently asked</p>
+                    <h2 class="faqs-page-heading"><em>Questions &amp; answers</em></h2>
+                </div>
+                <div class="faq-accordion">
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>What is the parking situation at the venue?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>[Answer coming soon]</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>Is the venue wheelchair accessible?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>[Answer coming soon]</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>What time should I arrive?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>[Answer coming soon]</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>Will there be transportation provided?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>[Answer coming soon]</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>Can I bring children?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>[Answer coming soon]</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>What is the weather typically like in Santa Cruz in September?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>[Answer coming soon]</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>Is there a room block at any of the hotels?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>[Answer coming soon]</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>What is the dress code?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>[Answer coming soon]</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 

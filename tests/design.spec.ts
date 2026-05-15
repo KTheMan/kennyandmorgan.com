@@ -179,7 +179,7 @@ test.describe('Home — AccommodationsC', () => {
         const heading = section.locator('.accommodations-c-heading');
         await expect(heading).toBeVisible();
         await expect(heading).toContainText('A short list');
-        await expect(heading).toContainText('of suggestions');
+        await expect(heading).toContainText('of suggested accommodations');
     });
 
     test('hotels grouped by neighborhood (Santa Cruz, Pasatiempo, Scotts Valley)', async ({ page }) => {
@@ -333,14 +333,12 @@ test.describe('RSVP Page — RSVPC', () => {
         // Left col: heading
         const heading = page.locator('.rsvp-c-heading');
         await expect(heading).toBeVisible();
-        await expect(heading).toContainText('Will');
-        await expect(heading).toContainText('you');
-        await expect(heading).toContainText('be there');
+        await expect(heading).toContainText('RSVP');
 
         // Left col: eyebrow
         const eyebrow = page.locator('.rsvp-eyebrow');
         await expect(eyebrow).toBeVisible();
-        await expect(eyebrow).toContainText('RSVP');
+        await expect(eyebrow).toContainText('Will you be there');
         await expect(eyebrow).toContainText('Aug 1');
 
         // Left col: copy
@@ -431,7 +429,7 @@ test.describe('Wedding Party Page — PartyB', () => {
 
         // Check subs
         const briefSubs = await page.locator('.brief-sub').allTextContents();
-        expect(briefSubs.some(s => /5:30 PM/i.test(s))).toBeTruthy();
+        expect(briefSubs.some(s => /10 AM/i.test(s))).toBeTruthy();
         expect(briefSubs.some(s => /4:00 PM ceremony/i.test(s))).toBeTruthy();
         expect(briefSubs.some(s => /10 PM send-off/i.test(s))).toBeTruthy();
         expect(briefSubs.some(s => /408.*693-4383/i.test(s))).toBeTruthy();

@@ -6,10 +6,40 @@
     <title>RSVP Admin | Kenny & Morgan</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Work+Sans:wght@300;400;500;600;700&family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body class="admin-body">
+
+    <!-- Site Header (same as main site) -->
+    <header class="site-header">
+        <div class="site-nav-desktop">
+            <span class="nav-tagline">09 &middot; 12 &middot; 26 &middot; The Hollins House</span>
+            <span class="nav-monogram">K &middot; M</span>
+            <div class="nav-desktop-right">
+                <ul class="nav-links">
+                    <li><a href="index.html#home" class="nav-link">Home</a></li>
+                    <li><a href="index.html#rsvp" class="nav-link">RSVP</a></li>
+                    <li><a href="index.html#faqs" class="nav-link">FAQs</a></li>
+                    <li><a href="index.html#registry" class="nav-link">Registry</a></li>
+                    <li><a href="admin.html" class="nav-link active">Admin</a></li>
+                </ul>
+                <div class="nav-actions"></div>
+            </div>
+        </div>
+        <div class="site-nav-mobile-row1">
+            <span class="nav-mobile-date">09.12.26</span>
+            <span class="nav-monogram-mobile">K &middot; M</span>
+            <span class="nav-mobile-place">Admin</span>
+        </div>
+        <div class="site-nav-mobile-tabs">
+            <a href="index.html#home" class="nav-link">Home</a>
+            <a href="index.html#rsvp" class="nav-link">RSVP</a>
+            <a href="index.html#registry" class="nav-link">Registry</a>
+            <a href="admin.html" class="nav-link active">Admin</a>
+        </div>
+    </header>
+
     <main class="admin-layout">
         <section class="admin-card" id="adminLoginPanel">
             <h1>RSVP Admin</h1>
@@ -109,9 +139,9 @@
                             <label for="guestMealChoice">Meal Choice</label>
                             <select id="guestMealChoice" name="mealChoice">
                                 <option value="">Not Selected</option>
-                                <option value="chicken">Chicken</option>
-                                <option value="steak">Steak</option>
-                                <option value="vegetarian">Vegetarian</option>
+                                <option value="gnocchi">Gnocchi</option>
+                                <option value="salmon">Atlantic Salmon (GF)</option>
+                                <option value="steak">Flank Steak</option>
                             </select>
                         </div>
                         <div class="form-group">
