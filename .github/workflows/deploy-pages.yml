@@ -30,6 +30,7 @@ jobs:
         run: |
           mkdir -p dist
           cp index.html admin.html script.js admin.js styles.css site-config.js data-client.js .nojekyll dist/
+          cp -R images dist/images
           cp -R vendor dist/vendor
       - name: Generate runtime config
         env:

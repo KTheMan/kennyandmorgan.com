@@ -125,6 +125,32 @@ test.describe('Home — HeroB', () => {
         await expect(carousel.locator('.hero-carousel-image')).toHaveCount(4);
         await expect(carousel.locator('.hero-carousel-image.is-active')).toHaveCount(1);
     });
+
+    test('static site images resolve successfully', async ({ page }) => {
+        await unlock(page);
+        const imageStates = await page.locator('img[src^="images/"]').evaluateAll(async images => {
+            const urls = Array.from(new Set(
+                images
+                    .map(image => image.getAttribute('src'))
+                    .filter(src => Boolean(src))
+            ));
+
+            return Promise.all(urls.map(async src => {
+                const response = await fetch(src, { cache: 'no-store' });
+                return {
+                    src,
+                    ok: response.ok,
+                    status: response.status
+                };
+            }));
+        });
+
+        expect(imageStates.length).toBeGreaterThan(0);
+        imageStates.forEach(image => {
+            expect(image.ok, `${image.src} should return a successful response`).toBeTruthy();
+            expect(image.status, `${image.src} should return HTTP 200`).toBe(200);
+        });
+    });
 });
 
 // ─────────────────────────────────────────────
