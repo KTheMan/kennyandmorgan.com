@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initNavigation();
     initCountdown();
     initForms();
+    initFaqAccordions();
 
     await initAccessControl().catch(error => {
         console.error('Access control failed to initialize:', error);
@@ -39,9 +40,9 @@ let hasUnlockedOnce = false;
 const ACCESS_ORDER = [ACCESS_LEVELS.locked, ACCESS_LEVELS.family, ACCESS_LEVELS.party, ACCESS_LEVELS.admin];
 const MEAL_OPTIONS = [
     { value: '', label: 'Select a meal' },
-    { value: 'chicken', label: 'Chicken' },
-    { value: 'steak', label: 'Steak' },
-    { value: 'vegetarian', label: 'Vegetarian' }
+    { value: 'gnocchi', label: 'Gnocchi' },
+    { value: 'salmon', label: 'Atlantic Salmon (GF)' },
+    { value: 'steak', label: 'Flank Steak' }
 ];
 const REGISTRY_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 const REGISTRY_ACTIVITY_COOLDOWN_MS = 90 * 1000;
@@ -147,6 +148,18 @@ const weddingPartyMembers = [
         role: 'Officiant',
         bio: 'High school partner in crime and lifelong best friend honored with leading this special day.',
         photo: 'https://placehold.co/200x200?text=Gabe'
+    },
+    {
+        name: 'Cathy Williams',
+        role: 'Mother of the Bride',
+        bio: "Morgan's mom, whose love, support, and guidance have shaped everything about this day.",
+        photo: 'https://placehold.co/200x200?text=Cathy'
+    },
+    {
+        name: 'Therese Gordon',
+        role: 'Mother of the Groom',
+        bio: "Kenny's mom, whose warmth and kindness have always made everyone feel at home.",
+        photo: 'https://placehold.co/200x200?text=Therese'
     }
 ];
 
@@ -427,8 +440,13 @@ function initNavigation() {
     const navLinks = document.querySelectorAll('.nav-link');
 
     const navigate = (link, event) => {
+        const href = link.getAttribute('href') || '';
+        if (!href.startsWith('#')) {
+            // External or page link — let browser handle normally
+            return;
+        }
         event?.preventDefault();
-        const targetId = link.getAttribute('href')?.substring(1);
+        const targetId = href.substring(1);
         if (!targetId) {
             return;
         }
@@ -508,6 +526,16 @@ function initForms() {
         e.preventDefault();
         handleRSVPSubmit(e.target);
     });
+
+    // Hair & Makeup Form
+    const hmuForm = document.getElementById('hmuForm');
+    if (hmuForm) {
+        hmuForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            showMessage('hmuMessage', 'Thanks! We will reach out to confirm.', 'success');
+            hmuForm.reset();
+        });
+    }
 
     setupGuestLookup();
 }
@@ -680,14 +708,16 @@ function renderGuestResponseSection() {
     list.innerHTML = activeGuestParty.guests.map(guest => {
         const state = guestResponseState.get(guest.id) || {};
         const displayName = (state.nameOverride && state.nameOverride.trim()) || guest.fullName;
-        const requiresNameField = guest.fullName.toLowerCase().includes('guest');
+        const isPlusOne = guest.isPlusOne;
+        const requiresNameField = isPlusOne || guest.fullName.toLowerCase().includes('guest');
         const mealWrapperClass = state.status === 'accepted' ? 'guest-response-meal' : 'guest-response-meal hidden';
-        const guestRole = guest.isPlusOne ? 'Plus One' : (guest.isPrimary ? 'Primary Guest' : 'Guest');
+        const nameInputHidden = isPlusOne && state.status !== 'accepted';
+        const guestRole = isPlusOne ? 'Plus One' : '';
         return `
             <div class="guest-response-card${requiresNameField ? ' is-guest-placeholder' : ''}" data-guest-card="${guest.id}">
                 <div class="guest-response-header">
                     <p class="guest-response-name">${escapeHtml(displayName)}</p>
-                    <p class="guest-response-tag">${guestRole}</p>
+                    ${guestRole ? `<p class="guest-response-tag">${guestRole}</p>` : ''}
                 </div>
                 <div class="guest-response-status">
                     ${renderGuestStatusOption(guest.id, 'accepted', 'Joyfully Accepts', state.status === 'accepted')}
@@ -701,7 +731,7 @@ function renderGuestResponseSection() {
                         </select>
                     </label>
                 </div>
-                ${requiresNameField ? renderGuestNameInput(guest.id, state.nameOverride) : ''}
+                ${requiresNameField ? renderGuestNameInput(guest.id, state.nameOverride, isPlusOne, nameInputHidden) : ''}
             </div>
         `;
     }).join('');
@@ -722,11 +752,12 @@ function renderMealOptions(selectedValue) {
     `).join('');
 }
 
-function renderGuestNameInput(guestId, currentValue = '') {
+function renderGuestNameInput(guestId, currentValue = '', isRequired = false, isHidden = false) {
+    const labelText = isRequired ? 'Guest Name' : 'Guest Name (optional)';
     return `
-        <div class="guest-response-name-input">
+        <div class="guest-response-name-input${isHidden ? ' hidden' : ''}" data-guest-name-wrapper="${guestId}">
             <label>
-                Guest Name (optional)
+                ${labelText}
                 <input type="text" placeholder="Add their name" data-guest-name="${guestId}" value="${escapeHtmlAttr(currentValue || '')}">
             </label>
         </div>
@@ -748,6 +779,14 @@ function handleGuestResponseListInput(event) {
         const mealWrapper = document.querySelector(`[data-guest-meal-wrapper="${guestId}"]`);
         if (mealWrapper) {
             mealWrapper.classList.toggle('hidden', state.status !== 'accepted');
+        }
+        // For plus-one guests: show name input only when attending
+        const guest = activeGuestParty.guests.find(g => g.id === guestId);
+        if (guest?.isPlusOne) {
+            const nameWrapper = document.querySelector(`[data-guest-name-wrapper="${guestId}"]`);
+            if (nameWrapper) {
+                nameWrapper.classList.toggle('hidden', state.status !== 'accepted');
+            }
         }
     } else if (target.matches('[data-guest-meal]')) {
         const guestId = Number(target.dataset.guestMeal);
@@ -787,6 +826,15 @@ function validateGuestResponses(responses) {
     const missingMeal = responses.find(response => response.status === 'accepted' && !response.mealChoice);
     if (missingMeal) {
         return { valid: false, message: `Select a meal for ${getGuestDisplayName(missingMeal.guestId)}.` };
+    }
+
+    const missingPlusOneName = responses.find(response => {
+        if (response.status !== 'accepted') return false;
+        const guest = activeGuestParty.guests.find(g => g.id === response.guestId);
+        return guest?.isPlusOne && !response.name?.trim();
+    });
+    if (missingPlusOneName) {
+        return { valid: false, message: 'Please enter the name for your plus one.' };
     }
 
     return { valid: true };
@@ -1353,7 +1401,7 @@ async function initAccommodationsMap() {
         if (!Number.isNaN(venueLat) && !Number.isNaN(venueLng)) {
             venuePoint = {
                 id: 'venue-hollins-house',
-                name: 'Hollins House (Venue)',
+                name: 'The Hollins House (Venue)',
                 address: venueAddress,
                 lat: venueLat,
                 lng: venueLng,
@@ -1387,9 +1435,9 @@ async function initAccommodationsMap() {
 
     const defaultStyle = {
         radius: 8,
-        color: '#C9A961',
+        color: '#7A9A1F',
         weight: 2,
-        fillColor: '#C9A961',
+        fillColor: '#7A9A1F',
         fillOpacity: 0.85
     };
     const activeStyle = {
@@ -1401,9 +1449,9 @@ async function initAccommodationsMap() {
     };
     const venueStyle = {
         radius: 12,
-        color: '#0F77FF',
+        color: '#2E3A1C',
         weight: 3,
-        fillColor: '#0F77FF',
+        fillColor: '#2E3A1C',
         fillOpacity: 0.95
     };
     const venueActiveStyle = {
@@ -1535,6 +1583,23 @@ function initAccommodationScrollHint() {
     list.addEventListener('scroll', updateHintVisibility);
     window.addEventListener('resize', updateHintVisibility);
     updateHintVisibility();
+}
+
+function initFaqAccordions() {
+    document.querySelectorAll('.faq-question').forEach(button => {
+        button.addEventListener('click', () => {
+            const expanded = button.getAttribute('aria-expanded') === 'true';
+            const answer = button.nextElementSibling;
+            button.setAttribute('aria-expanded', String(!expanded));
+            if (answer) {
+                if (expanded) {
+                    answer.setAttribute('hidden', '');
+                } else {
+                    answer.removeAttribute('hidden');
+                }
+            }
+        });
+    });
 }
 
 function escapeHtml(value) {
