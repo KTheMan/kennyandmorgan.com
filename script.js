@@ -184,7 +184,7 @@ function applyImageFallback(img, candidates) {
         return;
     }
 
-    let candidateIndex = 0;
+    let candidateIndex = 1;
     const loadNext = () => {
         if (candidateIndex >= candidates.length) {
             img.removeEventListener('error', loadNext);
@@ -198,7 +198,11 @@ function applyImageFallback(img, candidates) {
         img.removeEventListener('error', loadNext);
     }, { once: true });
     img.addEventListener('error', loadNext);
-    loadNext();
+
+    const initialSource = img.getAttribute('src') || '';
+    if (initialSource !== candidates[0]) {
+        img.src = candidates[0];
+    }
 }
 
 async function initAccessControl() {
@@ -386,14 +390,19 @@ function renderWeddingPartyMembers() {
         return;
     }
 
-    const imageCandidatesByMember = [];
-    grid.innerHTML = weddingPartyMembers.map(member => {
+    const membersWithImages = weddingPartyMembers.map(member => {
         const firstName = (member.name.split(' ')[0] || 'friend').toLowerCase();
-        const imageCandidates = buildImageCandidates(member.photo || `images/${firstName}.png`);
-        imageCandidatesByMember.push(imageCandidates);
+        return {
+            ...member,
+            imageCandidates: buildImageCandidates(member.photo || `images/${firstName}.png`)
+        };
+    });
+
+    grid.innerHTML = membersWithImages.map(member => {
+        const initialImageUrl = member.imageCandidates[0] || '';
         return `
             <article class="party-card">
-                <img alt="${member.name}" loading="lazy">
+                <img src="${initialImageUrl}" alt="${member.name}" loading="lazy">
                 <h3 class="party-name">${member.name}</h3>
                 <p class="party-role">${member.role}</p>
                 <p class="party-bio">${member.bio}</p>
@@ -403,7 +412,7 @@ function renderWeddingPartyMembers() {
 
     const images = Array.from(grid.querySelectorAll('.party-card img'));
     images.forEach((img, index) => {
-        applyImageFallback(img, imageCandidatesByMember[index] || []);
+        applyImageFallback(img, membersWithImages[index]?.imageCandidates || []);
     });
 }
 
