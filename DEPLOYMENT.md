@@ -86,6 +86,14 @@ In GitHub:
 4. Add the required variables and secret listed above
 5. Push to `main` or run the workflow manually
 
+### Wedding-party image normalization
+
+`deploy-pages.yml` normalizes the wedding-party source images into lowercase `.png` files
+for deployment. On regular push deployments it only regenerates the normalized files whose
+source images changed in that push; on manual or first-run deployments it regenerates the
+full wedding-party image set. If any changed source image cannot be converted, the deploy
+fails before publishing.
+
 See `SECURITY.md` for the full public-repository hardening checklist and secret migration walkthrough.
 
 ## Local preview
