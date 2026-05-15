@@ -184,16 +184,19 @@ function applyImageFallback(img, candidates) {
         return;
     }
 
-    let index = 0;
+    let candidateIndex = 0;
     const loadNext = () => {
-        if (index >= candidates.length) {
+        if (candidateIndex >= candidates.length) {
             img.removeEventListener('error', loadNext);
             return;
         }
-        img.src = candidates[index];
-        index += 1;
+        img.src = candidates[candidateIndex];
+        candidateIndex += 1;
     };
 
+    img.addEventListener('load', () => {
+        img.removeEventListener('error', loadNext);
+    }, { once: true });
     img.addEventListener('error', loadNext);
     loadNext();
 }
@@ -386,7 +389,7 @@ function renderWeddingPartyMembers() {
     const imageCandidatesByMember = [];
     grid.innerHTML = weddingPartyMembers.map(member => {
         const firstName = (member.name.split(' ')[0] || 'friend').toLowerCase();
-        const imageCandidates = buildImageCandidates(member.photo || `images/${firstName}`);
+        const imageCandidates = buildImageCandidates(member.photo || `images/${firstName}.png`);
         imageCandidatesByMember.push(imageCandidates);
         return `
             <article class="party-card">
