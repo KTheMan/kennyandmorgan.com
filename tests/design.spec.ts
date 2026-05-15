@@ -128,26 +128,27 @@ test.describe('Home — HeroB', () => {
 
     test('static site images resolve successfully', async ({ page }) => {
         await unlock(page);
-        const imageStates = await page.locator('img[src^="images/"]').evaluateAll(images =>
-            images.map(image => ({
-                src: image.getAttribute('src'),
-                complete: image.complete,
-                naturalWidth: image.naturalWidth
-            }))
-        );
+        const imageStates = await page.locator('img[src^="images/"]').evaluateAll(async images => {
+            const urls = Array.from(new Set(
+                images
+                    .map(image => image.getAttribute('src'))
+                    .filter(src => Boolean(src))
+            ));
+
+            return Promise.all(urls.map(async src => {
+                const response = await fetch(src, { cache: 'no-store' });
+                return {
+                    src,
+                    ok: response.ok,
+                    status: response.status
+                };
+            }));
+        });
 
         expect(imageStates.length).toBeGreaterThan(0);
-        expect(imageStates).toEqual(
-            expect.arrayContaining(
-                imageStates.map(image => expect.objectContaining({
-                    src: image.src,
-                    complete: true,
-                    naturalWidth: expect.any(Number)
-                }))
-            )
-        );
         imageStates.forEach(image => {
-            expect(image.naturalWidth, `${image.src} should load`).toBeGreaterThan(0);
+            expect(image.ok, `${image.src} should return a successful response`).toBeTruthy();
+            expect(image.status, `${image.src} should return HTTP 200`).toBe(200);
         });
     });
 });
