@@ -52,6 +52,34 @@ const REGISTRY_VISIBILITY_COOLDOWN_MS = 60 * 1000;
 const REGISTRY_VISIBILITY_THRESHOLD = 0.2;
 const REGISTRY_ACTIVITY_EVENTS = ['scroll', 'pointerdown', 'touchstart', 'keydown'];
 const SUPPORTED_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'heic', 'PNG', 'JPG', 'JPEG', 'HEIC'];
+const KNOWN_IMAGE_PATHS = new Set([
+    'images/KM-Carousel1.png',
+    'images/KM-Carousel2.png',
+    'images/KM-Carousel3.png',
+    'images/KM-Carousel4.png',
+    'images/alexis.heic',
+    'images/alexis.png',
+    'images/alyssa.png',
+    'images/anthony.png',
+    'images/cathy.jpeg',
+    'images/cathy.png',
+    'images/chayton.png',
+    'images/gabe.png',
+    'images/haley.png',
+    'images/jen.jpeg',
+    'images/jen.png',
+    'images/kelcie.png',
+    'images/najah.png',
+    'images/raquel.heic',
+    'images/raquel.png',
+    'images/roy.png',
+    'images/ryan.png',
+    'images/sam.png',
+    'images/therese.png',
+    'images/tim.heic',
+    'images/tim.png',
+    'images/weston.png'
+]);
 const registryRefreshState = {
     initialized: false,
     sectionVisible: false,
@@ -173,10 +201,12 @@ function buildImageCandidates(source) {
     }
 
     const baseSource = normalizedSource.replace(/\.[^./?#]+(?=[?#]|$)/, '');
-    return Array.from(new Set([
+    const candidates = Array.from(new Set([
         normalizedSource,
         ...SUPPORTED_IMAGE_EXTENSIONS.map(extension => `${baseSource}.${extension}`)
     ]));
+    const knownCandidates = candidates.filter(candidate => KNOWN_IMAGE_PATHS.has(candidate));
+    return knownCandidates.length ? knownCandidates : candidates;
 }
 
 function applyImageFallback(img, candidates) {

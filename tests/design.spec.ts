@@ -125,6 +125,31 @@ test.describe('Home — HeroB', () => {
         await expect(carousel.locator('.hero-carousel-image')).toHaveCount(4);
         await expect(carousel.locator('.hero-carousel-image.is-active')).toHaveCount(1);
     });
+
+    test('static site images resolve successfully', async ({ page }) => {
+        await unlock(page);
+        const imageStates = await page.locator('img[src^="images/"]').evaluateAll(images =>
+            images.map(image => ({
+                src: image.getAttribute('src'),
+                complete: image.complete,
+                naturalWidth: image.naturalWidth
+            }))
+        );
+
+        expect(imageStates.length).toBeGreaterThan(0);
+        expect(imageStates).toEqual(
+            expect.arrayContaining(
+                imageStates.map(image => expect.objectContaining({
+                    src: image.src,
+                    complete: true,
+                    naturalWidth: expect.any(Number)
+                }))
+            )
+        );
+        imageStates.forEach(image => {
+            expect(image.naturalWidth, `${image.src} should load`).toBeGreaterThan(0);
+        });
+    });
 });
 
 // ─────────────────────────────────────────────
