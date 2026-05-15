@@ -118,10 +118,12 @@ test.describe('Home — HeroB', () => {
         await expect(venueEl).toHaveAttribute('data-address', '20 Clubhouse Rd, Santa Cruz, CA 95060');
     });
 
-    test('photo placeholder area is rendered', async ({ page }) => {
+    test('hero carousel area is rendered with four images', async ({ page }) => {
         await unlock(page);
-        const placeholder = page.locator('.hero-photo-placeholder');
-        await expect(placeholder).toBeVisible();
+        const carousel = page.locator('.hero-carousel');
+        await expect(carousel).toBeVisible();
+        await expect(carousel.locator('.hero-carousel-image')).toHaveCount(4);
+        await expect(carousel.locator('.hero-carousel-image.is-active')).toHaveCount(1);
     });
 });
 
