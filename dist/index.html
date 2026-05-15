@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kenny & Morgan's Wedding</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Work+Sans:wght@300;400;500;600;700&family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="access-locked" data-access-level="locked">
+
+    <!-- Access Overlay -->
+    <div id="accessOverlay" class="access-overlay" role="dialog" aria-modal="true" aria-labelledby="accessOverlayTitle">
+        <div class="access-overlay-card">
+            <h2 id="accessOverlayTitle">Welcome to Kenny &amp; Morgan's Celebration</h2>
+            <p class="access-overlay-subtitle">Enter the family password to unlock the site.</p>
+            <form id="accessForm" class="access-form">
+                <label class="access-label" for="accessPassword">Password</label>
+                <input type="password" id="accessPassword" class="access-input" autocomplete="off" required>
+                <button type="submit" class="btn btn-primary access-submit">Unlock</button>
+                <p id="accessStatus" class="access-status" role="alert"></p>
+            </form>
+            <p class="access-hint">Need help? Reach out to Kenny or Morgan for the latest password.</p>
+        </div>
+    </div>
+
+    <!-- SiteNavB: Desktop 3-col grid + Mobile 2-row always visible tabs -->
+    <header class="site-header">
+        <!-- Desktop nav row -->
+        <div class="site-nav-desktop">
+            <span class="nav-tagline">09 &middot; 12 &middot; 26 &middot; The Hollins House</span>
+            <span class="nav-monogram">K &middot; M</span>
+            <div class="nav-desktop-right">
+                <ul class="nav-links">
+                    <li><a href="#home" class="nav-link active">Home</a></li>
+                    <li><a href="#rsvp" class="nav-link">RSVP</a></li>
+                    <li><a href="#faqs" class="nav-link">FAQs</a></li>
+                    <li class="access-conditional" data-access-visible="party"><a href="#wedding-party" class="nav-link">Wedding Party</a></li>
+                    <li><a href="#registry" class="nav-link">Registry</a></li>
+                    <li class="access-conditional" data-access-visible="admin"><a href="admin.html" class="nav-link">Admin</a></li>
+                </ul>
+                <div class="nav-actions">
+                </div>
+            </div>
+        </div>
+        <!-- Mobile row 1: date | monogram | venue -->
+        <div class="site-nav-mobile-row1">
+            <span class="nav-mobile-date">09.12.26</span>
+            <span class="nav-monogram-mobile">K &middot; M</span>
+            <span class="nav-mobile-place">The Hollins House</span>
+        </div>
+        <!-- Mobile row 2: tabs (always visible) -->
+        <div class="site-nav-mobile-tabs">
+            <a href="#home" class="nav-link active">Home</a>
+            <a href="#rsvp" class="nav-link">RSVP</a>
+            <a href="#faqs" class="nav-link">FAQs</a>
+            <a href="#wedding-party" class="nav-link access-conditional" data-access-visible="party">Party</a>
+            <a href="#registry" class="nav-link">Registry</a>
+            <a href="admin.html" class="nav-link access-conditional" data-access-visible="admin">Admin</a>
+        </div>
+    </header>
+
+    <main>
+        <!-- ==================== HOME PAGE ==================== -->
+        <section id="home" class="page active">
+
+            <!-- HeroB -->
+            <div class="hero-b">
+                <div class="hero-b-inner">
+                    <div class="hero-b-left">
+                        <h1 class="couple-names">
+                            Kenny
+                            <span class="couple-conjunction">and</span>
+                            Morgan
+                        </h1>
+                    </div>
+                    <div class="hero-b-right">
+                        <div class="hero-carousel" aria-label="Couple photos">
+                            <img src="images/KM-Carousel1.png" alt="Kenny and Morgan carousel photo 1" class="hero-carousel-image is-active" loading="lazy">
+                            <img src="images/KM-Carousel2.png" alt="Kenny and Morgan carousel photo 2" class="hero-carousel-image" loading="lazy">
+                            <img src="images/KM-Carousel3.png" alt="Kenny and Morgan carousel photo 3" class="hero-carousel-image" loading="lazy">
+                            <img src="images/KM-Carousel4.png" alt="Kenny and Morgan carousel photo 4" class="hero-carousel-image" loading="lazy">
+                        </div>
+                    </div>
+                </div>
+                <!-- 4-col details strip -->
+                <div class="hero-strip">
+                    <div class="hero-strip-cell">
+                        <span class="strip-label">Date</span>
+                        <span class="strip-value">09.12.26</span>
+                        <span class="strip-sub">Saturday</span>
+                    </div>
+                    <div class="hero-strip-cell">
+                        <span class="strip-label">Place</span>
+                        <span class="strip-value venue-card" data-venue-card="hollins-house" data-address="20 Clubhouse Rd, Santa Cruz, CA 95060" data-lat="37.0045534" data-lng="-122.0253021" tabindex="0">The Hollins House</span>
+                        <span class="strip-sub">Santa Cruz, CA</span>
+                    </div>
+                    <div class="hero-strip-cell">
+                        <span class="strip-label">Time</span>
+                        <span class="strip-value">4:00 PM</span>
+                        <span class="strip-sub">Ceremony</span>
+                    </div>
+                    <div class="hero-strip-cell">
+                        <span class="strip-label">Code</span>
+                        <span class="strip-value">Cocktail</span>
+                        <span class="strip-sub">Lots of color encouraged.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CountdownC -->
+            <div class="countdown-c">
+                <div class="countdown-c-left">
+                    <p class="section-eyebrow">The countdown</p>
+                    <h2 class="countdown-c-heading"><em>Until</em> we say I do.</h2>
+                    <p class="countdown-c-copy">Set a reminder, we hope to see you there.</p>
+                </div>
+                <div class="countdown-c-right">
+                    <div class="countdown" id="countdown">
+                        <div class="countdown-box">
+                            <span class="countdown-num" id="days">0</span>
+                            <span class="countdown-unit">Days</span>
+                        </div>
+                        <div class="countdown-box">
+                            <span class="countdown-num" id="hours">0</span>
+                            <span class="countdown-unit">Hours</span>
+                        </div>
+                        <div class="countdown-box">
+                            <span class="countdown-num" id="minutes">0</span>
+                            <span class="countdown-unit">Minutes</span>
+                        </div>
+                        <div class="countdown-box">
+                            <span class="countdown-num" id="seconds">0</span>
+                            <span class="countdown-unit">Seconds</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AccommodationsC -->
+            <div class="accommodations-c">
+                <div class="accommodations-c-header">
+                    <p class="section-eyebrow">Where to stay</p>
+                    <h2 class="accommodations-c-heading">A short list <em>of suggested accommodations</em></h2>
+                    <div></div>
+                </div>
+                <div class="accommodations-c-layout">
+                    <!-- Left col: grouped hotel list -->
+                    <div class="accommodations-list-col">
+
+                        <!-- Santa Cruz group -->
+                        <div class="area-group">
+                            <div class="area-header">
+                                <em class="area-name">Santa Cruz</em>
+                                <span class="area-line"></span>
+                                <span class="area-count">10 options</span>
+                            </div>
+                            <div class="area-hotels accommodation-list">
+                                <div class="accommodation-item" data-accommodation-id="chaminade" data-area="santa-cruz" data-address="1 Chaminade Ln, Santa Cruz, CA 95065" data-lat="36.99424" data-lng="-121.984107" tabindex="0">
+                                    <div class="accommodation-meta">
+                                        <a class="accommodation-name" href="https://www.chaminade.com" target="_blank" rel="noopener noreferrer">Chaminade Resort &amp; Spa</a>
+                                        <span class="accommodation-address">1 Chaminade Ln, Santa Cruz, CA 95065</span>
+                                    </div>
+                                    <a class="accommodation-phone" href="tel:18314755600">831.475.5600</a>
+                                </div>
+                                <div class="accommodation-item" data-accommodation-id="dream-inn" data-area="santa-cruz" data-address="175 W Cliff Dr, Santa Cruz, CA 95060" data-lat="36.9618999" data-lng="-122.0247626" tabindex="0">
+                                    <div class="accommodation-meta">
+                                        <a class="accommodation-name" href="https://www.dreaminnsantacruz.com" target="_blank" rel="noopener noreferrer">Dream Inn Santa Cruz</a>
+                                        <span class="accommodation-address">175 W Cliff Dr, Santa Cruz, CA 95060</span>
+                                    </div>
+                                    <a class="accommodation-phone" href="tel:18445101746">844.510.1746</a>
+                                </div>
+                                <div class="accommodation-item" data-accommodation-id="holiday-inn" data-area="santa-cruz" data-address="1410 Ocean St, Santa Cruz, CA 95060" data-lat="36.9843138" data-lng="-122.0227188" tabindex="0">
+                                    <div class="accommodation-meta">
+                                        <a class="accommodation-name" href="https://www.ihg.com/holidayinnexpress/hotels/us/en/santa-cruz/srues/hoteldetail" target="_blank" rel="noopener noreferrer">Holiday Inn Express &amp; Suites Santa Cruz</a>
+                                        <span class="accommodation-address">1410 Ocean St, Santa Cruz, CA 95060</span>
+                                    </div>
+                                    <a class="accommodation-phone" href="tel:18314069331">831.406.9331</a>
+                                </div>
+                                <div class="accommodation-item" data-accommodation-id="hotel-paradox" data-area="santa-cruz" data-address="611 Ocean St, Santa Cruz, CA 95060" data-lat="36.9767839" data-lng="-122.0208788" tabindex="0">
+                                    <div class="accommodation-meta">
+                                        <a class="accommodation-name" href="https://www.hotelparadox.com" target="_blank" rel="noopener noreferrer">Hotel Paradox</a>
+                                        <span class="accommodation-address">611 Ocean St, Santa Cruz, CA 95060</span>
+                                    </div>
+                                    <a class="accommodation-phone" href="tel:18314257100">831.425.7100</a>
+                                </div>
+                                <div class="accommodation-item" data-accommodation-id="hyatt-place" data-area="santa-cruz" data-address="407 Broadway, Santa Cruz, CA 95060" data-lat="36.9733306" data-lng="-122.0193774" tabindex="0">
+                                    <div class="accommodation-meta">
+                                        <a class="accommodation-name" href="https://www.hyatt.com/en-US/hotel/california/hyatt-place-santa-cruz/sjczs" target="_blank" rel="noopener noreferrer">Hyatt Place Santa Cruz</a>
+                                        <span class="accommodation-address">407 Broadway, Santa Cruz, CA 95060</span>
+                                    </div>
+                                    <a class="accommodation-phone" href="tel:18313164000">831.316.4000</a>
+                                </div>
+                                <div class="accommodation-item" data-accommodation-id="west-cliff-inn" data-area="santa-cruz" data-address="174 W Cliff Dr, Santa Cruz, CA 95060" data-lat="36.9625172" data-lng="-122.0255876" tabindex="0">
+                                    <div class="accommodation-meta">
+                                        <a class="accommodation-name" href="https://www.westcliffinn.com/" target="_blank" rel="noopener noreferrer">West Cliff Inn</a>
+                                        <span class="accommodation-address">174 W Cliff Dr, Santa Cruz, CA 95060</span>
+                                    </div>
+                                    <a class="accommodation-phone" href="tel:18314572200">831.457.2200</a>
+                                </div>
+                                <div class="accommodation-item" data-accommodation-id="beach-street-inn" data-area="santa-cruz" data-address="125 Beach St, Santa Cruz, CA 95060" data-lat="36.9639011" data-lng="-122.0232335" tabindex="0">
+                                    <div class="accommodation-meta">
+                                        <a class="accommodation-name" href="https://www.beachstreetinn.com" target="_blank" rel="noopener noreferrer">Beach Street Inn &amp; Suites</a>
+                                        <span class="accommodation-address">125 Beach St, Santa Cruz, CA 95060</span>
+                                    </div>
+                                    <a class="accommodation-phone" href="tel:18314233031">831.423.3031</a>
+                                </div>
+                                <div class="accommodation-item" data-accommodation-id="la-bahia" data-area="santa-cruz" data-address="215 Beach St, Santa Cruz, CA 95060" data-lat="36.9640339" data-lng="-122.0218529" tabindex="0">
+                                    <div class="accommodation-meta">
+                                        <a class="accommodation-name" href="https://labahiahotel.com" target="_blank" rel="noopener noreferrer">La Bahia Hotel &amp; Spa</a>
+                                        <span class="accommodation-address">215 Beach St, Santa Cruz, CA 95060</span>
+                                    </div>
+                                    <a class="accommodation-phone" href="tel:18312817009">831.281.7009</a>
+                                </div>
+                                <div class="accommodation-item" data-accommodation-id="casablanca-inn" data-area="santa-cruz" data-address="101 Main St, Santa Cruz, CA 95060" data-lat="36.9636056" data-lng="-122.0226674" tabindex="0">
+                                    <div class="accommodation-meta">
+                                        <a class="accommodation-name" href="https://www.casablancainn.com" target="_blank" rel="noopener noreferrer">Casablanca Inn on the Beach</a>
+                                        <span class="accommodation-address">101 Main St, Santa Cruz, CA 95060</span>
+                                    </div>
+                                    <a class="accommodation-phone" href="tel:18314231570">831.423.1570</a>
+                                </div>
+                                <div class="accommodation-item" data-accommodation-id="sea-and-sand" data-area="santa-cruz" data-address="201 W Cliff Dr, Santa Cruz, CA 95060" data-lat="36.9608293" data-lng="-122.0254532" tabindex="0">
+                                    <div class="accommodation-meta">
+                                        <a class="accommodation-name" href="https://www.seaandsandinn.com" target="_blank" rel="noopener noreferrer">Sea &amp; Sand Inn</a>
+                                        <span class="accommodation-address">201 W Cliff Dr, Santa Cruz, CA 95060</span>
+                                    </div>
+                                    <a class="accommodation-phone" href="tel:18314273400">831.427.3400</a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pasatiempo group -->
+                        <div class="area-group">
+                            <div class="area-header">
+                                <em class="area-name">Pasatiempo</em>
+                                <span class="area-line"></span>
+                                <span class="area-count">1 option</span>
+                            </div>
+                            <div class="area-hotels">
+                                <div class="accommodation-item" data-accommodation-id="inn-pasatiempo" data-area="pasatiempo" data-address="555 CA-17, Santa Cruz, CA 95060" data-lat="36.9999048" data-lng="-122.0225784" tabindex="0">
+                                    <div class="accommodation-meta">
+                                        <a class="accommodation-name" href="https://www.innatpasatiempo.com" target="_blank" rel="noopener noreferrer">Inn at Pasatiempo</a>
+                                        <span class="accommodation-address">555 CA-17, Santa Cruz, CA 95060</span>
+                                    </div>
+                                    <a class="accommodation-phone" href="tel:18314235000">831.423.5000</a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Scotts Valley group -->
+                        <div class="area-group">
+                            <div class="area-header">
+                                <em class="area-name">Scotts Valley</em>
+                                <span class="area-line"></span>
+                                <span class="area-count">2 options</span>
+                            </div>
+                            <div class="area-hotels">
+                                <div class="accommodation-item" data-accommodation-id="four-points" data-area="scotts-valley" data-address="5030 Scotts Valley Dr, Scotts Valley, CA 95066" data-lat="37.0540787" data-lng="-122.0120681" tabindex="0">
+                                    <div class="accommodation-meta">
+                                        <a class="accommodation-name" href="https://www.marriott.com/en-us/hotels/sjcfv-four-points-santa-cruz-scotts-valley/overview/" target="_blank" rel="noopener noreferrer">Four Points by Sheraton Scotts Valley</a>
+                                        <span class="accommodation-address">5030 Scotts Valley Dr, Scotts Valley, CA 95066</span>
+                                    </div>
+                                    <a class="accommodation-phone" href="tel:18314381500">831.438.1500</a>
+                                </div>
+                                <div class="accommodation-item" data-accommodation-id="hilton-scotts-valley" data-area="scotts-valley" data-address="6001 La Madrona Dr, Santa Cruz, CA 95060" data-lat="37.0361469" data-lng="-122.0243378" tabindex="0">
+                                    <div class="accommodation-meta">
+                                        <a class="accommodation-name" href="https://www.hilton.com/en/hotels/sjcsvhf-hilton-santa-cruz-scotts-valley/" target="_blank" rel="noopener noreferrer">Hilton Santa Cruz / Scotts Valley</a>
+                                        <span class="accommodation-address">6001 La Madrona Dr, Santa Cruz, CA 95060</span>
+                                    </div>
+                                    <a class="accommodation-phone" href="tel:18314401000">831.440.1000</a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="accommodation-scroll-hint" aria-hidden="true">
+                            <span>Scroll for more stays</span>
+                            <span class="scroll-hint-arrow" role="presentation"></span>
+                        </div>
+                    </div>
+
+                    <!-- Right col: map + pro tip -->
+                    <div class="accommodations-map-col">
+                        <div class="accommodation-map-card">
+                            <p class="map-legend"><span class="legend-dot venue"></span>The Hollins House Venue</p>
+                            <div id="accommodationMap" aria-label="Map of recommended accommodations"></div>
+                        </div>
+                        <div class="pro-tip-card">
+                            <p class="pro-tip-eyebrow">Pro tip</p>
+                            <p class="pro-tip-text"><em>Parking can be found in front of the venue. The bar will be open, so rideshare is encouraged.</em></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DirectionsB -->
+            <div class="directions-b">
+                <div class="directions-b-left">
+                    <p class="section-eyebrow">03 &middot; Getting there</p>
+                    <h2 class="directions-b-heading"><em>The drive up<br>to the hill.</em></h2>
+                </div>
+                <div class="directions-b-right">
+                    <div class="direction-card-b">
+                        <div class="direction-card-b-header">
+                            <h3 class="direction-route">From San Jose</h3>
+                            <span class="direction-time">45 min</span>
+                        </div>
+                        <ol class="direction-steps">
+                            <li>Highway 17 south toward Santa Cruz</li>
+                            <li>Exit Pasatiempo Drive</li>
+                            <li>Right after the Pasatiempo Inn</li>
+                            <li>Through the gate, stay right</li>
+                            <li>Pasatiempo &rarr; Clubhouse Road, up the hill</li>
+                        </ol>
+                    </div>
+                    <div class="direction-card-b">
+                        <div class="direction-card-b-header">
+                            <h3 class="direction-route">From Santa Cruz / Monterey</h3>
+                            <span class="direction-time">10&ndash;50 min</span>
+                        </div>
+                        <ol class="direction-steps">
+                            <li>Highway 1 north &rarr; Highway 17 north</li>
+                            <li>Exit Pasatiempo Drive</li>
+                            <li>Left over the overpass, left at the Inn</li>
+                            <li>Right onto Pasatiempo Drive</li>
+                            <li>Through the gate, stay right</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ThemeC -->
+            <div class="theme-c">
+                <div class="theme-c-left">
+                    <p class="section-eyebrow">The dress code</p>
+                    <h2 class="theme-c-heading"><em>Cocktail attire;</em> suits, knee to floor&#8209;length dresses, &amp; <em>lots of color encouraged.</em></h2>
+                    <p class="theme-c-copy">Polished, festive, and the kind of outfit that you would feel your best in.</p>
+                </div>
+                <div class="theme-c-right">
+                    <p class="section-eyebrow">Our Palette (More or Less)</p>
+                    <div class="swatch-grid">
+                        <div class="swatch-card">
+                            <div class="swatch-color" style="background:#F8F3F2"></div>
+                            <div class="swatch-info">
+                                <span class="swatch-name">Ivory Blush</span>
+                                <span class="swatch-code">PMS 7436</span>
+                            </div>
+                        </div>
+                        <div class="swatch-card">
+                            <div class="swatch-color" style="background:#FFFEE1"></div>
+                            <div class="swatch-info">
+                                <span class="swatch-name">Buttercream</span>
+                                <span class="swatch-code">PMS 9220</span>
+                            </div>
+                        </div>
+                        <div class="swatch-card">
+                            <div class="swatch-color" style="background:#B5C680"></div>
+                            <div class="swatch-info">
+                                <span class="swatch-name">Pistachio</span>
+                                <span class="swatch-code">PMS 7493</span>
+                            </div>
+                        </div>
+                        <div class="swatch-card">
+                            <div class="swatch-color" style="background:#6F8E3A"></div>
+                            <div class="swatch-info">
+                                <span class="swatch-name">Leaf Green</span>
+                                <span class="swatch-code">PMS 576</span>
+                            </div>
+                        </div>
+                        <div class="swatch-card">
+                            <div class="swatch-color" style="background:#A7CAE6"></div>
+                            <div class="swatch-info">
+                                <span class="swatch-name">Powder Blue</span>
+                                <span class="swatch-code">PMS 5435</span>
+                            </div>
+                        </div>
+                        <div class="swatch-card">
+                            <div class="swatch-color" style="background:#6786B8"></div>
+                            <div class="swatch-info">
+                                <span class="swatch-name">Hydrangea Blue</span>
+                                <span class="swatch-code">PMS 7681</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bring-layer-card">
+                        <em>Bring a layer &mdash; The Hollins House is on a hill, and the breeze can be unpredictable. The ceremony and dinner are both on grass, so keep this in mind for your shoe selection.</em>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ==================== ADDRESS PAGE (hidden, no nav) ==================== -->
+        <section id="address" class="page hidden">
+            <div class="container">
+                <h1>Send Us Your Address</h1>
+                <p class="section-subtitle">Help us send you save the dates, invitations, and thank you cards!</p>
+                <form id="addressForm" class="form">
+                    <div class="form-group">
+                        <label for="fullName">Full Name *</label>
+                        <input type="text" id="fullName" name="fullName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="email">Email *</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="street">Street Address *</label>
+                        <input type="text" id="street" name="street" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="city">City *</label>
+                            <input type="text" id="city" name="city" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="state">State *</label>
+                            <input type="text" id="state" name="state" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="zip">ZIP Code *</label>
+                            <input type="text" id="zip" name="zip" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="country">Country</label>
+                        <input type="text" id="country" name="country" value="United States">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Submit Address</button>
+                </form>
+                <div id="addressMessage" class="message"></div>
+            </div>
+        </section>
+
+        <!-- ==================== RSVP PAGE ==================== -->
+        <section id="rsvp" class="page">
+            <div class="rsvp-c">
+                <div class="rsvp-c-left">
+                    <p class="rsvp-eyebrow">Will you be there? &middot; Let us know by Aug 1</p>
+                    <h2 class="rsvp-c-heading">RSVP</h2>
+                    <p class="rsvp-c-copy">Look up your party with the name from your invitation. Mark each guest, pick a meal, and send us a song.</p>
+
+                    <!-- Restaurant-style menu card -->
+                    <div class="rsvp-menu-card">
+                        <p class="rsvp-menu-title">Dinner Menu</p>
+                        <div class="rsvp-menu-note">
+                            <p>All adult meals served with the <em>Butter Lettuce Salad</em> &mdash; Candied Pecans, Bleu Cheese, Apples, Green Goddess Dressing</p>
+                        </div>
+                        <div class="rsvp-menu-items">
+                            <div class="rsvp-menu-item">
+                                <div class="rsvp-menu-item-header">
+                                    <span class="rsvp-menu-item-name">Gnocchi</span>
+                                </div>
+                                <p class="rsvp-menu-item-desc">Baby Spinach, Roasted Mushrooms, Cherry Tomatoes, Caramelized Shallots, Parmesan, Roasted Garlic Cream Sauce</p>
+                            </div>
+                            <div class="rsvp-menu-item">
+                                <div class="rsvp-menu-item-header">
+                                    <span class="rsvp-menu-item-name">Atlantic Salmon</span>
+                                    <span class="rsvp-menu-item-tag">GF</span>
+                                </div>
+                                <p class="rsvp-menu-item-desc">Lemon Risotto, Vanilla Balsamic Reduction, Chef&rsquo;s seasonal vegetable</p>
+                            </div>
+                            <div class="rsvp-menu-item">
+                                <div class="rsvp-menu-item-header">
+                                    <span class="rsvp-menu-item-name">Flank Steak</span>
+                                </div>
+                                <p class="rsvp-menu-item-desc">Mashed Potato, Chimichurri, Fried Onion, Chef&rsquo;s seasonal vegetable</p>
+                            </div>
+                        </div>
+                        <div class="rsvp-menu-note">
+                            <p class="rsvp-menu-note-kids">Children: Chicken Tenders, French Fries, Fresh Fruit</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="rsvp-c-right">
+                    <div class="rsvp-ticket">
+                        <form id="rsvpForm" class="form">
+                            <div class="form-group">
+                                <label for="rsvpName">Full Name *</label>
+                                <div class="guest-lookup-controls">
+                                    <input type="text" id="rsvpName" name="rsvpName" required>
+                                    <button type="button" id="guestLookupButton" class="btn btn-secondary">Find My Party</button>
+                                </div>
+                                <p class="form-hint">Use the name that appears on your invitation so we can locate your party.</p>
+                                <input type="hidden" id="guestGroupId" name="guestGroupId">
+                                <div id="guestLookupMessage" class="guest-lookup-message" role="status" aria-live="polite"></div>
+                                <div id="guestLookupResults" class="guest-lookup-results" aria-live="polite"></div>
+                            </div>
+                            <div id="guestResponseSection" class="guest-response-section hidden" aria-live="polite">
+                                <h2 class="guest-response-title">Party RSVP</h2>
+                                <p class="form-hint">Confirm each guest's attendance and meal preference. Plus-ones can add their name before submitting.</p>
+                                <div id="guestResponseList" class="guest-response-list"></div>
+                                <div id="guestResponseMessage" class="guest-response-message" role="alert"></div>
+                            </div>
+                            <div class="form-group">
+                                <label for="rsvpEmail">Email *</label>
+                                <input type="email" id="rsvpEmail" name="rsvpEmail" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="dietaryRestrictions">Dietary Restrictions or Allergies</label>
+                                <textarea id="dietaryRestrictions" name="dietaryRestrictions" rows="3"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="songRequest">Song Request</label>
+                                <input type="text" id="songRequest" name="songRequest" placeholder="What song will get you on the dance floor?">
+                            </div>
+                            <div class="form-group">
+                                <label for="specialMessage">Special Message for the Couple</label>
+                                <textarea id="specialMessage" name="specialMessage" rows="4"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Submit RSVP</button>
+                        </form>
+                        <div id="rsvpMessage" class="message"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- UntilThenCoda -->
+            <div class="until-then-coda">
+                <div class="coda-signoff">Until then &mdash;</div>
+                <div class="coda-mark">K &middot; M &middot; 09.12.26</div>
+            </div>
+        </section>
+
+        <!-- ==================== THEME (hidden, no nav) ==================== -->
+        <section id="theme" class="page hidden">
+            <div class="container">
+                <h1>Details</h1>
+                <p class="section-subtitle">Dress code, palette notes, and the look of the day.</p>
+            </div>
+        </section>
+
+        <!-- ==================== WEDDING PARTY PAGE ==================== -->
+        <section id="wedding-party" class="page access-conditional" data-access-visible="party">
+            <div class="party-b">
+                <div class="party-b-header">
+                    <h2 class="party-b-heading"><em>The party, briefed.</em></h2>
+                    <p class="party-b-label">06 &middot; Wedding party</p>
+                </div>
+                <div class="party-briefing-strip">
+                    <div class="party-brief-cell">
+                        <span class="brief-label">Rehearsal</span>
+                        <span class="brief-value">Fri Sept 11</span>
+                        <span class="brief-sub">10 AM &middot; The Hollins House</span>
+                    </div>
+                    <div class="party-brief-cell">
+                        <span class="brief-label">Rehearsal Lunch</span>
+                        <span class="brief-value">Shadowbrook</span>
+                        <span class="brief-sub">12&ndash;3 PM &middot; Fri Sept 11</span>
+                    </div>
+                    <div class="party-brief-cell">
+                        <span class="brief-label">Day-Of</span>
+                        <span class="brief-value">Sat Sept 12</span>
+                        <span class="brief-sub">4:00 PM ceremony &middot; 10 PM send-off</span>
+                    </div>
+                    <div class="party-brief-cell">
+                        <span class="brief-label">Help Line</span>
+                        <span class="brief-value">Text us</span>
+                        <span class="brief-sub">Kenny (408) 693-4383 &middot; Morgan (408) 854-1944</span>
+                    </div>
+                </div>
+                <div id="weddingPartyGrid" class="wedding-party-grid" aria-live="polite"></div>
+
+                <!-- Suit Reference -->
+                <div class="party-suit-note">
+                    <p class="section-eyebrow">Attire</p>
+                    <p class="party-suit-text">Groomsmen are wearing the <a href="https://www.indochino.com/product/hexham-black-suit" target="_blank" rel="noopener noreferrer" class="party-suit-link">Hexham Black Suit</a> from Indochino.</p>
+                </div>
+
+                <!-- Day-of Timeline -->
+                <div class="party-timeline">
+                    <p class="section-eyebrow">Day-of Timeline &mdash; Saturday, Sept 12</p>
+                    <h3 class="party-timeline-heading"><em>The day, hour by hour.</em></h3>
+                    <ol class="timeline-list">
+                        <li class="timeline-item">
+                            <span class="timeline-time">9 AM</span>
+                            <div class="timeline-body">
+                                <span class="timeline-label">Hair &amp; Makeup</span>
+                                <span class="timeline-desc">Get-ready time &amp; ordered breakfast at our Seascape Resort suite, Aptos</span>
+                            </div>
+                        </li>
+                        <li class="timeline-item">
+                            <span class="timeline-time">12 PM</span>
+                            <div class="timeline-body">
+                                <span class="timeline-label">Men help with final venue setup</span>
+                                <span class="timeline-desc">At The Hollins House</span>
+                            </div>
+                        </li>
+                        <li class="timeline-item">
+                            <span class="timeline-time">2&ndash;3 PM</span>
+                            <div class="timeline-body">
+                                <span class="timeline-label">Wedding party shifts to venue</span>
+                                <span class="timeline-desc">Women&rsquo;s lounge available for final get-ready &amp; putting on dresses</span>
+                            </div>
+                        </li>
+                        <li class="timeline-item">
+                            <span class="timeline-time">4 PM</span>
+                            <div class="timeline-body">
+                                <span class="timeline-label">Ceremony</span>
+                                <span class="timeline-desc">The Hollins House</span>
+                            </div>
+                        </li>
+                        <li class="timeline-item">
+                            <span class="timeline-time">10 PM</span>
+                            <div class="timeline-body">
+                                <span class="timeline-label">Send-off</span>
+                                <span class="timeline-desc">Reception ends, safe travels!</span>
+                            </div>
+                        </li>
+                    </ol>
+                </div>
+
+                <!-- Hair & Makeup Signup -->
+                <div class="party-hmu-section">
+                    <p class="section-eyebrow">Hair &amp; Makeup</p>
+                    <h3 class="party-hmu-heading"><em>Sign up below if you&rsquo;d like to join.</em></h3>
+                    <div class="party-hmu-insta">
+                        <a href="https://www.instagram.com" target="_blank" rel="noopener noreferrer" class="party-hmu-insta-link">
+                            <svg class="insta-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+                            @hairandmakeup
+                        </a>
+                    </div>
+                    <p class="party-hmu-copy">Do whatever feels most comfortable for your hair and makeup &mdash; this is your day too. Rates are $200 for hair and $200 for makeup. We&rsquo;ll reach out to confirm, but this helps us get a head count.</p>
+                    <form id="hmuForm" class="party-hmu-form">
+                        <div class="form-group">
+                            <label for="hmuName">Your Name *</label>
+                            <input type="text" id="hmuName" name="hmuName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="hmuEmail">Email *</label>
+                            <input type="email" id="hmuEmail" name="hmuEmail" required>
+                        </div>
+                        <div class="party-hmu-checks">
+                            <label class="hmu-check-label">
+                                <input type="checkbox" name="hmuHair" value="yes">
+                                <span>Hair ($200)</span>
+                            </label>
+                            <label class="hmu-check-label">
+                                <input type="checkbox" name="hmuMakeup" value="yes">
+                                <span>Makeup ($200)</span>
+                            </label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Submit</button>
+                    </form>
+                    <div id="hmuMessage" class="message"></div>
+                </div>
+
+                <!-- Wedding Party FAQ -->
+                <div class="party-faq-section">
+                    <p class="section-eyebrow">FAQ</p>
+                    <h3 class="party-faq-heading"><em>Questions &amp; Answers</em></h3>
+                    <div class="faq-accordion">
+                        <div class="faq-item">
+                            <button class="faq-question" aria-expanded="false">
+                                <span>What should I wear for the rehearsal?</span>
+                                <span class="faq-chevron" aria-hidden="true"></span>
+                            </button>
+                            <div class="faq-answer" hidden>
+                                <p>[Answer coming soon]</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" aria-expanded="false">
+                                <span>When do I need to arrive on the wedding day?</span>
+                                <span class="faq-chevron" aria-hidden="true"></span>
+                            </button>
+                            <div class="faq-answer" hidden>
+                                <p>[Answer coming soon]</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" aria-expanded="false">
+                                <span>Where do I park on the day of?</span>
+                                <span class="faq-chevron" aria-hidden="true"></span>
+                            </button>
+                            <div class="faq-answer" hidden>
+                                <p>[Answer coming soon]</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <button class="faq-question" aria-expanded="false">
+                                <span>What should I do if I have questions day-of?</span>
+                                <span class="faq-chevron" aria-hidden="true"></span>
+                            </button>
+                            <div class="faq-answer" hidden>
+                                <p>[Answer coming soon]</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== FAQs PAGE ==================== -->
+        <section id="faqs" class="page">
+            <div class="faqs-page">
+                <div class="faqs-page-header">
+                    <p class="section-eyebrow">Frequently asked</p>
+                    <h2 class="faqs-page-heading"><em>Questions &amp; Answers</em></h2>
+                </div>
+                <div class="faq-accordion">
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>Are there colors that should be avoided?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>The bridesmaids will be wearing powder blue, but don&rsquo;t take that as a sign to shy away from the color if it calls to you.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>Open or cash bar?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>The bar is covered, no need for cash. If you feel so inclined to tip the bartender, please feel free to do so.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>Can I bring a plus 1?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>Please check your invitation for your guest count. Due to restrictions, we are unable to accommodate anyone not already accounted for.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>Are children invited?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>Children in our respective families will be in attendance. We kindly ask all other guests to find childcare accommodations.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>Can I change my RSVP after submitting it?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>Things happen; we understand if you need to change your answer. Just return to the RSVP page and locate your party, changing any details as needed.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>Are gifts required and can I bring or mail a wedding gift?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>No, gifts are not a requirement, but anything is truly appreciated. There will be a designated table for cards and gifts, but mailing might be most convenient.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>Can I take photos or videos during the ceremony?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>We kindly ask that the ceremony be unplugged as to not obstruct the view of others and allow us to enjoy the moment all together.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span></span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>Parking is located directly in front of the venue. Plan on a rideshare, if necessary, for safety and convenience.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>What time should I arrive?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>3:30 PM is recommended to enjoy a pre-ceremony drink and find your seat, but please be seated for the ceremony no later than 4:00 PM as that is the firm start time.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>What is the weather in Santa Cruz like in September?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <div class="weather-widget" data-weather-date="2026-09-12" aria-live="polite">
+                                <p class="weather-widget-status">Loading weather forecast for Sept 12, 2026&hellip;</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" aria-expanded="false">
+                            <span>Is there a room block at any of the hotels?</span>
+                            <span class="faq-chevron" aria-hidden="true"></span>
+                        </button>
+                        <div class="faq-answer" hidden>
+                            <p>While we have not reserved a formal room block, there are plenty of options in the Santa Cruz area, some of which are listed on the home page.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== REGISTRY PAGE ==================== -->
+        <section id="registry" class="page">
+            <div class="registry-c">
+                <div class="registry-c-header">
+                    <div>
+                        <p class="section-eyebrow">The registry</p>
+                        <h2 class="registry-c-heading">Gifts &amp; registry.</h2>
+                    </div>
+                    <p class="registry-c-intro">Your presence is a gift. If you&rsquo;d like to send something &mdash; everything&rsquo;s right here.</p>
+                </div>
+
+                <div id="registryLoading" class="loading" aria-live="polite" aria-label="Loading registry items">
+                    <div class="spinner" role="status" aria-hidden="true"></div>
+                    <p>Loading registry&hellip;</p>
+                </div>
+
+                <div id="registryError" class="registry-error hidden" role="alert"></div>
+
+                <div id="registryGrid" class="registry-grid" aria-live="polite"></div>
+
+                <div class="registry-direct-link registry-cta">
+                    <a href="https://www.myregistry.com/giftlist/morganandkenny" target="_blank" rel="noopener noreferrer" class="registry-cta-btn">Open the full registry &rarr;</a>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="vendor/leaflet/leaflet.js"></script>
+    <script src="vendor/supabase/supabase.js"></script>
+    <script src="site-config.js"></script>
+    <script src="data-client.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -64,7 +64,6 @@ const KNOWN_IMAGE_PATHS = new Set([
     'images/cathy.jpeg',
     'images/cathy.png',
     'images/chayton.png',
-    'images/gabe.JPEG',
     'images/gabe.png',
     'images/haley.png',
     'images/jen.jpeg',
