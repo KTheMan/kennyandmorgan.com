@@ -51,6 +51,7 @@ const REGISTRY_ACTIVITY_COOLDOWN_MS = 90 * 1000;
 const REGISTRY_VISIBILITY_COOLDOWN_MS = 60 * 1000;
 const REGISTRY_VISIBILITY_THRESHOLD = 0.2;
 const REGISTRY_ACTIVITY_EVENTS = ['scroll', 'pointerdown', 'touchstart', 'keydown'];
+const SUPPORTED_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'heic', 'PNG', 'JPG', 'JPEG', 'HEIC'];
 const registryRefreshState = {
     initialized: false,
     sectionVisible: false,
@@ -164,6 +165,45 @@ const weddingPartyMembers = [
         photo: 'images/therese.png'
     }
 ];
+
+function buildImageCandidates(source) {
+    const normalizedSource = String(source || '').trim();
+    if (!normalizedSource) {
+        return [];
+    }
+
+    const baseSource = normalizedSource.replace(/\.[^./?#]+(?=[?#]|$)/, '');
+    return Array.from(new Set([
+        normalizedSource,
+        ...SUPPORTED_IMAGE_EXTENSIONS.map(extension => `${baseSource}.${extension}`)
+    ]));
+}
+
+function applyImageFallback(img, candidates) {
+    if (!img || !Array.isArray(candidates) || !candidates.length) {
+        return;
+    }
+
+    let candidateIndex = 1;
+    const loadNext = () => {
+        if (candidateIndex >= candidates.length) {
+            img.removeEventListener('error', loadNext);
+            return;
+        }
+        img.src = candidates[candidateIndex];
+        candidateIndex += 1;
+    };
+
+    img.addEventListener('load', () => {
+        img.removeEventListener('error', loadNext);
+    }, { once: true });
+    img.addEventListener('error', loadNext);
+
+    const initialSource = img.getAttribute('src') || '';
+    if (initialSource !== candidates[0]) {
+        img.src = candidates[0];
+    }
+}
 
 async function initAccessControl() {
     renderWeddingPartyMembers();
@@ -349,18 +389,31 @@ function renderWeddingPartyMembers() {
     if (!grid) {
         return;
     }
-    grid.innerHTML = weddingPartyMembers.map(member => {
+
+    const membersWithImages = weddingPartyMembers.map(member => {
         const firstName = (member.name.split(' ')[0] || 'friend').toLowerCase();
-        const imageUrl = member.photo || `images/${firstName}.png`;
+        return {
+            ...member,
+            imageCandidates: buildImageCandidates(member.photo || `images/${firstName}.png`)
+        };
+    });
+
+    grid.innerHTML = membersWithImages.map(member => {
+        const initialImageUrl = member.imageCandidates[0] || '';
         return `
             <article class="party-card">
-                <img src="${imageUrl}" alt="${member.name}" loading="lazy">
+                <img src="${initialImageUrl}" alt="${member.name}" loading="lazy">
                 <h3 class="party-name">${member.name}</h3>
                 <p class="party-role">${member.role}</p>
                 <p class="party-bio">${member.bio}</p>
             </article>
         `;
     }).join('');
+
+    const images = Array.from(grid.querySelectorAll('.party-card img'));
+    images.forEach((img, index) => {
+        applyImageFallback(img, membersWithImages[index]?.imageCandidates || []);
+    });
 }
 
 function initHeroCarousel() {
@@ -370,6 +423,11 @@ function initHeroCarousel() {
     }
 
     const slides = Array.from(carousel.querySelectorAll('.hero-carousel-image'));
+    slides.forEach(slide => {
+        const source = slide.getAttribute('src') || '';
+        applyImageFallback(slide, buildImageCandidates(source));
+    });
+
     if (slides.length <= 1) {
         return;
     }
