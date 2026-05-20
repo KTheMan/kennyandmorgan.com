@@ -88,11 +88,11 @@ In GitHub:
 
 ### Wedding-party image normalization
 
-`deploy-pages.yml` normalizes the wedding-party source images into lowercase `.png` files
-for deployment. On regular push deployments it only regenerates the normalized files whose
-source images changed in that push; on manual or first-run deployments it regenerates the
-full wedding-party image set. If any changed source image cannot be converted, the deploy
-fails before publishing.
+`deploy-pages.yml` converts every non-`.png` image in `images/` into a same-name `.png`
+for deployment (for example `alexis.heic` becomes `alexis.png`). The conversion currently
+covers prior inputs (`.heic`, `.jpeg`, `.jpg`) plus other common Pillow-supported formats
+such as `.heif`, `.avif`, `.webp`, `.gif`, `.bmp`, and `.tiff`. If any source image cannot
+be converted, the deploy fails before publishing.
 
 See `SECURITY.md` for the full public-repository hardening checklist and secret migration walkthrough.
 
