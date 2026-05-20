@@ -26,17 +26,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Normalize changed wedding-party images
-        env:
-          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
+      - name: Convert non-PNG images to PNG
         run: |
           python -m pip install --disable-pip-version-check Pillow==12.2.0 pillow-heif==1.3.0
           python - <<'PY'
-          import os
           import shutil
-          import subprocess
-          import sys
           import tempfile
           from pathlib import Path
 
@@ -48,91 +42,46 @@ jobs:
           repo_root = Path.cwd()
           images_dir = repo_root / 'images'
           normalized_dir = Path(tempfile.gettempdir()) / 'km-normalized-images'
-          changed_files = set()
-          targets = {
-              'alexis.png': ('alexis.png', 'alexis.heic'),
-              'alyssa.png': ('alyssa.png',),
-              'anthony.png': ('anthony.png',),
-              'cathy.png': ('cathy.png', 'cathy.jpeg'),
-              'chayton.png': ('chayton.png',),
-              'gabe.png': ('gabe.png', 'gabe.JPEG'),
-              'haley.png': ('haley.png',),
-              'jen.png': ('jen.png', 'jen.jpeg'),
-              'kelcie.png': ('kelcie.png',),
-              'najah.png': ('najah.png',),
-              'raquel.png': ('raquel.png', 'raquel.heic'),
-              'roy.png': ('roy.png',),
-              'ryan.png': ('ryan.png',),
-              'sam.png': ('sam.png',),
-              'therese.png': ('therese.png',),
-              'tim.png': ('tim.png', 'tim.heic'),
-              'weston.png': ('weston.png',),
-          }
-
-          event_before = os.environ.get('GITHUB_EVENT_BEFORE', '').strip()
-          event_name = os.environ.get('GITHUB_EVENT_NAME', '').strip()
-          should_normalize_all = (
-              event_name != 'push'
-              or not event_before
-              or set(event_before) == {'0'}
-          )
-
-          if not should_normalize_all:
-              diff = subprocess.run(
-                  ['git', 'diff', '--name-only', f'{event_before}..HEAD', '--', 'images'],
-                  capture_output=True,
-                  text=True,
-                  check=False,
-              )
-              if diff.returncode != 0:
-                  sys.stderr.write(diff.stderr)
-                  raise SystemExit(diff.returncode)
-              changed_files = {
-                  Path(line.strip()).name
-                  for line in diff.stdout.splitlines()
-                  if line.strip()
-              }
-
-          dirty_targets = set(targets) if should_normalize_all else {
-              target
-              for target, candidates in targets.items()
-              if any(candidate in changed_files for candidate in candidates)
+          source_extensions = {
+              '.jpg',
+              '.jpeg',
+              '.jpe',
+              '.jfif',
+              '.heic',
+              '.heif',
+              '.avif',
+              '.webp',
+              '.gif',
+              '.bmp',
+              '.dib',
+              '.tif',
+              '.tiff',
           }
 
           if normalized_dir.exists():
               shutil.rmtree(normalized_dir)
 
-          if not dirty_targets:
-              print('No wedding-party source image changes detected; skipping normalization.')
+          source_files = sorted(
+              path for path in images_dir.iterdir()
+              if path.is_file() and path.suffix.lower() in source_extensions
+          )
+          if not source_files:
+              print('No non-PNG source images detected in images/.')
               raise SystemExit(0)
 
           normalized_dir.mkdir(parents=True, exist_ok=True)
 
-          for target_name in sorted(dirty_targets):
-              candidates = targets[target_name]
-              preferred_sources = [
-                  images_dir / candidate
-                  for candidate in candidates
-                  if candidate in changed_files and (images_dir / candidate).exists()
-              ]
-              fallback_sources = [
-                  images_dir / candidate
-                  for candidate in candidates
-                  if (images_dir / candidate).exists()
-              ]
-              source_path = next(iter(preferred_sources or fallback_sources), None)
-              if source_path is None:
-                  raise SystemExit(
-                      f'Missing source image for {target_name}. Checked: {", ".join(candidates)}'
-                  )
-
-              target_path = normalized_dir / target_name
+          for source_path in source_files:
+              target_path = normalized_dir / f'{source_path.stem}.png'
               with Image.open(source_path) as image:
                   normalized = ImageOps.exif_transpose(image)
+                  alpha_in_mode = 'A' in normalized.getbands()
+                  alpha_in_info = bool(normalized.info.get('transparency'))
+                  has_alpha = alpha_in_mode or alpha_in_info
                   if normalized.mode not in ('RGB', 'RGBA'):
-                      normalized = normalized.convert('RGBA' if 'A' in normalized.getbands() else 'RGB')
-                  normalized.save(target_path, format='PNG', optimize=True)
-              print(f'Normalized {source_path.name} -> {target_path.name}')
+                      normalized = normalized.convert('RGBA' if has_alpha else 'RGB')
+                  normalized.save(target_path, format='PNG', compress_level=9)
+              print(f'Converted {source_path.name} -> {target_path.name}')
           PY
       - uses: actions/configure-pages@v5
       - name: Prepare deploy artifact
