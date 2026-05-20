@@ -30,6 +30,7 @@ function initAdminApp() {
     const csvImportButton = document.getElementById('csvImportButton');
     const guestTable = document.getElementById('guestTable');
     const guestFilterInput = document.getElementById('guestTableFilter');
+    const newGuestButton = document.getElementById('newGuestButton');
 
     loginForm?.addEventListener('submit', handleLogin);
     logoutButton?.addEventListener('click', handleLogout);
@@ -40,6 +41,17 @@ function initAdminApp() {
     guestTable?.addEventListener('click', handleTableClick);
     guestFilterInput?.addEventListener('input', event => {
         setGuestFilter(event.target.value || '');
+    });
+
+    newGuestButton?.addEventListener('click', () => {
+        resetGuestForm();
+        scrollToGuestForm();
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && document.getElementById('guestId')?.value) {
+            resetGuestForm();
+        }
     });
 
     if (guestFilterInput) {
@@ -191,12 +203,15 @@ async function handleLogout() {
 function toggleConsole(isAuthenticated) {
     const loginPanel = document.getElementById('adminLoginPanel');
     const consolePanel = document.getElementById('adminConsole');
+    const statsRow = document.getElementById('adminStatsRow');
     if (isAuthenticated) {
         loginPanel?.classList.add('hidden');
         consolePanel?.classList.remove('hidden');
+        statsRow?.classList.remove('hidden');
     } else {
         loginPanel?.classList.remove('hidden');
         consolePanel?.classList.add('hidden');
+        statsRow?.classList.add('hidden');
     }
 }
 
@@ -214,6 +229,7 @@ async function loadGuests() {
     } finally {
         state.isLoadingGuests = false;
         renderGuestTable();
+        renderStats();
     }
 }
 
@@ -253,12 +269,19 @@ function renderGuestTable() {
     }
 
     if (state.isLoadingGuests) {
-        tbody.innerHTML = '<tr><td colspan="10" class="table-empty">Loading guests…</td></tr>';
+        const skeletonWidths = ['70%', '50%', '30%', '30%', '55%', '45%', '40%', '65%', '40%', '80%'];
+        const skeletonRow = () => `<tr class="skeleton-row">${skeletonWidths.map(w =>
+            `<td><span class="skeleton-cell" style="width:${w}"></span></td>`
+        ).join('')}</tr>`;
+        tbody.innerHTML = Array(5).fill(0).map(skeletonRow).join('');
         return;
     }
 
+    const countEl = document.getElementById('guestFilterCount');
+
     if (!state.guests.length) {
-        tbody.innerHTML = '<tr><td colspan="10" class="table-empty">No guests on file yet. Click “Add Guest” or import a CSV.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="table-empty">No guests on file yet. Use “+ New Guest” or import a CSV.</td></tr>';
+        if (countEl) countEl.textContent = '';
         return;
     }
 
@@ -268,26 +291,39 @@ function renderGuestTable() {
 
     if (!visibleGuests.length) {
         tbody.innerHTML = '<tr><td colspan="10" class="table-empty">No guests match this filter.</td></tr>';
+        if (countEl) countEl.textContent = `0 of ${state.guests.length}`;
         return;
     }
 
-    tbody.innerHTML = visibleGuests.map(guest => `
-        <tr data-guest-id="${guest.id}">
-            <td>${escapeHtml(guest.fullName || '')}</td>
-            <td>${escapeHtml(guest.groupId || '')}</td>
-            <td>${guest.isPrimary ? 'Yes' : 'No'}</td>
-            <td>${guest.isPlusOne ? 'Yes' : 'No'}</td>
-            <td>${escapeHtml((guest.rsvpStatus || 'pending').toUpperCase())}</td>
-            <td>${escapeHtml(guest.mealChoice || '—')}</td>
-            <td>${escapeHtml(guest.dietaryNotes || '—')}</td>
-            <td>${escapeHtml(formatGuestAddress(guest) || '—')}</td>
-            <td>${formatDate(guest.lastRsvpAt)}</td>
-            <td class="table-actions">
+    if (countEl) {
+        countEl.textContent = state.guestFilter
+            ? `${visibleGuests.length} of ${state.guests.length} guests`
+            : `${state.guests.length} guests`;
+    }
+
+    const editingId = document.getElementById('guestId')?.value;
+
+    tbody.innerHTML = visibleGuests.map(guest => {
+        const rsvpStatus = guest.rsvpStatus || 'pending';
+        const rsvpBadge = `<span class="rsvp-badge rsvp-badge--${escapeHtml(rsvpStatus)}">${escapeHtml(rsvpStatus)}</span>`;
+        const isEditing = editingId && String(guest.id) === String(editingId);
+        return `
+        <tr data-guest-id="${guest.id}" data-guest-name="${escapeHtml(guest.fullName || '')}"${isEditing ? ' class="is-editing"' : ''}>
+            <td class="px-3 py-2">${escapeHtml(guest.fullName || '')}</td>
+            <td class="px-3 py-2">${escapeHtml(guest.groupId || '')}</td>
+            <td class="px-3 py-2">${guest.isPrimary ? 'Yes' : 'No'}</td>
+            <td class="px-3 py-2">${guest.isPlusOne ? 'Yes' : 'No'}</td>
+            <td class="px-3 py-2">${rsvpBadge}</td>
+            <td class="px-3 py-2">${escapeHtml(guest.mealChoice || '—')}</td>
+            <td class="px-3 py-2">${escapeHtml(guest.dietaryNotes || '—')}</td>
+            <td class="px-3 py-2">${escapeHtml(formatGuestAddress(guest) || '—')}</td>
+            <td class="px-3 py-2 whitespace-nowrap">${formatDate(guest.lastRsvpAt)}</td>
+            <td class="px-3 py-2 table-actions whitespace-nowrap">
                 <button type="button" class="table-action table-action--edit">Edit</button>
                 <button type="button" class="table-action table-action--delete">Delete</button>
             </td>
-        </tr>
-    `).join('');
+        </tr>`;
+    }).join('');
 }
 
 function handleTableClick(event) {
@@ -300,14 +336,32 @@ function handleTableClick(event) {
     const guestId = Number(row?.dataset.guestId);
     const guest = state.guests.find(item => item.id === guestId);
 
+    if (button.classList.contains('table-action--confirm-no')) {
+        const actionsCell = row?.querySelector('.table-actions');
+        if (actionsCell) {
+            actionsCell.innerHTML = '<button type="button" class="table-action table-action--edit">Edit</button> <button type="button" class="table-action table-action--delete">Delete</button>';
+        }
+        return;
+    }
+
+    if (button.classList.contains('table-action--confirm-yes')) {
+        deleteGuestRecord(guestId);
+        return;
+    }
+
     if (!guest) {
         return;
     }
 
     if (button.classList.contains('table-action--edit')) {
         populateGuestForm(guest);
+        scrollToGuestForm();
     } else if (button.classList.contains('table-action--delete')) {
-        deleteGuestRecord(guestId);
+        const actionsCell = row?.querySelector('.table-actions');
+        if (actionsCell) {
+            const name = escapeHtml(guest.fullName || 'this guest');
+            actionsCell.innerHTML = `<span style="font-size:0.7rem;color:#b91c1c;margin-right:0.25rem">Delete ${name}?</span><button type="button" class="table-action table-action--confirm-yes">Yes</button> <button type="button" class="table-action table-action--confirm-no">No</button>`;
+        }
     }
 }
 
@@ -328,6 +382,15 @@ function populateGuestForm(guest) {
     document.getElementById('guestState').value = guest.state || '';
     document.getElementById('guestPostalCode').value = guest.postalCode || '';
     document.getElementById('guestNotes').value = guest.notes || '';
+
+    const titleEl = document.getElementById('guestFormTitle');
+    const subtitleEl = document.getElementById('guestFormSubtitle');
+    if (titleEl) titleEl.textContent = `Editing: ${guest.fullName || 'Guest'}`;
+    if (subtitleEl) subtitleEl.textContent = 'Update the fields below, then click Save Guest. Press Esc to cancel.';
+
+    document.querySelectorAll('#guestTable tbody tr.is-editing').forEach(r => r.classList.remove('is-editing'));
+    const editRow = document.querySelector(`#guestTable tbody tr[data-guest-id="${guest.id}"]`);
+    editRow?.classList.add('is-editing');
 }
 
 function resetGuestForm() {
@@ -336,6 +399,13 @@ function resetGuestForm() {
     document.getElementById('guestId').value = '';
     clearGuestFieldErrors();
     showMessage('guestFormMessage', '', 'success');
+
+    const titleEl = document.getElementById('guestFormTitle');
+    const subtitleEl = document.getElementById('guestFormSubtitle');
+    if (titleEl) titleEl.textContent = 'Add New Guest';
+    if (subtitleEl) subtitleEl.textContent = 'Fill in the fields below to create a new guest entry.';
+
+    document.querySelectorAll('#guestTable tbody tr.is-editing').forEach(r => r.classList.remove('is-editing'));
 }
 
 async function handleGuestSubmit(event) {
@@ -403,9 +473,6 @@ async function handleGuestSubmit(event) {
 }
 
 async function deleteGuestRecord(guestId) {
-    if (!confirm('Delete this guest? This cannot be undone.')) {
-        return;
-    }
     try {
         await window.KMDataClient.deleteAdminGuest(state.token, guestId);
         state.guests = state.guests.filter(guest => guest.id !== guestId);
@@ -499,4 +566,26 @@ function formatGuestAddress(guest = {}) {
         parts.push(guest.postalCode);
     }
     return parts.join(', ');
+}
+
+function scrollToGuestForm() {
+    const card = document.getElementById('guestFormCard');
+    card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => document.getElementById('guestFullName')?.focus(), 300);
+}
+
+function renderStats() {
+    const total = state.guests.length;
+    const accepted = state.guests.filter(g => g.rsvpStatus === 'accepted').length;
+    const declined = state.guests.filter(g => g.rsvpStatus === 'declined').length;
+    const pending = state.guests.filter(g => !g.rsvpStatus || g.rsvpStatus === 'pending').length;
+
+    const setEl = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    };
+    setEl('statTotal', total || '\u2014');
+    setEl('statAccepted', accepted || '0');
+    setEl('statDeclined', declined || '0');
+    setEl('statPending', pending || '0');
 }

@@ -4,32 +4,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RSVP Admin | Kenny & Morgan</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Work+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
+                    fontFamily: {
+                        sans: ['Work Sans', 'Montserrat', 'system-ui', 'sans-serif'],
+                        serif: ['Playfair Display', 'serif'],
+                        disp: ['DM Serif Display', 'Playfair Display', 'serif'],
+                    },
                     colors: {
-                        border: 'hsl(214.3 31.8% 91.4%)',
-                        input: 'hsl(214.3 31.8% 91.4%)',
-                        ring: 'hsl(222.2 84% 4.9%)',
-                        background: 'hsl(0 0% 100%)',
-                        foreground: 'hsl(222.2 84% 4.9%)',
+                        border: 'rgba(30, 34, 24, 0.15)',
+                        input: 'rgba(30, 34, 24, 0.15)',
+                        ring: '#7A9A1F',
+                        background: '#FAF8F0',
+                        foreground: '#1E2218',
                         primary: {
-                            DEFAULT: 'hsl(222.2 47.4% 11.2%)',
-                            foreground: 'hsl(210 40% 98%)'
+                            DEFAULT: '#2E3A1C',
+                            foreground: '#FAF8F0'
                         },
                         secondary: {
-                            DEFAULT: 'hsl(210 40% 96.1%)',
-                            foreground: 'hsl(222.2 47.4% 11.2%)'
+                            DEFAULT: '#F3F0E7',
+                            foreground: '#1E2218'
                         },
                         muted: {
-                            DEFAULT: 'hsl(210 40% 96.1%)',
-                            foreground: 'hsl(215.4 16.3% 46.9%)'
+                            DEFAULT: '#F3F0E7',
+                            foreground: '#54604A'
+                        },
+                        accent: {
+                            DEFAULT: '#7A9A1F',
+                            foreground: '#FAF8F0'
                         },
                         destructive: {
                             DEFAULT: 'hsl(0 84.2% 60.2%)',
-                            foreground: 'hsl(210 40% 98%)'
+                            foreground: '#FAF8F0'
                         }
                     },
                     borderRadius: {
@@ -44,39 +56,81 @@
     <style>
         .hidden { display: none !important; }
         .message { display: none; margin-top: 0.75rem; border-radius: 0.5rem; padding: 0.75rem 1rem; font-size: 0.875rem; }
-        .message.success { display: block; background: #ecfdf3; border: 1px solid #a6f4c5; color: #166534; }
+        .message.success { display: block; background: #f0f7e0; border: 1px solid #b8d97a; color: #3a5a0a; }
         .message.error { display: block; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
         .field-hint--error { display: none; }
         .field-hint--error.is-visible { display: block; color: #b91c1c; margin-top: 0.25rem; font-size: 0.75rem; }
         .is-loading { opacity: 0.7; cursor: wait; }
-        .table-action { display: inline-flex; align-items: center; justify-content: center; border-radius: 0.375rem; border: 1px solid #e2e8f0; padding: 0.25rem 0.625rem; font-size: 0.75rem; font-weight: 500; }
-        .table-action:hover { background: #f8fafc; }
+        .table-action { display: inline-flex; align-items: center; justify-content: center; border-radius: 0.375rem; border: 1px solid rgba(30,34,24,0.15); padding: 0.25rem 0.625rem; font-size: 0.75rem; font-weight: 500; cursor: pointer; background: transparent; transition: background 0.15s, border-color 0.15s; }
+        .table-action:hover { background: #F3F0E7; }
         .table-action--delete { border-color: #fecaca; color: #b91c1c; }
         .table-action--delete:hover { background: #fef2f2; }
-        .table-empty { text-align: center; color: #64748b; padding: 1.5rem !important; }
+        .table-action--confirm-yes { border-color: #fecaca; color: #b91c1c; }
+        .table-action--confirm-yes:hover { background: #fef2f2; }
+        .table-action--confirm-no { border-color: rgba(30,34,24,0.15); color: #54604A; }
+        .table-empty { text-align: center; color: #54604A; padding: 2rem !important; font-style: italic; }
         .admin-toast-stack { position: fixed; right: 1rem; bottom: 1rem; display: flex; flex-direction: column; gap: 0.5rem; z-index: 50; }
-        .admin-toast { border-radius: 0.5rem; border: 1px solid #e2e8f0; background: #fff; padding: 0.625rem 0.875rem; font-size: 0.875rem; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); cursor: pointer; }
-        .admin-toast--success { border-color: #86efac; background: #f0fdf4; color: #166534; }
+        .admin-toast { border-radius: 0.5rem; border: 1px solid rgba(30,34,24,0.15); background: #FAF8F0; padding: 0.625rem 0.875rem; font-size: 0.875rem; box-shadow: 0 10px 30px rgba(0,0,0,0.1); cursor: pointer; max-width: 320px; }
+        .admin-toast--success { border-color: #b8d97a; background: #f0f7e0; color: #3a5a0a; }
         .admin-toast--error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
-        .admin-toast--info { border-color: #bfdbfe; background: #eff6ff; color: #1e3a8a; }
+        .admin-toast--info { border-color: rgba(46,58,28,0.25); background: #FAF8F0; color: #2E3A1C; }
         .admin-toast.is-hiding { opacity: 0; transform: translateY(8px); transition: all 0.2s ease; }
         .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+        /* RSVP status badges */
+        .rsvp-badge { display: inline-flex; align-items: center; border-radius: 9999px; padding: 0.1rem 0.6rem; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; border: 1px solid transparent; white-space: nowrap; }
+        .rsvp-badge--accepted { background: #e8f5d4; color: #3a5a0a; border-color: #b8d97a; }
+        .rsvp-badge--declined { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+        .rsvp-badge--pending { background: #fef9e7; color: #7c5c10; border-color: #f5e09e; }
+        /* Skeleton loading rows */
+        .skeleton-row td { padding: 0.65rem 0.75rem !important; }
+        .skeleton-cell { display: block; height: 0.85rem; border-radius: 0.25rem; background: linear-gradient(90deg, #e8e4d9 25%, #f0ede4 50%, #e8e4d9 75%); background-size: 200% 100%; animation: skeleton-shimmer 1.5s ease-in-out infinite; }
+        @keyframes skeleton-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        /* Editing row highlight */
+        #guestTable tbody tr.is-editing { background: rgba(122, 154, 31, 0.07) !important; box-shadow: inset 3px 0 0 #7A9A1F; }
+        /* Table row hover */
+        #guestTable tbody tr { transition: background 0.12s; }
+        #guestTable tbody tr:hover:not(.is-editing) { background: rgba(30, 34, 24, 0.03); }
     </style>
 </head>
-<body class="min-h-screen bg-slate-50 text-slate-900 antialiased">
+<body class="min-h-screen bg-background text-foreground antialiased font-sans">
     <div class="mx-auto w-full max-w-[1400px] px-4 py-8 sm:px-6 lg:px-8">
-        <header class="mb-8 rounded-lg border border-border bg-white p-6 shadow-sm">
+        <header class="mb-8 rounded-lg bg-primary p-6 shadow-md">
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                    <p class="text-xs uppercase tracking-[0.2em] text-muted-foreground">Kenny & Morgan</p>
-                    <h1 class="mt-2 text-2xl font-semibold">RSVP Admin Console</h1>
-                    <p class="mt-1 text-sm text-muted-foreground">Manage guests, RSVPs, and CSV imports in one place.</p>
+                    <p class="font-disp text-2xl italic tracking-wide text-primary-foreground/80">K · M</p>
+                    <h1 class="mt-1 font-sans text-xl font-semibold text-primary-foreground">RSVP Admin Console</h1>
+                    <p class="mt-0.5 text-sm text-primary-foreground/60">Manage guests, RSVPs, and CSV imports.</p>
                 </div>
-                <a href="index.html#home" class="inline-flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-muted">Back to Site</a>
+                <div class="flex items-center gap-3">
+                    <span class="hidden text-xs uppercase tracking-[0.2em] text-primary-foreground/40 sm:inline">09 · 12 · 26</span>
+                    <a href="index.html#home" class="inline-flex items-center rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary-foreground/20">← Site</a>
+                </div>
             </div>
         </header>
 
         <main class="space-y-6">
+            <!-- Stats row (visible only when authenticated) -->
+            <section class="hidden" id="adminStatsRow">
+                <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    <div class="rounded-lg border border-border bg-white p-4 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total</p>
+                        <p class="mt-1.5 text-3xl font-semibold tabular-nums" id="statTotal">—</p>
+                    </div>
+                    <div class="rounded-lg border border-[#b8d97a] bg-[#f0f7e0] p-4 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-[#3a5a0a]/70">Accepted</p>
+                        <p class="mt-1.5 text-3xl font-semibold tabular-nums text-[#3a5a0a]" id="statAccepted">—</p>
+                    </div>
+                    <div class="rounded-lg border border-[#fecaca] bg-[#fef2f2] p-4 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-[#991b1b]/70">Declined</p>
+                        <p class="mt-1.5 text-3xl font-semibold tabular-nums text-[#991b1b]" id="statDeclined">—</p>
+                    </div>
+                    <div class="rounded-lg border border-[#f5e09e] bg-[#fef9e7] p-4 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-[#7c5c10]/70">Pending</p>
+                        <p class="mt-1.5 text-3xl font-semibold tabular-nums text-[#7c5c10]" id="statPending">—</p>
+                    </div>
+                </div>
+            </section>
+
             <section class="rounded-lg border border-border bg-white p-6 shadow-sm" id="adminLoginPanel">
                 <h2 class="text-xl font-semibold">Admin Sign In</h2>
                 <p class="mt-2 text-sm text-muted-foreground">Enter the admin password to unlock guest management tools.</p>
@@ -107,10 +161,11 @@
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <h3 class="text-lg font-semibold">Guest List</h3>
-                                <p class="text-sm text-muted-foreground">Use search to quickly find guests or groups.</p>
+                                <p class="text-sm text-muted-foreground">Use search to quickly find guests or groups. <span id="guestFilterCount" class="font-medium text-foreground"></span></p>
                             </div>
                             <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-                                <label class="relative w-full sm:w-72" for="guestTableFilter">
+                                <button type="button" id="newGuestButton" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90">+ New Guest</button>
+                                <label class="relative w-full sm:w-64" for="guestTableFilter">
                                     <span class="sr-only">Filter guests</span>
                                     <input type="search" id="guestTableFilter" placeholder="Search guests or groups" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                                 </label>
@@ -140,9 +195,9 @@
                     </article>
 
                     <div class="space-y-6">
-                        <article class="rounded-lg border border-border bg-white p-6 shadow-sm">
-                            <h3 class="text-lg font-semibold">Add or Update Guest</h3>
-                            <p class="mt-1 text-sm text-muted-foreground">Edit RSVP details or create a new guest entry.</p>
+                        <article class="rounded-lg border border-border bg-white p-6 shadow-sm" id="guestFormCard">
+                            <h3 class="text-lg font-semibold" id="guestFormTitle">Add New Guest</h3>
+                            <p class="mt-1 text-sm text-muted-foreground" id="guestFormSubtitle">Fill in the fields below to create a new guest entry.</p>
 
                             <form id="guestForm" class="mt-5 space-y-4">
                                 <input type="hidden" id="guestId" name="id">
@@ -165,12 +220,12 @@
                                 </div>
 
                                 <div class="grid grid-cols-2 gap-3">
-                                    <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm">
-                                        <input type="checkbox" id="guestIsPrimary" name="isPrimary" class="h-4 w-4 rounded border-input">
+                                    <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
+                                        <input type="checkbox" id="guestIsPrimary" name="isPrimary" class="h-4 w-4 rounded border-input accent-accent">
                                         Primary
                                     </label>
-                                    <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm">
-                                        <input type="checkbox" id="guestIsPlusOne" name="isPlusOne" class="h-4 w-4 rounded border-input">
+                                    <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
+                                        <input type="checkbox" id="guestIsPlusOne" name="isPlusOne" class="h-4 w-4 rounded border-input accent-accent">
                                         Plus One
                                     </label>
                                 </div>
