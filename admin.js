@@ -253,12 +253,12 @@ function renderGuestTable() {
     }
 
     if (state.isLoadingGuests) {
-        tbody.innerHTML = '<tr><td colspan="9" class="table-empty">Loading guests…</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="table-empty">Loading guests…</td></tr>';
         return;
     }
 
     if (!state.guests.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="table-empty">No guests on file yet. Click “Add Guest” or import a CSV.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="table-empty">No guests on file yet. Click “Add Guest” or import a CSV.</td></tr>';
         return;
     }
 
@@ -267,7 +267,7 @@ function renderGuestTable() {
         : state.guests;
 
     if (!visibleGuests.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="table-empty">No guests match this filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="table-empty">No guests match this filter.</td></tr>';
         return;
     }
 
