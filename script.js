@@ -802,7 +802,7 @@ function setActiveGuestParty(group) {
         const normalizedMealChoice = normalizeMealChoice(guest.mealChoice || '');
         guestResponseState.set(guest.id, {
             status,
-            mealChoice: Boolean(guest.isChild) && status === 'accepted'
+            mealChoice: isGuestChild(guest) && status === 'accepted'
                 ? currentChildMealLabel
                 : normalizedMealChoice,
             nameOverride: '',
@@ -829,7 +829,7 @@ function renderGuestResponseSection() {
         const state = guestResponseState.get(guest.id) || {};
         const displayName = (state.nameOverride && state.nameOverride.trim()) || guest.fullName;
         const isPlusOne = guest.isPlusOne;
-        const isChild = Boolean(guest.isChild);
+        const isChild = isGuestChild(guest);
         const requiresNameField = isPlusOne || guest.fullName.toLowerCase().includes('guest');
         const mealWrapperClass = state.status === 'accepted' && !isChild ? 'guest-response-meal' : 'guest-response-meal hidden';
         const childMealWrapperClass = state.status === 'accepted' && isChild ? 'guest-response-meal' : 'guest-response-meal hidden';
@@ -913,15 +913,15 @@ function handleGuestResponseListInput(event) {
         const childMealWrapper = document.querySelector(`[data-guest-child-meal-wrapper="${guestId}"]`);
         if (mealWrapper) {
             const guest = activeGuestParty.guests.find(g => g.id === guestId);
-            mealWrapper.classList.toggle('hidden', state.status !== 'accepted' || Boolean(guest?.isChild));
-            if (state.status === 'accepted' && guest?.isChild) {
+            mealWrapper.classList.toggle('hidden', state.status !== 'accepted' || isGuestChild(guest));
+            if (state.status === 'accepted' && isGuestChild(guest)) {
                 state.mealChoice = currentChildMealLabel;
                 guestResponseState.set(guestId, state);
             }
         }
         if (childMealWrapper) {
             const guest = activeGuestParty.guests.find(g => g.id === guestId);
-            childMealWrapper.classList.toggle('hidden', state.status !== 'accepted' || !Boolean(guest?.isChild));
+            childMealWrapper.classList.toggle('hidden', state.status !== 'accepted' || !isGuestChild(guest));
         }
         // For plus-one guests: show name input only when attending
         const guest = activeGuestParty.guests.find(g => g.id === guestId);
@@ -971,7 +971,7 @@ function validateGuestResponses(responses) {
             return false;
         }
         const guest = activeGuestParty.guests.find(g => g.id === response.guestId);
-        if (guest?.isChild) {
+        if (isGuestChild(guest)) {
             return false;
         }
         return !response.mealChoice;
@@ -1002,11 +1002,48 @@ function buildGuestResponsesPayload() {
             guestId: guest.id,
             status: state.status || null,
             mealChoice: state.status === 'accepted'
-                ? (guest.isChild ? currentChildMealLabel : (state.mealChoice || ''))
+                ? (isGuestChild(guest) ? currentChildMealLabel : (state.mealChoice || ''))
                 : '',
             name: state.nameOverride?.trim() || undefined
         };
     });
+}
+
+function parseBooleanFlag(value) {
+    if (typeof value === 'boolean') {
+        return value;
+    }
+    if (typeof value === 'number') {
+        return value === 1;
+    }
+    if (typeof value !== 'string') {
+        return false;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+        return false;
+    }
+
+    if (['true', '1', 'yes', 'y'].includes(normalized)) {
+        return true;
+    }
+
+    if (['false', '0', 'no', 'n'].includes(normalized)) {
+        return false;
+    }
+
+    return false;
+}
+
+function isGuestChild(guest = {}) {
+    return parseBooleanFlag(
+        guest.isChild
+        ?? guest.is_child
+        ?? guest.child
+        ?? guest.children
+        ?? false
+    );
 }
 
 function setGuestResponseMessage(message = '', variant = 'error') {
