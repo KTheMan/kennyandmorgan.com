@@ -40,12 +40,14 @@ const ACCESS_TOKEN_STORAGE_KEY = 'km_access_token';
 let currentAccessLevel = ACCESS_LEVELS.locked;
 let hasUnlockedOnce = false;
 const ACCESS_ORDER = [ACCESS_LEVELS.locked, ACCESS_LEVELS.family, ACCESS_LEVELS.party, ACCESS_LEVELS.admin];
-const MEAL_OPTIONS = [
-    { value: '', label: 'Select a meal' },
-    { value: 'gnocchi', label: 'Gnocchi' },
-    { value: 'salmon', label: 'Atlantic Salmon (GF)' },
-    { value: 'steak', label: 'Flank Steak' }
-];
+const DEFAULT_ADULT_MEALS = ['Gnocchi', 'Atlantic Salmon', 'Flank Steak'];
+const LEGACY_MEAL_VALUE_MAP = {
+    gnocchi: 'Gnocchi',
+    salmon: 'Atlantic Salmon',
+    steak: 'Flank Steak'
+};
+let currentAdultMealOptions = [...DEFAULT_ADULT_MEALS];
+let currentChildMealLabel = "Child's Meal";
 const REGISTRY_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
 const REGISTRY_ACTIVITY_COOLDOWN_MS = 90 * 1000;
 const REGISTRY_VISIBILITY_COOLDOWN_MS = 60 * 1000;
@@ -632,6 +634,26 @@ function initForms() {
     }
 
     setupGuestLookup();
+    loadRsvpMenuOptions();
+}
+
+async function loadRsvpMenuOptions() {
+    try {
+        const data = await window.KMDataClient.getMenuOptions();
+        if (!data?.success) {
+            return;
+        }
+        const adultMeals = Array.isArray(data.adultMeals)
+            ? data.adultMeals.filter(item => typeof item === 'string' && item.trim() !== '').map(item => item.trim())
+            : [];
+        currentAdultMealOptions = adultMeals.length ? adultMeals : [...DEFAULT_ADULT_MEALS];
+        currentChildMealLabel = (data.childMeal || '').toString().trim() || "Child's Meal";
+        if (activeGuestParty) {
+            renderGuestResponseSection();
+        }
+    } catch (error) {
+        console.warn('Unable to load RSVP menu options, using defaults.', error);
+    }
 }
 
 function setupGuestLookup() {
@@ -776,9 +798,13 @@ function setActiveGuestParty(group) {
     };
     guestResponseState.clear();
     activeGuestParty.guests.forEach(guest => {
+        const status = normalizeGuestStatus(guest.rsvpStatus);
+        const normalizedMealChoice = normalizeMealChoice(guest.mealChoice || '');
         guestResponseState.set(guest.id, {
-            status: normalizeGuestStatus(guest.rsvpStatus),
-            mealChoice: guest.mealChoice || '',
+            status,
+            mealChoice: Boolean(guest.isChild) && status === 'accepted'
+                ? currentChildMealLabel
+                : normalizedMealChoice,
             nameOverride: '',
             originalName: guest.fullName
         });
@@ -803,8 +829,10 @@ function renderGuestResponseSection() {
         const state = guestResponseState.get(guest.id) || {};
         const displayName = (state.nameOverride && state.nameOverride.trim()) || guest.fullName;
         const isPlusOne = guest.isPlusOne;
+        const isChild = Boolean(guest.isChild);
         const requiresNameField = isPlusOne || guest.fullName.toLowerCase().includes('guest');
-        const mealWrapperClass = state.status === 'accepted' ? 'guest-response-meal' : 'guest-response-meal hidden';
+        const mealWrapperClass = state.status === 'accepted' && !isChild ? 'guest-response-meal' : 'guest-response-meal hidden';
+        const childMealWrapperClass = state.status === 'accepted' && isChild ? 'guest-response-meal' : 'guest-response-meal hidden';
         const nameInputHidden = isPlusOne && state.status !== 'accepted';
         const guestRole = isPlusOne ? 'Plus One' : '';
         return `
@@ -825,6 +853,12 @@ function renderGuestResponseSection() {
                         </select>
                     </label>
                 </div>
+                <div class="${childMealWrapperClass}" data-guest-child-meal-wrapper="${guest.id}">
+                    <label>
+                        Meal Preference
+                        <span>${escapeHtml(currentChildMealLabel)}</span>
+                    </label>
+                </div>
                 ${requiresNameField ? renderGuestNameInput(guest.id, state.nameOverride, isPlusOne, nameInputHidden) : ''}
             </div>
         `;
@@ -841,8 +875,13 @@ function renderGuestStatusOption(guestId, value, label, isChecked) {
 }
 
 function renderMealOptions(selectedValue) {
-    return MEAL_OPTIONS.map(option => `
-        <option value="${option.value}" ${option.value === selectedValue ? 'selected' : ''}>${option.label}</option>
+    const normalizedSelectedValue = normalizeMealChoice(selectedValue);
+    const options = [
+        { value: '', label: 'Select a meal' },
+        ...currentAdultMealOptions.map(meal => ({ value: meal, label: meal }))
+    ];
+    return options.map(option => `
+        <option value="${escapeHtmlAttr(option.value)}" ${option.value === normalizedSelectedValue ? 'selected' : ''}>${escapeHtml(option.label)}</option>
     `).join('');
 }
 
@@ -871,8 +910,18 @@ function handleGuestResponseListInput(event) {
         guestResponseState.set(guestId, state);
         setGuestResponseMessage('');
         const mealWrapper = document.querySelector(`[data-guest-meal-wrapper="${guestId}"]`);
+        const childMealWrapper = document.querySelector(`[data-guest-child-meal-wrapper="${guestId}"]`);
         if (mealWrapper) {
-            mealWrapper.classList.toggle('hidden', state.status !== 'accepted');
+            const guest = activeGuestParty.guests.find(g => g.id === guestId);
+            mealWrapper.classList.toggle('hidden', state.status !== 'accepted' || Boolean(guest?.isChild));
+            if (state.status === 'accepted' && guest?.isChild) {
+                state.mealChoice = currentChildMealLabel;
+                guestResponseState.set(guestId, state);
+            }
+        }
+        if (childMealWrapper) {
+            const guest = activeGuestParty.guests.find(g => g.id === guestId);
+            childMealWrapper.classList.toggle('hidden', state.status !== 'accepted' || !Boolean(guest?.isChild));
         }
         // For plus-one guests: show name input only when attending
         const guest = activeGuestParty.guests.find(g => g.id === guestId);
@@ -917,7 +966,16 @@ function validateGuestResponses(responses) {
         return { valid: false, message: `Please choose accept or decline for ${getGuestDisplayName(incomplete.guestId)}.` };
     }
 
-    const missingMeal = responses.find(response => response.status === 'accepted' && !response.mealChoice);
+    const missingMeal = responses.find(response => {
+        if (response.status !== 'accepted') {
+            return false;
+        }
+        const guest = activeGuestParty.guests.find(g => g.id === response.guestId);
+        if (guest?.isChild) {
+            return false;
+        }
+        return !response.mealChoice;
+    });
     if (missingMeal) {
         return { valid: false, message: `Select a meal for ${getGuestDisplayName(missingMeal.guestId)}.` };
     }
@@ -943,7 +1001,9 @@ function buildGuestResponsesPayload() {
         return {
             guestId: guest.id,
             status: state.status || null,
-            mealChoice: state.status === 'accepted' ? (state.mealChoice || '') : '',
+            mealChoice: state.status === 'accepted'
+                ? (guest.isChild ? currentChildMealLabel : (state.mealChoice || ''))
+                : '',
             name: state.nameOverride?.trim() || undefined
         };
     });
@@ -967,6 +1027,15 @@ function normalizeGuestStatus(value) {
         return normalized === 'pending' ? null : normalized;
     }
     return null;
+}
+
+function normalizeMealChoice(value) {
+    const normalized = (value || '').toString().trim();
+    if (!normalized) {
+        return '';
+    }
+    const legacy = LEGACY_MEAL_VALUE_MAP[normalized.toLowerCase()];
+    return legacy || normalized;
 }
 
 async function handleAddressSubmit(form) {
