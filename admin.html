@@ -90,25 +90,67 @@
         /* Table row hover */
         #guestTable tbody tr { transition: background 0.12s; }
         #guestTable tbody tr:hover:not(.is-editing) { background: rgba(30, 34, 24, 0.03); }
+        .site-header { background: #FAF8F0; position: fixed; width: 100%; top: 0; z-index: 1000; border-bottom: 1px solid #1E2218; }
+        .site-nav-desktop { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 20px 56px; gap: 2rem; }
+        .nav-tagline { font-size: 10px; letter-spacing: 0.32em; text-transform: uppercase; font-weight: 500; color: #1E2218; }
+        .nav-monogram { font-family: 'Playfair Display', serif; font-size: 16px; letter-spacing: 0.4em; font-weight: 700; color: #1E2218; text-align: center; }
+        .nav-desktop-right { display: flex; align-items: center; justify-content: flex-end; gap: 1.5rem; }
+        .nav-links { display: flex; list-style: none; gap: 24px; }
+        .nav-link { font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase; font-weight: 500; color: #1E2218; text-decoration: none; padding: 4px 0; border-bottom: 1px solid transparent; transition: all 0.2s; }
+        .nav-link.active, .nav-link:hover { font-weight: 700; border-bottom-color: #1E2218; }
+        .site-nav-mobile-row1, .site-nav-mobile-tabs { display: none; }
+        @media screen and (max-width: 768px) {
+            .site-nav-desktop { display: none; }
+            .site-nav-mobile-row1 { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 10px 5%; border-bottom: 1px solid rgba(30,34,24,0.1); }
+            .site-nav-mobile-tabs { display: flex; justify-content: space-around; padding: 8px 5%; gap: 0; }
+            .nav-mobile-date, .nav-mobile-place { font-size: 9px; letter-spacing: 0.28em; text-transform: uppercase; font-weight: 500; color: #54604A; }
+            .nav-mobile-place { text-align: right; }
+            .nav-monogram-mobile { font-family: 'Playfair Display', serif; font-size: 18px; letter-spacing: 0.45em; font-weight: 700; color: #1E2218; text-align: center; }
+            .site-nav-mobile-tabs .nav-link { font-size: 10px; letter-spacing: 0.2em; padding: 4px 0; border-bottom: none; font-weight: 500; color: #54604A; }
+            .site-nav-mobile-tabs .nav-link.active { font-weight: 700; color: #1E2218; text-decoration: underline; }
+        }
     </style>
 </head>
 <body class="min-h-screen bg-background text-foreground antialiased font-sans">
-    <div class="mx-auto w-full max-w-[1400px] px-4 py-8 sm:px-6 lg:px-8">
-        <header class="mb-8 rounded-lg bg-primary p-6 shadow-md">
-            <div class="flex flex-wrap items-center justify-between gap-4">
+    <header class="site-header">
+        <div class="site-nav-desktop">
+            <span class="nav-tagline">09 &middot; 12 &middot; 26 &middot; The Hollins House</span>
+            <span class="nav-monogram">K &middot; M</span>
+            <div class="nav-desktop-right">
+                <ul class="nav-links">
+                    <li><a href="index.html#home" class="nav-link">Home</a></li>
+                    <li><a href="index.html#rsvp" class="nav-link">RSVP</a></li>
+                    <li><a href="index.html#faqs" class="nav-link">FAQs</a></li>
+                    <li><a href="index.html#wedding-party" class="nav-link">Wedding Party</a></li>
+                    <li><a href="index.html#registry" class="nav-link">Registry</a></li>
+                    <li><a href="admin.html" class="nav-link active">Admin</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="site-nav-mobile-row1">
+            <span class="nav-mobile-date">09.12.26</span>
+            <span class="nav-monogram-mobile">K &middot; M</span>
+            <span class="nav-mobile-place">The Hollins House</span>
+        </div>
+        <div class="site-nav-mobile-tabs">
+            <a href="index.html#home" class="nav-link">Home</a>
+            <a href="index.html#rsvp" class="nav-link">RSVP</a>
+            <a href="index.html#faqs" class="nav-link">FAQs</a>
+            <a href="index.html#wedding-party" class="nav-link">Party</a>
+            <a href="index.html#registry" class="nav-link">Registry</a>
+            <a href="admin.html" class="nav-link active">Admin</a>
+        </div>
+    </header>
+    <div class="mx-auto w-full max-w-[1600px] px-4 pb-8 pt-24 sm:px-6 md:pt-28 lg:px-8">
+
+        <main class="space-y-6">
+            <section class="rounded-lg bg-primary p-6 shadow-md">
                 <div>
                     <p class="font-disp text-2xl italic tracking-wide text-primary-foreground/80">K · M</p>
                     <h1 class="mt-1 font-sans text-xl font-semibold text-primary-foreground">RSVP Admin Console</h1>
                     <p class="mt-0.5 text-sm text-primary-foreground/60">Manage guests, RSVPs, and CSV imports.</p>
                 </div>
-                <div class="flex items-center gap-3">
-                    <span class="hidden text-xs uppercase tracking-[0.2em] text-primary-foreground/40 sm:inline">09 · 12 · 26</span>
-                    <a href="index.html#home" class="inline-flex items-center rounded-md border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary-foreground/20">← Site</a>
-                </div>
-            </div>
-        </header>
-
-        <main class="space-y-6">
+            </section>
             <!-- Stats row (visible only when authenticated) -->
             <section class="hidden" id="adminStatsRow">
                 <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -156,8 +198,8 @@
                     </div>
                 </article>
 
-                <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                    <article class="rounded-lg border border-border bg-white p-6 shadow-sm xl:col-span-2">
+                <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                    <article class="rounded-lg border border-border bg-white p-6 shadow-sm xl:col-span-7 2xl:col-span-8">
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <h3 class="text-lg font-semibold">Guest List</h3>
@@ -195,15 +237,15 @@
                         </div>
                     </article>
 
-                    <div class="space-y-6">
+                    <div class="space-y-6 xl:col-span-5 2xl:col-span-4">
                         <article class="rounded-lg border border-border bg-white p-6 shadow-sm" id="guestFormCard">
                             <h3 class="text-lg font-semibold" id="guestFormTitle">Add New Guest</h3>
                             <p class="mt-1 text-sm text-muted-foreground" id="guestFormSubtitle">Fill in the fields below to create a new guest entry.</p>
 
-                            <form id="guestForm" class="mt-5 space-y-4">
+                            <form id="guestForm" class="mt-5 grid gap-4 md:grid-cols-2">
                                 <input type="hidden" id="guestId" name="id">
 
-                                <div class="space-y-2">
+                                <div class="space-y-2 md:col-span-2">
                                     <label for="guestFullName" class="text-sm font-medium">Full Name *</label>
                                     <input type="text" id="guestFullName" name="fullName" required class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                                     <small class="field-hint field-hint--error" id="guestFullNameError" aria-live="polite"></small>
@@ -220,7 +262,7 @@
                                     <small class="field-hint field-hint--error" id="guestGroupIdError" aria-live="polite"></small>
                                 </div>
 
-                                <div class="grid grid-cols-2 gap-3">
+                                <div class="grid grid-cols-2 gap-3 md:col-span-2">
                                     <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
                                         <input type="checkbox" id="guestIsPrimary" name="isPrimary" class="h-4 w-4 rounded border-input accent-accent">
                                         Primary
@@ -231,7 +273,7 @@
                                     </label>
                                 </div>
 
-                                <div class="grid grid-cols-1 gap-3">
+                                <div class="grid grid-cols-1 gap-3 md:col-span-2">
                                     <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
                                         <input type="checkbox" id="guestIsChild" name="isChild" class="h-4 w-4 rounded border-input accent-accent">
                                         Child
@@ -255,22 +297,22 @@
                                     <p id="guestChildMealDisplay" class="text-xs text-muted-foreground hidden">Child guest meal will be set automatically.</p>
                                 </div>
 
-                                <div class="space-y-2">
+                                <div class="space-y-2 md:col-span-2">
                                     <label for="guestDietaryNotes" class="text-sm font-medium">Dietary Notes</label>
                                     <textarea id="guestDietaryNotes" name="dietaryNotes" rows="2" class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"></textarea>
                                 </div>
 
-                                <div class="space-y-2">
+                                <div class="space-y-2 md:col-span-2">
                                     <label for="guestAddressLine1" class="text-sm font-medium">Address Line 1</label>
                                     <input type="text" id="guestAddressLine1" name="addressLine1" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                                 </div>
 
-                                <div class="space-y-2">
+                                <div class="space-y-2 md:col-span-2">
                                     <label for="guestAddressLine2" class="text-sm font-medium">Address Line 2</label>
                                     <input type="text" id="guestAddressLine2" name="addressLine2" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                                 </div>
 
-                                <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 md:col-span-2">
                                     <div class="space-y-2">
                                         <label for="guestCity" class="text-sm font-medium">City</label>
                                         <input type="text" id="guestCity" name="city" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
@@ -285,12 +327,12 @@
                                     </div>
                                 </div>
 
-                                <div class="space-y-2">
+                                <div class="space-y-2 md:col-span-2">
                                     <label for="guestNotes" class="text-sm font-medium">Internal Notes</label>
                                     <textarea id="guestNotes" name="notes" rows="2" class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"></textarea>
                                 </div>
 
-                                <div class="flex flex-wrap items-center gap-2 pt-1">
+                                <div class="flex flex-wrap items-center gap-2 pt-1 md:col-span-2">
                                     <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90" id="guestSaveButton">Save Guest</button>
                                     <button type="button" class="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-muted" id="guestResetButton">Reset</button>
                                 </div>
