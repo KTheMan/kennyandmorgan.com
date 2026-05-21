@@ -1,0 +1,89 @@
+name: Convert Images to PNG
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  convert-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install image dependencies
+        run: python -m pip install --disable-pip-version-check Pillow==12.2.0 pillow-heif==1.3.0
+
+      - name: Convert non-PNG images in images/ to PNG
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          from PIL import Image, ImageOps
+          from pillow_heif import register_heif_opener
+
+          register_heif_opener()
+
+          images_dir = Path('images')
+          source_extensions = {
+              '.jpg',
+              '.jpeg',
+              '.jpe',
+              '.jfif',
+              '.heic',
+              '.heif',
+              '.avif',
+              '.webp',
+              '.gif',
+              '.bmp',
+              '.dib',
+              '.tif',
+              '.tiff',
+          }
+
+          if not images_dir.exists():
+              print('images/ does not exist. Nothing to convert.')
+              raise SystemExit(0)
+
+          source_files = sorted(
+              path for path in images_dir.rglob('*')
+              if path.is_file() and path.suffix.lower() in source_extensions
+          )
+
+          if not source_files:
+              print('No non-PNG source images detected in images/.')
+              raise SystemExit(0)
+
+          for source_path in source_files:
+              target_path = source_path.with_suffix('.png')
+              with Image.open(source_path) as image:
+                  normalized = ImageOps.exif_transpose(image)
+                  alpha_in_mode = 'A' in normalized.getbands()
+                  alpha_in_info = bool(normalized.info.get('transparency'))
+                  has_alpha = alpha_in_mode or alpha_in_info
+                  if normalized.mode not in ('RGB', 'RGBA'):
+                      normalized = normalized.convert('RGBA' if has_alpha else 'RGB')
+                  normalized.save(target_path, format='PNG', compress_level=9)
+              source_path.unlink()
+              print(f'Converted {source_path} -> {target_path} and deleted source.')
+          PY
+
+      - name: Commit converted images
+        run: |
+          if [ -z "$(git status --porcelain images)" ]; then
+            echo "No image changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add images
+          git commit -m "Convert uploaded images to PNG"
+          git push
