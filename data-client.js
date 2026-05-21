@@ -159,6 +159,33 @@
         });
     }
 
+    async function getMenuOptions() {
+        try {
+            const data = await callSupabaseRpc('get_menu_options', {});
+            const adultMeals = Array.isArray(data?.adultMeals)
+                ? data.adultMeals.filter(item => typeof item === 'string' && item.trim() !== '').map(item => item.trim())
+                : [];
+            const childMeal = typeof data?.childMeal === 'string' && data.childMeal.trim() !== ''
+                ? data.childMeal.trim()
+                : "Child's Meal";
+            return {
+                success: true,
+                adultMeals,
+                childMeal
+            };
+        } catch (error) {
+            if (!canUseLocalFallback()) {
+                throw error;
+            }
+            return {
+                success: true,
+                adultMeals: ['Gnocchi', 'Atlantic Salmon', 'Flank Steak'],
+                childMeal: "Child's Meal",
+                localFallback: true
+            };
+        }
+    }
+
     function loadLocalCollection(key) {
         try {
             return JSON.parse(localStorage.getItem(key) || '[]');
@@ -396,6 +423,7 @@
 
         const isPrimaryFlag = parseBoolean(get('is primary', 'isprimary', 'primary'));
         const isPlusOneFlag = parseBoolean(get('is plus one', 'isplusone', 'plus one'));
+        const isChildFlag = parseBoolean(get('is child', 'ischild', 'child', 'children', 'kid'));
 
         return {
             fullName,
@@ -403,6 +431,7 @@
             groupId,
             isPrimary: typeof isPrimaryFlag === 'boolean' ? isPrimaryFlag : undefined,
             isPlusOne: typeof isPlusOneFlag === 'boolean' ? isPlusOneFlag : undefined,
+            isChild: typeof isChildFlag === 'boolean' ? isChildFlag : undefined,
             notes: labeledNotes || undefined,
             rsvpStatus: normalizedRsvp,
             mealChoice: get('meal choice', 'mealchoice') || undefined,
@@ -488,6 +517,7 @@
         saveAdminGuest,
         deleteAdminGuest,
         importAdminGuests,
+        getMenuOptions,
         getRegistryItems
     };
 })(window);

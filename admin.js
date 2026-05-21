@@ -9,7 +9,9 @@ const state = {
     guests: [],
     filteredGuests: [],
     guestFilter: '',
-    isLoadingGuests: false
+    isLoadingGuests: false,
+    adultMealOptions: ['Gnocchi', 'Atlantic Salmon', 'Flank Steak'],
+    childMealLabel: "Child's Meal"
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -31,6 +33,7 @@ function initAdminApp() {
     const guestTable = document.getElementById('guestTable');
     const guestFilterInput = document.getElementById('guestTableFilter');
     const newGuestButton = document.getElementById('newGuestButton');
+    const guestIsChildInput = document.getElementById('guestIsChild');
 
     loginForm?.addEventListener('submit', handleLogin);
     logoutButton?.addEventListener('click', handleLogout);
@@ -39,6 +42,7 @@ function initAdminApp() {
     guestResetButton?.addEventListener('click', resetGuestForm);
     csvImportButton?.addEventListener('click', handleCsvImport);
     guestTable?.addEventListener('click', handleTableClick);
+    guestIsChildInput?.addEventListener('change', updateGuestMealChoiceControl);
     guestFilterInput?.addEventListener('input', event => {
         setGuestFilter(event.target.value || '');
     });
@@ -67,6 +71,17 @@ function initAdminApp() {
                 toggleConsole(false);
             });
     }
+
+    loadMenuOptions()
+        .then(() => {
+            renderGuestMealOptions();
+            updateGuestMealChoiceControl();
+        })
+        .catch(error => {
+            console.warn('Unable to load menu options, using defaults.', error);
+            renderGuestMealOptions();
+            updateGuestMealChoiceControl();
+        });
 }
 
 function pushToast(message, variant = 'info') {
@@ -269,7 +284,7 @@ function renderGuestTable() {
     }
 
     if (state.isLoadingGuests) {
-        const skeletonWidths = ['70%', '50%', '30%', '30%', '55%', '45%', '40%', '65%', '40%', '80%'];
+        const skeletonWidths = ['70%', '50%', '30%', '30%', '30%', '55%', '45%', '40%', '65%', '40%', '80%'];
         const skeletonRow = () => `<tr class="skeleton-row">${skeletonWidths.map(w =>
             `<td><span class="skeleton-cell" style="width:${w}"></span></td>`
         ).join('')}</tr>`;
@@ -280,7 +295,7 @@ function renderGuestTable() {
     const countEl = document.getElementById('guestFilterCount');
 
     if (!state.guests.length) {
-        tbody.innerHTML = '<tr><td colspan="10" class="table-empty">No guests on file yet. Use “+ New Guest” or import a CSV.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="table-empty">No guests on file yet. Use “+ New Guest” or import a CSV.</td></tr>';
         if (countEl) countEl.textContent = '';
         return;
     }
@@ -290,7 +305,7 @@ function renderGuestTable() {
         : state.guests;
 
     if (!visibleGuests.length) {
-        tbody.innerHTML = '<tr><td colspan="10" class="table-empty">No guests match this filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="table-empty">No guests match this filter.</td></tr>';
         if (countEl) countEl.textContent = `0 of ${state.guests.length}`;
         return;
     }
@@ -313,8 +328,9 @@ function renderGuestTable() {
             <td class="px-3 py-2">${escapeHtml(guest.groupId || '')}</td>
             <td class="px-3 py-2">${guest.isPrimary ? 'Yes' : 'No'}</td>
             <td class="px-3 py-2">${guest.isPlusOne ? 'Yes' : 'No'}</td>
+            <td class="px-3 py-2">${guest.isChild ? 'Yes' : 'No'}</td>
             <td class="px-3 py-2">${rsvpBadge}</td>
-            <td class="px-3 py-2">${escapeHtml(guest.mealChoice || '—')}</td>
+            <td class="px-3 py-2">${escapeHtml(getMealDisplayValue(guest) || '—')}</td>
             <td class="px-3 py-2">${escapeHtml(guest.dietaryNotes || '—')}</td>
             <td class="px-3 py-2">${escapeHtml(formatGuestAddress(guest) || '—')}</td>
             <td class="px-3 py-2 whitespace-nowrap">${formatDate(guest.lastRsvpAt)}</td>
@@ -373,8 +389,12 @@ function populateGuestForm(guest) {
     document.getElementById('guestGroupId').value = guest.groupId || '';
     document.getElementById('guestIsPrimary').checked = Boolean(guest.isPrimary);
     document.getElementById('guestIsPlusOne').checked = Boolean(guest.isPlusOne);
+    document.getElementById('guestIsChild').checked = Boolean(guest.isChild);
     document.getElementById('guestRsvpStatus').value = guest.rsvpStatus || 'pending';
-    document.getElementById('guestMealChoice').value = guest.mealChoice || '';
+    const mealSelect = document.getElementById('guestMealChoice');
+    if (mealSelect) {
+        renderGuestMealOptions(normalizeMealChoice(guest.mealChoice || ''));
+    }
     document.getElementById('guestDietaryNotes').value = guest.dietaryNotes || '';
     document.getElementById('guestAddressLine1').value = guest.addressLine1 || '';
     document.getElementById('guestAddressLine2').value = guest.addressLine2 || '';
@@ -391,6 +411,7 @@ function populateGuestForm(guest) {
     document.querySelectorAll('#guestTable tbody tr.is-editing').forEach(r => r.classList.remove('is-editing'));
     const editRow = document.querySelector(`#guestTable tbody tr[data-guest-id="${guest.id}"]`);
     editRow?.classList.add('is-editing');
+    updateGuestMealChoiceControl();
 }
 
 function resetGuestForm() {
@@ -406,6 +427,8 @@ function resetGuestForm() {
     if (subtitleEl) subtitleEl.textContent = 'Fill in the fields below to create a new guest entry.';
 
     document.querySelectorAll('#guestTable tbody tr.is-editing').forEach(r => r.classList.remove('is-editing'));
+    renderGuestMealOptions();
+    updateGuestMealChoiceControl();
 }
 
 async function handleGuestSubmit(event) {
@@ -419,8 +442,11 @@ async function handleGuestSubmit(event) {
         groupId: formData.get('groupId')?.toString().trim(),
         isPrimary: formData.get('isPrimary') === 'on' || document.getElementById('guestIsPrimary').checked,
         isPlusOne: formData.get('isPlusOne') === 'on' || document.getElementById('guestIsPlusOne').checked,
+        isChild: formData.get('isChild') === 'on' || document.getElementById('guestIsChild').checked,
         rsvpStatus: formData.get('rsvpStatus') || 'pending',
-        mealChoice: formData.get('mealChoice') || '',
+        mealChoice: (formData.get('isChild') === 'on' || document.getElementById('guestIsChild').checked)
+            ? state.childMealLabel
+            : (formData.get('mealChoice') || ''),
         dietaryNotes: formData.get('dietaryNotes')?.toString().trim() || '',
         notes: formData.get('notes')?.toString().trim() || '',
         addressLine1: formData.get('addressLine1')?.toString().trim() || '',
@@ -469,6 +495,52 @@ async function handleGuestSubmit(event) {
     } finally {
         submitButton?.removeAttribute('disabled');
         submitButton?.classList.remove('is-loading');
+    }
+}
+
+async function loadMenuOptions() {
+    const data = await window.KMDataClient.getMenuOptions();
+    if (!data?.success) {
+        return;
+    }
+    const adultMeals = Array.isArray(data.adultMeals)
+        ? data.adultMeals.filter(item => typeof item === 'string' && item.trim() !== '').map(item => item.trim())
+        : [];
+    state.adultMealOptions = adultMeals.length ? adultMeals : state.adultMealOptions;
+    state.childMealLabel = (data.childMeal || '').toString().trim() || state.childMealLabel;
+}
+
+function renderGuestMealOptions(selectedValue = '') {
+    const select = document.getElementById('guestMealChoice');
+    if (!select) {
+        return;
+    }
+    const normalizedSelected = normalizeMealChoice(selectedValue);
+    const options = [
+        { value: '', label: 'Not Selected' },
+        ...state.adultMealOptions.map(meal => ({ value: meal, label: meal }))
+    ];
+    select.innerHTML = options.map(option => `
+        <option value="${escapeHtml(option.value)}" ${option.value === normalizedSelected ? 'selected' : ''}>${escapeHtml(option.label)}</option>
+    `).join('');
+}
+
+function updateGuestMealChoiceControl() {
+    const isChild = document.getElementById('guestIsChild')?.checked;
+    const select = document.getElementById('guestMealChoice');
+    const childMessage = document.getElementById('guestChildMealDisplay');
+    if (!select) {
+        return;
+    }
+    if (isChild) {
+        select.value = '';
+        select.setAttribute('disabled', 'disabled');
+    } else {
+        select.removeAttribute('disabled');
+    }
+    if (childMessage) {
+        childMessage.textContent = `Child guest meal: ${state.childMealLabel}`;
+        childMessage.classList.toggle('hidden', !isChild);
     }
 }
 
@@ -539,6 +611,26 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function normalizeMealChoice(value) {
+    const normalized = String(value || '').trim();
+    if (!normalized) {
+        return '';
+    }
+    const legacy = {
+        gnocchi: 'Gnocchi',
+        salmon: 'Atlantic Salmon',
+        steak: 'Flank Steak'
+    };
+    return legacy[normalized.toLowerCase()] || normalized;
+}
+
+function getMealDisplayValue(guest = {}) {
+    if (guest.isChild) {
+        return state.childMealLabel;
+    }
+    return normalizeMealChoice(guest.mealChoice || '');
 }
 
 function formatDate(value) {
