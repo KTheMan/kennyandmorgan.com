@@ -171,7 +171,7 @@ const weddingPartyMembers = [
     },
     {
         name: 'Gabe Lapp',
-        role: 'Officiant',
+        role: 'Bridesman <br/> & Officiant',
         bio: 'High school partner in crime and lifelong best friend honored with leading this special day.',
         photo: 'images/gabe.png'
     },
