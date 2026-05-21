@@ -88,94 +88,10 @@ const registryRefreshState = {
 
 const weddingPartyMembers = [
     {
-        name: 'Alexis Miller',
-        role: 'Matron of Honor',
-        bio: "Morgan's older sister and resident hype queen. The glue that holds the crew together.",
-        photo: 'images/alexis.png'
-    },
-    {
-        name: 'Chayton Whiskey',
-        role: 'Best Man',
-        bio: "Kenny's best friend since middle school, and all-around goofball who keeps the energy high.",
-        photo: 'images/chayton.png'
-    },
-    {
         name: 'Najah Izquierdo',
         role: 'Maid of Honor',
         bio: "Morgan's best friend who knows every embarrassing story and still shows up early.",
         photo: 'images/najah.png'
-    },
-    {
-        name: 'Sam Calderon',
-        role: 'Groomsman',
-        bio: 'D&D game master and Kenny’s partner in crime for all things nerdy and adventurous.',
-        photo: 'images/sam.png'
-    },
-    {
-        name: 'Raquel Esquerra',
-        role: 'Bridesmaid',
-        bio: 'Met Morgan in high school and bonded over late-night study snacks and travel plans.',
-        photo: 'images/raquel.png'
-    },
-    {
-        name: 'Roy Calderon',
-        role: 'Groomsman',
-        bio: "Kindred spirit to Sam and Kenny, always ready with a joke and a helping hand.",
-        photo: 'images/roy.png'
-    },
-    {
-        name: 'Jen Miller',
-        role: 'Bridesmaid',
-        bio: 'Sister-in-law and supporter for all things wedding planning. She keeps everyone laughing and on time.',
-        photo: 'images/jen.png'
-    },
-    {
-        name: 'Weston Cargay',
-        role: 'Groomsman',
-        bio: "Cousin and adventure partner who’s always been there for the big moments and bonding over the small ones.",
-        photo: 'images/weston.png'
-    },
-    {
-        name: 'Alyssa Graham',
-        role: 'Bridesmaid',
-        bio: 'Work bestie turned every other type of bestie. She’s been there through it all.',
-        photo: 'images/alyssa.png'
-    },
-    {
-        name: 'Anthony Sacci',
-        role: 'Groomsman',
-        bio: 'Kindergarten day one friend who has seen it all who can always be counted on for a good time.',
-        photo: 'images/anthony.png'
-    },
-    {
-        name: 'Tim Miller',
-        role: 'Bridesman',
-        bio: "Morgan's older brother and steadfast supporter through every life chapter.",
-        photo: 'images/tim.png'
-    },
-    {
-        name: 'Kelcie Bettencourt',
-        role: 'Groomswoman',
-        bio: 'Middle school best friend who has been a constant source of support and laughter.',
-        photo: 'images/kelcie.png'
-    },
-    {
-        name: 'Haley Zimmer',
-        role: 'Bridesmaid',
-        bio: 'College roommate, meditation partner, and fearless toastmaster.',
-        photo: 'images/haley.png'
-    },
-    {
-        name: 'Ryan Gordon',
-        role: 'Groomsman',
-        bio: "Kenny's older brother who always brings the energy (and the electronics).",
-        photo: 'images/ryan.png'
-    },
-    {
-        name: 'Gabe Lapp',
-        role: 'Bridesman <br/> & Officiant',
-        bio: 'High school partner in crime and lifelong best friend honored with leading this special day.',
-        photo: 'images/gabe.png'
     },
     {
         name: 'Cathy Williams',
@@ -184,10 +100,94 @@ const weddingPartyMembers = [
         photo: 'images/cathy.png'
     },
     {
+        name: 'Gabe Lapp',
+        role: 'Bridesman & Officiant',
+        bio: 'High school partner in crime and lifelong best friend honored with leading this special day.',
+        photo: 'images/gabe.png'
+    },
+    {
+        name: 'Alexis Miller',
+        role: 'Bridesmaid',
+        bio: "Morgan's older sister and resident hype queen. The glue that holds the crew together.",
+        photo: 'images/alexis.png'
+    },
+    {
+        name: 'Raquel Esquerra',
+        role: 'Bridesmaid',
+        bio: 'Met Morgan in high school and bonded over late-night study snacks and travel plans.',
+        photo: 'images/raquel.png'
+    },
+    {
+        name: 'Jen Miller',
+        role: 'Bridesmaid',
+        bio: 'Sister-in-law and supporter for all things wedding planning. She keeps everyone laughing and on time.',
+        photo: 'images/jen.png'
+    },
+    {
+        name: 'Alyssa Graham',
+        role: 'Bridesmaid',
+        bio: 'Work bestie turned every other type of bestie. She’s been there through it all.',
+        photo: 'images/alyssa.png'
+    },
+    {
+        name: 'Tim Miller',
+        role: 'Bridesman',
+        bio: "Morgan's older brother and steadfast supporter through every life chapter.",
+        photo: 'images/tim.png'
+    },
+    {
+        name: 'Haley Zimmer',
+        role: 'Bridesmaid',
+        bio: 'College roommate, meditation partner, and fearless toastmaster.',
+        photo: 'images/haley.png'
+    },
+    {
+        name: 'Chayton Whiskey',
+        role: 'Best Man',
+        bio: "Kenny's best friend since middle school, and all-around goofball who keeps the energy high.",
+        photo: 'images/chayton.png'
+    },
+    {
         name: 'Therese Gordon',
         role: 'Mother of the Groom',
         bio: "Kenny's mom, whose warmth and kindness have always made everyone feel at home.",
         photo: 'images/therese.png'
+    },
+    {
+        name: 'Sam Calderon',
+        role: 'Groomsman',
+        bio: 'D&D game master and Kenny’s partner in crime for all things nerdy and adventurous.',
+        photo: 'images/sam.png'
+    },
+    {
+        name: 'Roy Calderon',
+        role: 'Groomsman',
+        bio: "Kindred spirit to Sam and Kenny, always ready with a joke and a helping hand.",
+        photo: 'images/roy.png'
+    },
+    {
+        name: 'Weston Cargay',
+        role: 'Groomsman',
+        bio: "Cousin and adventure partner who’s always been there for the big moments and bonding over the small ones.",
+        photo: 'images/weston.png'
+    },
+    {
+        name: 'Anthony Sacci',
+        role: 'Groomsman',
+        bio: 'Kindergarten day one friend who has seen it all who can always be counted on for a good time.',
+        photo: 'images/anthony.png'
+    },
+    {
+        name: 'Kelcie Bettencourt',
+        role: 'Groomswoman',
+        bio: 'Middle school best friend who has been a constant source of support and laughter.',
+        photo: 'images/kelcie.png'
+    },
+    {
+        name: 'Ryan Gordon',
+        role: 'Groomsman',
+        bio: "Kenny's older brother who always brings the energy (and the electronics).",
+        photo: 'images/ryan.png'
     }
 ];
 
