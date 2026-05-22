@@ -10,6 +10,9 @@ const CLASS_TEXT_CAPTURE_TEMPLATE = `<[^>]*class=["'][^"']*\\b%s\\b[^"']*["'][^>
 const HREF_ATTR_REGEX = /<a[^>]*href=["']([^"']+)["'][^>]*>/gi;
 const ITEM_TYPE_HINTS = ['fund', 'cash gift', 'contribute'];
 const MYREGISTRY_ORIGIN = 'https://www.myregistry.com';
+const MYREGISTRY_IMAGE_HOST_SUFFIXES = ['myregistry.com', 'blob.core.windows.net'];
+const SOURCE_IMAGE_HINTS = ['source', 'original', 'large', 'full', 'zoom', 'hires', 'highres'];
+const THUMBNAIL_IMAGE_HINTS = ['thumb', 'thumbnail', 'small', 'icon', 'mini'];
 const REGISTRY_URL =
     Deno.env.get('MYREGISTRY_URL') ?? 'https://www.myregistry.com/giftlist/morganandkenny';
 
@@ -284,6 +287,84 @@ function inferItemType(raw: Record<string, unknown>): 'product' | 'fund' {
     return 'product';
 }
 
+function isMyRegistryImageHost(hostname: string): boolean {
+    const lower = hostname.toLowerCase();
+    return MYREGISTRY_IMAGE_HOST_SUFFIXES.some(suffix => lower === suffix || lower.endsWith(`.${suffix}`));
+}
+
+function isProbablyImageUrl(value: string): boolean {
+    const lower = value.toLowerCase();
+    if (/\.(avif|bmp|gif|heic|jpeg|jpg|png|svg|webp)(?:[?#]|$)/i.test(lower)) return true;
+    return lower.includes('/image') || lower.includes('giftimages');
+}
+
+function scoreImageUrlCandidate(value: string): number {
+    let score = 0;
+    try {
+        const url = new URL(value);
+        const host = url.hostname.toLowerCase();
+        const urlText = `${host}${url.pathname}${url.search}`.toLowerCase();
+        if (url.protocol === 'https:') score += 5;
+        if (!isMyRegistryImageHost(host)) score += 50;
+        if (SOURCE_IMAGE_HINTS.some(hint => urlText.includes(hint))) score += 20;
+        if (THUMBNAIL_IMAGE_HINTS.some(hint => urlText.includes(hint))) score -= 35;
+        if (url.pathname.toLowerCase().includes('_large')) score += 15;
+    } catch {
+        score -= 100;
+    }
+    return score;
+}
+
+function collectImageCandidates(raw: Record<string, unknown>): string[] {
+    const candidates: string[] = [];
+    const addCandidate = (value: unknown) => {
+        const text = toTextValue(value);
+        if (!text) return;
+        const trimmed = text.trim();
+        if (!trimmed || /^(javascript|data|vbscript|file):/i.test(trimmed)) return;
+        if (!isProbablyImageUrl(trimmed)) return;
+        candidates.push(trimmed);
+    };
+
+    addCandidate(raw.sourceImageUrl ?? raw.source_image_url);
+    addCandidate(raw.originalImageUrl ?? raw.original_image_url);
+    addCandidate(raw.primaryImageUrl ?? raw.primary_image_url);
+    addCandidate(raw.productImageUrl ?? raw.product_image_url);
+    addCandidate(raw.imageUrl ?? raw.image_url ?? raw.image ?? raw.imgUrl);
+    addCandidate(raw.thumbnailUrl ?? raw.thumbnail_url ?? raw.thumbnail);
+
+    const scanForNestedImages = (node: unknown, depth = 0) => {
+        if (depth > 2 || !node || typeof node !== 'object') return;
+        if (Array.isArray(node)) {
+            for (const child of node) {
+                scanForNestedImages(child, depth + 1);
+            }
+            return;
+        }
+        for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+            if (/(image|img|photo|thumbnail|thumb)/i.test(key)) {
+                if (typeof value === 'string') {
+                    addCandidate(value);
+                } else if (Array.isArray(value)) {
+                    for (const entry of value) addCandidate(entry);
+                }
+            }
+            if (value && typeof value === 'object') {
+                scanForNestedImages(value, depth + 1);
+            }
+        }
+    };
+    scanForNestedImages(raw);
+
+    const uniqueCandidates = [...new Set(candidates)];
+    uniqueCandidates.sort((left, right) => scoreImageUrlCandidate(right) - scoreImageUrlCandidate(left));
+    return uniqueCandidates;
+}
+
+function resolveBestImageUrl(raw: Record<string, unknown>): string | null {
+    return collectImageCandidates(raw)[0] ?? null;
+}
+
 function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): RegistryItem | null {
     const id = String(
         raw.id ??
@@ -319,16 +400,7 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
         isPurchased = quantityPurchased >= quantityRequested;
     }
 
-    const imageUrl = String(
-        raw.imageUrl ??
-            raw.image_url ??
-            raw.image ??
-            raw.imgUrl ??
-            raw.thumbnailUrl ??
-            raw.thumbnail ??
-            raw.productImageUrl ??
-            '',
-    ).trim() || null;
+    const imageUrl = resolveBestImageUrl(raw);
 
     const rawActionLabel = String(raw.action_label ?? raw.actionLabel ?? '').trim() || null;
     const productUrl = resolveRegistryProductUrl(raw, itemType);
