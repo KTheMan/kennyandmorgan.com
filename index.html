@@ -43,6 +43,12 @@
                     <li class="access-conditional" data-access-visible="admin"><a href="admin.html" class="nav-link">Admin</a></li>
                 </ul>
                 <div class="nav-actions">
+                    <div class="admin-quick-menu access-conditional" data-access-visible="admin">
+                        <button type="button" id="adminMenuToggle" class="admin-menu-toggle" aria-expanded="false" aria-controls="adminMenuPanel" aria-label="Open admin quick menu">
+                            <span class="admin-menu-icon" aria-hidden="true"></span>
+                        </button>
+                        <div id="adminMenuPanel" class="admin-menu-panel" role="menu" aria-hidden="true"></div>
+                    </div>
                 </div>
             </div>
         </div>
