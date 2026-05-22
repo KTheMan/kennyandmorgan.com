@@ -30,10 +30,15 @@ function initAdminApp() {
     const guestForm = document.getElementById('guestForm');
     const guestResetButton = document.getElementById('guestResetButton');
     const csvImportButton = document.getElementById('csvImportButton');
+    const openCsvImportModalButton = document.getElementById('openCsvImportModalButton');
+    const csvImportModalBackdrop = document.getElementById('csvImportModalBackdrop');
+    const csvImportModalCloseButton = document.getElementById('csvImportModalCloseButton');
+    const csvImportModalCancelButton = document.getElementById('csvImportModalCancelButton');
     const guestTable = document.getElementById('guestTable');
     const guestFilterInput = document.getElementById('guestTableFilter');
     const newGuestButton = document.getElementById('newGuestButton');
     const guestIsChildInput = document.getElementById('guestIsChild');
+    const guestFlyoutCloseButton = document.getElementById('guestFlyoutCloseButton');
 
     loginForm?.addEventListener('submit', handleLogin);
     logoutButton?.addEventListener('click', handleLogout);
@@ -41,19 +46,40 @@ function initAdminApp() {
     guestForm?.addEventListener('submit', handleGuestSubmit);
     guestResetButton?.addEventListener('click', resetGuestForm);
     csvImportButton?.addEventListener('click', handleCsvImport);
+    openCsvImportModalButton?.addEventListener('click', openCsvImportModal);
+    csvImportModalCloseButton?.addEventListener('click', closeCsvImportModal);
+    csvImportModalCancelButton?.addEventListener('click', closeCsvImportModal);
     guestTable?.addEventListener('click', handleTableClick);
     guestIsChildInput?.addEventListener('change', updateGuestMealChoiceControl);
+    guestFlyoutCloseButton?.addEventListener('click', closeGuestFlyout);
+    csvImportModalBackdrop?.addEventListener('click', event => {
+        if (event.target === csvImportModalBackdrop) {
+            closeCsvImportModal();
+        }
+    });
     guestFilterInput?.addEventListener('input', event => {
         setGuestFilter(event.target.value || '');
     });
 
     newGuestButton?.addEventListener('click', () => {
         resetGuestForm();
-        scrollToGuestForm();
+        openGuestFlyout();
     });
 
     document.addEventListener('keydown', event => {
-        if (event.key === 'Escape' && document.getElementById('guestId')?.value) {
+        if (event.key !== 'Escape') {
+            return;
+        }
+        if (isCsvImportModalOpen()) {
+            closeCsvImportModal();
+            return;
+        }
+        if (isGuestFlyoutOpen()) {
+            resetGuestForm();
+            closeGuestFlyout();
+            return;
+        }
+        if (document.getElementById('guestId')?.value) {
             resetGuestForm();
         }
     });
@@ -219,14 +245,19 @@ function toggleConsole(isAuthenticated) {
     const loginPanel = document.getElementById('adminLoginPanel');
     const consolePanel = document.getElementById('adminConsole');
     const statsRow = document.getElementById('adminStatsRow');
+    const logoutButton = document.getElementById('adminLogoutButton');
     if (isAuthenticated) {
         loginPanel?.classList.add('hidden');
         consolePanel?.classList.remove('hidden');
         statsRow?.classList.remove('hidden');
+        logoutButton?.classList.remove('hidden');
     } else {
         loginPanel?.classList.remove('hidden');
         consolePanel?.classList.add('hidden');
         statsRow?.classList.add('hidden');
+        logoutButton?.classList.add('hidden');
+        closeGuestFlyout();
+        closeCsvImportModal();
     }
 }
 
@@ -371,7 +402,7 @@ function handleTableClick(event) {
 
     if (button.classList.contains('table-action--edit')) {
         populateGuestForm(guest);
-        scrollToGuestForm();
+        openGuestFlyout();
     } else if (button.classList.contains('table-action--delete')) {
         const actionsCell = row?.querySelector('.table-actions');
         if (actionsCell) {
@@ -577,6 +608,7 @@ async function handleCsvImport() {
         pushToast(`Imported ${result.inserted || 0} guests.`, 'success');
         fileInput.value = '';
         await loadGuests();
+        closeCsvImportModal();
     } catch (error) {
         console.error('CSV import failed:', error);
         showMessage('csvImportMessage', error.message || 'Unable to import CSV.', 'error');
@@ -660,10 +692,52 @@ function formatGuestAddress(guest = {}) {
     return parts.join(', ');
 }
 
-function scrollToGuestForm() {
-    const card = document.getElementById('guestFormCard');
-    card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setTimeout(() => document.getElementById('guestFullName')?.focus(), 300);
+function openGuestFlyout() {
+    const flyout = document.getElementById('guestFlyout');
+    if (!flyout) {
+        return;
+    }
+    flyout.classList.remove('hidden');
+    flyout.setAttribute('aria-hidden', 'false');
+    setTimeout(() => document.getElementById('guestFullName')?.focus(), 100);
+}
+
+function closeGuestFlyout() {
+    const flyout = document.getElementById('guestFlyout');
+    if (!flyout) {
+        return;
+    }
+    flyout.classList.add('hidden');
+    flyout.setAttribute('aria-hidden', 'true');
+}
+
+function isGuestFlyoutOpen() {
+    const flyout = document.getElementById('guestFlyout');
+    return Boolean(flyout && !flyout.classList.contains('hidden'));
+}
+
+function openCsvImportModal() {
+    const modalBackdrop = document.getElementById('csvImportModalBackdrop');
+    if (!modalBackdrop) {
+        return;
+    }
+    showMessage('csvImportMessage', '', 'success');
+    modalBackdrop.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeCsvImportModal() {
+    const modalBackdrop = document.getElementById('csvImportModalBackdrop');
+    if (!modalBackdrop) {
+        return;
+    }
+    modalBackdrop.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+function isCsvImportModalOpen() {
+    const modalBackdrop = document.getElementById('csvImportModalBackdrop');
+    return Boolean(modalBackdrop && !modalBackdrop.classList.contains('hidden'));
 }
 
 function renderStats() {
