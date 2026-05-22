@@ -98,6 +98,15 @@
         .nav-links { display: flex; list-style: none; gap: 24px; }
         .nav-link { font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase; font-weight: 500; color: #1E2218; text-decoration: none; padding: 4px 0; border-bottom: 1px solid transparent; transition: all 0.2s; }
         .nav-link.active, .nav-link:hover { font-weight: 700; border-bottom-color: #1E2218; }
+        .nav-lock-button { border: 1px solid rgba(30,34,24,0.2); background: #FAF8F0; color: #1E2218; width: 2rem; height: 2rem; border-radius: 9999px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; transition: background 0.15s; }
+        .nav-lock-button:hover { background: #F3F0E7; }
+        .admin-flyout { position: fixed; top: 6.4rem; right: 1rem; width: min(540px, calc(100vw - 2rem)); max-height: calc(100vh - 7.4rem); overflow-y: auto; border: 1px solid rgba(30,34,24,0.15); border-radius: 0.75rem; background: #fff; box-shadow: 0 20px 50px rgba(0,0,0,0.2); z-index: 45; padding: 1.5rem; }
+        .admin-flyout-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+        .admin-flyout-close { border: 1px solid rgba(30,34,24,0.15); background: #FAF8F0; width: 2rem; height: 2rem; border-radius: 9999px; font-size: 1rem; cursor: pointer; line-height: 1; }
+        .admin-flyout-close:hover { background: #F3F0E7; }
+        .admin-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+        .admin-modal { width: min(560px, 100%); border-radius: 0.75rem; border: 1px solid rgba(30,34,24,0.15); background: #fff; box-shadow: 0 24px 56px rgba(0,0,0,0.28); padding: 1.5rem; }
+        .admin-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
         .site-nav-mobile-row1, .site-nav-mobile-tabs { display: none; }
         @media screen and (max-width: 768px) {
             .site-nav-desktop { display: none; }
@@ -108,6 +117,7 @@
             .nav-monogram-mobile { font-family: 'Playfair Display', serif; font-size: 18px; letter-spacing: 0.45em; font-weight: 700; color: #1E2218; text-align: center; }
             .site-nav-mobile-tabs .nav-link { font-size: 10px; letter-spacing: 0.2em; padding: 4px 0; border-bottom: none; font-weight: 500; color: #54604A; }
             .site-nav-mobile-tabs .nav-link.active { font-weight: 700; color: #1E2218; text-decoration: underline; }
+            .admin-flyout { right: 0.75rem; left: 0.75rem; width: auto; top: 6.2rem; max-height: calc(100vh - 7rem); }
         }
     </style>
 </head>
@@ -125,6 +135,9 @@
                     <li><a href="index.html#registry" class="nav-link">Registry</a></li>
                     <li><a href="admin.html" class="nav-link active">Admin</a></li>
                 </ul>
+                <button type="button" id="adminLogoutButton" class="nav-lock-button hidden" title="Log out" aria-label="Log out">
+                    <span aria-hidden="true">🔒</span>
+                </button>
             </div>
         </div>
         <div class="site-nav-mobile-row1">
@@ -146,7 +159,6 @@
         <main class="space-y-6">
             <section class="rounded-lg bg-primary p-6 shadow-md">
                 <div>
-                    <p class="font-disp text-2xl italic tracking-wide text-primary-foreground/80">K · M</p>
                     <h1 class="mt-1 font-sans text-xl font-semibold text-primary-foreground">RSVP Admin Console</h1>
                     <p class="mt-0.5 text-sm text-primary-foreground/60">Manage guests, RSVPs, and CSV imports.</p>
                 </div>
@@ -188,18 +200,8 @@
             </section>
 
             <section class="hidden space-y-6" id="adminConsole">
-                <article class="rounded-lg border border-border bg-white p-6 shadow-sm">
-                    <div class="flex flex-wrap items-center justify-between gap-4">
-                        <div>
-                            <h2 class="text-xl font-semibold">Guest Management</h2>
-                            <p class="mt-1 text-sm text-muted-foreground">Search, edit, and maintain your full invitation roster.</p>
-                        </div>
-                        <button type="button" id="adminLogoutButton" class="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-muted">Log Out</button>
-                    </div>
-                </article>
-
-                <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                    <article class="rounded-lg border border-border bg-white p-6 shadow-sm xl:col-span-7 2xl:col-span-8">
+                <div class="grid grid-cols-1 gap-6">
+                    <article class="rounded-lg border border-border bg-white p-6 shadow-sm">
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <h3 class="text-lg font-semibold">Guest List</h3>
@@ -207,6 +209,7 @@
                             </div>
                             <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                                 <button type="button" id="newGuestButton" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90">+ New Guest</button>
+                                <button type="button" id="openCsvImportModalButton" class="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-muted">Import CSV</button>
                                 <label class="relative w-full sm:w-64" for="guestTableFilter">
                                     <span class="sr-only">Filter guests</span>
                                     <input type="search" id="guestTableFilter" placeholder="Search guests or groups" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
@@ -236,127 +239,140 @@
                             </table>
                         </div>
                     </article>
-
-                    <div class="space-y-6 xl:col-span-5 2xl:col-span-4">
-                        <article class="rounded-lg border border-border bg-white p-6 shadow-sm" id="guestFormCard">
-                            <h3 class="text-lg font-semibold" id="guestFormTitle">Add New Guest</h3>
-                            <p class="mt-1 text-sm text-muted-foreground" id="guestFormSubtitle">Fill in the fields below to create a new guest entry.</p>
-
-                            <form id="guestForm" class="mt-5 grid gap-4 md:grid-cols-2">
-                                <input type="hidden" id="guestId" name="id">
-
-                                <div class="space-y-2 md:col-span-2">
-                                    <label for="guestFullName" class="text-sm font-medium">Full Name *</label>
-                                    <input type="text" id="guestFullName" name="fullName" required class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                                    <small class="field-hint field-hint--error" id="guestFullNameError" aria-live="polite"></small>
-                                </div>
-
-                                <div class="space-y-2">
-                                    <label for="guestEmail" class="text-sm font-medium">Email</label>
-                                    <input type="email" id="guestEmail" name="email" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                                </div>
-
-                                <div class="space-y-2">
-                                    <label for="guestGroupId" class="text-sm font-medium">Group ID *</label>
-                                    <input type="text" id="guestGroupId" name="groupId" required class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                                    <small class="field-hint field-hint--error" id="guestGroupIdError" aria-live="polite"></small>
-                                </div>
-
-                                <div class="grid grid-cols-2 gap-3 md:col-span-2">
-                                    <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
-                                        <input type="checkbox" id="guestIsPrimary" name="isPrimary" class="h-4 w-4 rounded border-input accent-accent">
-                                        Primary
-                                    </label>
-                                    <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
-                                        <input type="checkbox" id="guestIsPlusOne" name="isPlusOne" class="h-4 w-4 rounded border-input accent-accent">
-                                        Plus One
-                                    </label>
-                                </div>
-
-                                <div class="grid grid-cols-1 gap-3 md:col-span-2">
-                                    <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
-                                        <input type="checkbox" id="guestIsChild" name="isChild" class="h-4 w-4 rounded border-input accent-accent">
-                                        Child
-                                    </label>
-                                </div>
-
-                                <div class="space-y-2">
-                                    <label for="guestRsvpStatus" class="text-sm font-medium">RSVP Status</label>
-                                    <select id="guestRsvpStatus" name="rsvpStatus" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                                        <option value="pending">Pending</option>
-                                        <option value="accepted">Accepted</option>
-                                        <option value="declined">Declined</option>
-                                    </select>
-                                </div>
-
-                                <div class="space-y-2">
-                                    <label for="guestMealChoice" class="text-sm font-medium">Meal Choice</label>
-                                    <select id="guestMealChoice" name="mealChoice" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                                        <option value="">Not Selected</option>
-                                    </select>
-                                    <p id="guestChildMealDisplay" class="text-xs text-muted-foreground hidden">Child guest meal will be set automatically.</p>
-                                </div>
-
-                                <div class="space-y-2 md:col-span-2">
-                                    <label for="guestDietaryNotes" class="text-sm font-medium">Dietary Notes</label>
-                                    <textarea id="guestDietaryNotes" name="dietaryNotes" rows="2" class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"></textarea>
-                                </div>
-
-                                <div class="space-y-2 md:col-span-2">
-                                    <label for="guestAddressLine1" class="text-sm font-medium">Address Line 1</label>
-                                    <input type="text" id="guestAddressLine1" name="addressLine1" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                                </div>
-
-                                <div class="space-y-2 md:col-span-2">
-                                    <label for="guestAddressLine2" class="text-sm font-medium">Address Line 2</label>
-                                    <input type="text" id="guestAddressLine2" name="addressLine2" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                                </div>
-
-                                <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 md:col-span-2">
-                                    <div class="space-y-2">
-                                        <label for="guestCity" class="text-sm font-medium">City</label>
-                                        <input type="text" id="guestCity" name="city" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                                    </div>
-                                    <div class="space-y-2">
-                                        <label for="guestState" class="text-sm font-medium">State</label>
-                                        <input type="text" id="guestState" name="state" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                                    </div>
-                                    <div class="space-y-2">
-                                        <label for="guestPostalCode" class="text-sm font-medium">ZIP / Postal Code</label>
-                                        <input type="text" id="guestPostalCode" name="postalCode" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-                                    </div>
-                                </div>
-
-                                <div class="space-y-2 md:col-span-2">
-                                    <label for="guestNotes" class="text-sm font-medium">Internal Notes</label>
-                                    <textarea id="guestNotes" name="notes" rows="2" class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"></textarea>
-                                </div>
-
-                                <div class="flex flex-wrap items-center gap-2 pt-1 md:col-span-2">
-                                    <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90" id="guestSaveButton">Save Guest</button>
-                                    <button type="button" class="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-muted" id="guestResetButton">Reset</button>
-                                </div>
-                            </form>
-                            <div id="guestFormMessage" class="message"></div>
-                        </article>
-
-                        <article class="rounded-lg border border-border bg-white p-6 shadow-sm">
-                            <h3 class="text-lg font-semibold">CSV Import</h3>
-                            <p class="mt-1 text-sm text-muted-foreground">Bulk update the roster using CSV headers from your export source.</p>
-                            <p class="mt-3 text-xs text-muted-foreground">Supported headers include fullName / groupId / isPrimary / isChild and The Knot defaults such as First Name, Last Name, Party, Phone, Street Address 1/2, City, State/Province, Zip/Postal Code, Wedding Day - RSVP.</p>
-
-                            <div class="mt-4 space-y-2">
-                                <label for="csvFileInput" class="text-sm font-medium">Upload CSV</label>
-                                <input type="file" id="csvFileInput" accept=".csv,text/csv" class="block w-full rounded-md border border-input bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-2 file:text-sm file:font-medium">
-                            </div>
-
-                            <button type="button" id="csvImportButton" class="mt-4 inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-muted">Import CSV</button>
-                            <div id="csvImportMessage" class="message"></div>
-                        </article>
-                    </div>
                 </div>
             </section>
         </main>
+    </div>
+
+    <aside id="guestFlyout" class="admin-flyout hidden" aria-hidden="true">
+        <div class="admin-flyout-header">
+            <div>
+                <h3 class="text-lg font-semibold" id="guestFormTitle">Add New Guest</h3>
+                <p class="mt-1 text-sm text-muted-foreground" id="guestFormSubtitle">Fill in the fields below to create a new guest entry.</p>
+            </div>
+            <button type="button" id="guestFlyoutCloseButton" class="admin-flyout-close" aria-label="Close guest editor">×</button>
+        </div>
+
+        <form id="guestForm" class="mt-5 grid gap-4 md:grid-cols-2">
+            <input type="hidden" id="guestId" name="id">
+
+            <div class="space-y-2 md:col-span-2">
+                <label for="guestFullName" class="text-sm font-medium">Full Name *</label>
+                <input type="text" id="guestFullName" name="fullName" required class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                <small class="field-hint field-hint--error" id="guestFullNameError" aria-live="polite"></small>
+            </div>
+
+            <div class="space-y-2">
+                <label for="guestEmail" class="text-sm font-medium">Email</label>
+                <input type="email" id="guestEmail" name="email" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+            </div>
+
+            <div class="space-y-2">
+                <label for="guestGroupId" class="text-sm font-medium">Group ID *</label>
+                <input type="text" id="guestGroupId" name="groupId" required class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                <small class="field-hint field-hint--error" id="guestGroupIdError" aria-live="polite"></small>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 md:col-span-2">
+                <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
+                    <input type="checkbox" id="guestIsPrimary" name="isPrimary" class="h-4 w-4 rounded border-input accent-accent">
+                    Primary
+                </label>
+                <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
+                    <input type="checkbox" id="guestIsPlusOne" name="isPlusOne" class="h-4 w-4 rounded border-input accent-accent">
+                    Plus One
+                </label>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 md:col-span-2">
+                <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
+                    <input type="checkbox" id="guestIsChild" name="isChild" class="h-4 w-4 rounded border-input accent-accent">
+                    Child
+                </label>
+            </div>
+
+            <div class="space-y-2">
+                <label for="guestRsvpStatus" class="text-sm font-medium">RSVP Status</label>
+                <select id="guestRsvpStatus" name="rsvpStatus" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                    <option value="pending">Pending</option>
+                    <option value="accepted">Accepted</option>
+                    <option value="declined">Declined</option>
+                </select>
+            </div>
+
+            <div class="space-y-2">
+                <label for="guestMealChoice" class="text-sm font-medium">Meal Choice</label>
+                <select id="guestMealChoice" name="mealChoice" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                    <option value="">Not Selected</option>
+                </select>
+                <p id="guestChildMealDisplay" class="text-xs text-muted-foreground hidden">Child guest meal will be set automatically.</p>
+            </div>
+
+            <div class="space-y-2 md:col-span-2">
+                <label for="guestDietaryNotes" class="text-sm font-medium">Dietary Notes</label>
+                <textarea id="guestDietaryNotes" name="dietaryNotes" rows="2" class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"></textarea>
+            </div>
+
+            <div class="space-y-2 md:col-span-2">
+                <label for="guestAddressLine1" class="text-sm font-medium">Address Line 1</label>
+                <input type="text" id="guestAddressLine1" name="addressLine1" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+            </div>
+
+            <div class="space-y-2 md:col-span-2">
+                <label for="guestAddressLine2" class="text-sm font-medium">Address Line 2</label>
+                <input type="text" id="guestAddressLine2" name="addressLine2" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 md:col-span-2">
+                <div class="space-y-2">
+                    <label for="guestCity" class="text-sm font-medium">City</label>
+                    <input type="text" id="guestCity" name="city" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                </div>
+                <div class="space-y-2">
+                    <label for="guestState" class="text-sm font-medium">State</label>
+                    <input type="text" id="guestState" name="state" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                </div>
+                <div class="space-y-2">
+                    <label for="guestPostalCode" class="text-sm font-medium">ZIP / Postal Code</label>
+                    <input type="text" id="guestPostalCode" name="postalCode" class="h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                </div>
+            </div>
+
+            <div class="space-y-2 md:col-span-2">
+                <label for="guestNotes" class="text-sm font-medium">Internal Notes</label>
+                <textarea id="guestNotes" name="notes" rows="2" class="w-full rounded-md border border-input bg-white px-3 py-2 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"></textarea>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 pt-1 md:col-span-2">
+                <button type="submit" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90" id="guestSaveButton">Save Guest</button>
+                <button type="button" class="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-muted" id="guestResetButton">Reset</button>
+            </div>
+        </form>
+        <div id="guestFormMessage" class="message"></div>
+    </aside>
+
+    <div id="csvImportModalBackdrop" class="admin-modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="csvImportModalTitle">
+        <div class="admin-modal">
+            <div class="admin-modal-header">
+                <div>
+                    <h3 id="csvImportModalTitle" class="text-lg font-semibold">CSV Import</h3>
+                    <p class="mt-1 text-sm text-muted-foreground">Bulk update the roster using CSV headers from your export source.</p>
+                    <p class="mt-3 text-xs text-muted-foreground">Supported headers include fullName / groupId / isPrimary / isChild and The Knot defaults such as First Name, Last Name, Party, Phone, Street Address 1/2, City, State/Province, Zip/Postal Code, Wedding Day - RSVP.</p>
+                </div>
+                <button type="button" id="csvImportModalCloseButton" class="admin-flyout-close" aria-label="Close CSV import">×</button>
+            </div>
+
+            <div class="mt-4 space-y-2">
+                <label for="csvFileInput" class="text-sm font-medium">Upload CSV</label>
+                <input type="file" id="csvFileInput" accept=".csv,text/csv" class="block w-full rounded-md border border-input bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-2 file:text-sm file:font-medium">
+            </div>
+
+            <div class="mt-4 flex flex-wrap items-center gap-2">
+                <button type="button" id="csvImportButton" class="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-muted">Import CSV</button>
+                <button type="button" id="csvImportModalCancelButton" class="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-muted">Cancel</button>
+            </div>
+            <div id="csvImportMessage" class="message"></div>
+        </div>
     </div>
 
     <div id="adminToastStack" class="admin-toast-stack" aria-live="polite" aria-atomic="true"></div>
