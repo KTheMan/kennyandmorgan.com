@@ -506,6 +506,54 @@
         return { success: data.success !== false, items: Array.isArray(data.items) ? data.items : [] };
     }
 
+    async function submitHmu(payload) {
+        try {
+            return await callSupabaseRpc('save_hmu_submission', { payload });
+        } catch (error) {
+            if (!canUseLocalFallback()) {
+                throw error;
+            }
+            const entries = loadLocalCollection('hmu_submissions');
+            entries.push({ ...payload, submittedAt: new Date().toISOString() });
+            localStorage.setItem('hmu_submissions', JSON.stringify(entries));
+            return { success: true, storedLocally: true };
+        }
+    }
+
+    async function listAdminHmuSubmissions(token) {
+        const data = await callSupabaseRpc('list_admin_hmu_submissions', {
+            session_token: token
+        });
+        return {
+            success: true,
+            submissions: Array.isArray(data) ? data : []
+        };
+    }
+
+    async function submitRehearsalLunchRsvp(payload) {
+        try {
+            return await callSupabaseRpc('submit_rehearsal_lunch_rsvp', { payload });
+        } catch (error) {
+            if (!canUseLocalFallback()) {
+                throw error;
+            }
+            const entries = loadLocalCollection('rehearsal_lunch_rsvps');
+            entries.push({ ...payload, submittedAt: new Date().toISOString() });
+            localStorage.setItem('rehearsal_lunch_rsvps', JSON.stringify(entries));
+            return { success: true, storedLocally: true };
+        }
+    }
+
+    async function listAdminRehearsalLunchRsvps(token) {
+        const data = await callSupabaseRpc('list_admin_rehearsal_lunch_rsvps', {
+            session_token: token
+        });
+        return {
+            success: true,
+            rsvps: Array.isArray(data) ? data : []
+        };
+    }
+
     window.KMDataClient = {
         loginAccess,
         getAccessSession,
@@ -513,6 +561,10 @@
         searchGuestGroups,
         submitRsvp,
         submitAddress,
+        submitHmu,
+        listAdminHmuSubmissions,
+        submitRehearsalLunchRsvp,
+        listAdminRehearsalLunchRsvps,
         listAdminGuests,
         saveAdminGuest,
         deleteAdminGuest,

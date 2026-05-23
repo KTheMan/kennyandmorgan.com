@@ -451,7 +451,7 @@ test.describe('Wedding Party Page — PartyB', () => {
         // Check cell content
         const briefValues = await page.locator('.brief-value').allTextContents();
         expect(briefValues.some(v => /sept 11|sep 11/i.test(v))).toBeTruthy();
-        expect(briefValues.some(v => /shadowbrook/i.test(v))).toBeTruthy();
+        expect(briefValues.some(v => /tbd/i.test(v))).toBeTruthy();
         expect(briefValues.some(v => /sept 12|sep 12/i.test(v))).toBeTruthy();
         expect(briefValues.some(v => /text us/i.test(v))).toBeTruthy();
 

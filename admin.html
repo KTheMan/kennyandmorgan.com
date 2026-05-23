@@ -227,12 +227,62 @@
                                         <th class="px-3 py-3 font-medium">Primary?</th>
                                         <th class="px-3 py-3 font-medium">Plus One?</th>
                                         <th class="px-3 py-3 font-medium">Child?</th>
+                        <th class="px-3 py-3 font-medium">Rehearsal Lunch?</th>
                                         <th class="px-3 py-3 font-medium">RSVP</th>
                                         <th class="px-3 py-3 font-medium">Meal</th>
                                         <th class="px-3 py-3 font-medium">Dietary</th>
                                         <th class="px-3 py-3 font-medium">Address</th>
                                         <th class="px-3 py-3 font-medium">Updated</th>
                                         <th class="px-3 py-3 font-medium"></th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-border bg-white"></tbody>
+                            </table>
+                        </div>
+                    </article>
+
+                    <!-- Hair & Makeup Submissions -->
+                    <article class="rounded-lg border border-border bg-white p-6 shadow-sm">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 class="text-lg font-semibold">Hair &amp; Makeup Inquiries</h3>
+                                <p class="text-sm text-muted-foreground">Submissions from the wedding party hair &amp; makeup sign-up form.</p>
+                            </div>
+                            <button type="button" id="refreshHmuButton" class="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-muted">Refresh</button>
+                        </div>
+                        <div class="mt-4 overflow-x-auto rounded-md border border-border">
+                            <table id="hmuTable" class="min-w-full text-left text-sm">
+                                <thead class="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+                                    <tr>
+                                        <th class="px-3 py-3 font-medium">Name</th>
+                                        <th class="px-3 py-3 font-medium">Email</th>
+                                        <th class="px-3 py-3 font-medium">Hair?</th>
+                                        <th class="px-3 py-3 font-medium">Makeup?</th>
+                                        <th class="px-3 py-3 font-medium">Submitted</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-border bg-white"></tbody>
+                            </table>
+                        </div>
+                    </article>
+
+                    <!-- Rehearsal Lunch RSVPs -->
+                    <article class="rounded-lg border border-border bg-white p-6 shadow-sm">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 class="text-lg font-semibold">Rehearsal Lunch RSVPs</h3>
+                                <p class="text-sm text-muted-foreground">Responses from the rehearsal lunch RSVP form.</p>
+                            </div>
+                            <button type="button" id="refreshRehearsalLunchButton" class="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-muted">Refresh</button>
+                        </div>
+                        <div class="mt-4 overflow-x-auto rounded-md border border-border">
+                            <table id="rehearsalLunchTable" class="min-w-full text-left text-sm">
+                                <thead class="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+                                    <tr>
+                                        <th class="px-3 py-3 font-medium">Name</th>
+                                        <th class="px-3 py-3 font-medium">Email</th>
+                                        <th class="px-3 py-3 font-medium">RSVP</th>
+                                        <th class="px-3 py-3 font-medium">Submitted</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-border bg-white"></tbody>
@@ -288,6 +338,13 @@
                 <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
                     <input type="checkbox" id="guestIsChild" name="isChild" class="h-4 w-4 rounded border-input accent-accent">
                     Child
+                </label>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 md:col-span-2">
+                <label class="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm cursor-pointer hover:bg-secondary/50">
+                    <input type="checkbox" id="guestIsInvitedToRehearsalLunch" name="isInvitedToRehearsalLunch" class="h-4 w-4 rounded border-input accent-accent">
+                    Invited to Rehearsal Lunch
                 </label>
             </div>
 

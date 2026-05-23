@@ -626,10 +626,43 @@ function initForms() {
     // Hair & Makeup Form
     const hmuForm = document.getElementById('hmuForm');
     if (hmuForm) {
-        hmuForm.addEventListener('submit', (e) => {
+        hmuForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            showMessage('hmuMessage', 'Thanks! We will reach out to confirm.', 'success');
-            hmuForm.reset();
+            const form = e.target;
+            const payload = {
+                fullName: form.hmuName.value.trim(),
+                email: form.hmuEmail.value.trim(),
+                wantsHair: form.hmuHair.checked,
+                wantsMakeup: form.hmuMakeup.checked
+            };
+            try {
+                await window.KMDataClient.submitHmu(payload);
+                showMessage('hmuMessage', 'Thanks! We will reach out to confirm.', 'success');
+                form.reset();
+            } catch (error) {
+                showMessage('hmuMessage', error.message || 'Unable to submit. Please try again.', 'error');
+            }
+        });
+    }
+
+    // Rehearsal Lunch RSVP Form
+    const rehearsalLunchForm = document.getElementById('rehearsalLunchRsvpForm');
+    if (rehearsalLunchForm) {
+        rehearsalLunchForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const payload = {
+                fullName: form.rlName.value.trim(),
+                email: form.rlEmail.value.trim(),
+                rsvpStatus: form.rlAttending.value
+            };
+            try {
+                await window.KMDataClient.submitRehearsalLunchRsvp(payload);
+                showMessage('rehearsalLunchRsvpMessage', 'Got it! Thanks for your RSVP.', 'success');
+                form.reset();
+            } catch (error) {
+                showMessage('rehearsalLunchRsvpMessage', error.message || 'Unable to submit. Please try again.', 'error');
+            }
         });
     }
 

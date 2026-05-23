@@ -552,7 +552,7 @@
                     </div>
                     <div class="party-brief-cell">
                         <span class="brief-label">Rehearsal Lunch</span>
-                        <span class="brief-value">Shadowbrook</span>
+                        <span class="brief-value">TBD</span>
                         <span class="brief-sub">12&ndash;3 PM &middot; Fri Sept 11</span>
                     </div>
                     <div class="party-brief-cell">
@@ -583,8 +583,8 @@
                         <li class="timeline-item">
                             <span class="timeline-time">9 AM</span>
                             <div class="timeline-body">
-                                <span class="timeline-label">Hair &amp; Makeup</span>
-                                <span class="timeline-desc">Get-ready time &amp; ordered breakfast at our Seascape Resort suite, Aptos</span>
+                                <span class="timeline-label">Hair &amp; Makeup &mdash; Morning Meeting Spot</span>
+                                <span class="timeline-desc">Get-ready time &amp; ordered breakfast at our Seascape Resort suite &mdash; 1 Seascape Resort Dr, Aptos, CA 95003</span>
                             </div>
                         </li>
                         <li class="timeline-item">
@@ -653,8 +653,34 @@
                     <div id="hmuMessage" class="message"></div>
                 </div>
 
+                <!-- Rehearsal Lunch RSVP (admin-only for now) -->
+                <div class="party-rehearsal-rsvp-section access-conditional" data-access-visible="admin">
+                    <p class="section-eyebrow">Rehearsal Lunch &middot; RSVP</p>
+                    <h3 class="party-hmu-heading"><em>Are you joining us for the rehearsal lunch?</em></h3>
+                    <p class="party-hmu-copy">Let us know if you&rsquo;ll be at the rehearsal lunch &mdash; date and location TBD.</p>
+                    <form id="rehearsalLunchRsvpForm" class="party-hmu-form">
+                        <div class="form-group">
+                            <label for="rlName">Your Name *</label>
+                            <input type="text" id="rlName" name="rlName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="rlEmail">Email *</label>
+                            <input type="email" id="rlEmail" name="rlEmail" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="rlAttending">Attending?</label>
+                            <select id="rlAttending" name="rlAttending" class="form-select">
+                                <option value="accepted">Yes, I&rsquo;ll be there</option>
+                                <option value="declined">No, I can&rsquo;t make it</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Submit RSVP</button>
+                    </form>
+                    <div id="rehearsalLunchRsvpMessage" class="message"></div>
+                </div>
+
                 <!-- Wedding Party FAQ -->
-                <div class="party-faq-section">
+                <div class="party-faq-section" hidden>
                     <p class="section-eyebrow">FAQ</p>
                     <h3 class="party-faq-heading"><em>Questions &amp; Answers</em></h3>
                     <div class="faq-accordion">
