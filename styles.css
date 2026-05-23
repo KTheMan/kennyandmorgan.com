@@ -2093,6 +2093,14 @@ textarea { resize: vertical; }
 
 .party-suit-link:hover { color: var(--deep); }
 
+.party-suit-img {
+    display: block;
+    width: 100%;
+    max-width: 480px;
+    margin-top: 1.25rem;
+    border-radius: 4px;
+}
+
 /* Day-of Timeline */
 .party-timeline {
     margin-top: 4rem;
