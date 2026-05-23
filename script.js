@@ -29,6 +29,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 let latestGuestLookupResults = [];
 let activeGuestParty = null;
 const guestResponseState = new Map();
+let latestRehearsalGuestLookupResults = [];
+let activeRehearsalGuestParty = null;
+const rehearsalGuestResponseState = new Map();
 const ACCESS_LEVELS = {
     locked: 'locked',
     family: 'family',
@@ -648,25 +651,14 @@ function initForms() {
     // Rehearsal Lunch RSVP Form
     const rehearsalLunchForm = document.getElementById('rehearsalLunchRsvpForm');
     if (rehearsalLunchForm) {
-        rehearsalLunchForm.addEventListener('submit', async (e) => {
+        rehearsalLunchForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            const form = e.target;
-            const payload = {
-                fullName: form.rlName.value.trim(),
-                email: form.rlEmail.value.trim(),
-                rsvpStatus: form.rlAttending.value
-            };
-            try {
-                await window.KMDataClient.submitRehearsalLunchRsvp(payload);
-                showMessage('rehearsalLunchRsvpMessage', 'Got it! Thanks for your RSVP.', 'success');
-                form.reset();
-            } catch (error) {
-                showMessage('rehearsalLunchRsvpMessage', error.message || 'Unable to submit. Please try again.', 'error');
-            }
+            handleRehearsalLunchSubmit(e.target);
         });
     }
 
     setupGuestLookup();
+    setupRehearsalGuestLookup();
     loadRsvpMenuOptions();
 }
 
@@ -804,6 +796,253 @@ function renderGuestLookupResults(container, groups) {
             </article>
         `;
     }).join('');
+}
+
+function setupRehearsalGuestLookup() {
+    const lookupButton = document.getElementById('rehearsalGuestLookupButton');
+    const nameInput = document.getElementById('rlName');
+    const hiddenGroupInput = document.getElementById('rlGuestGroupId');
+    const resultsContainer = document.getElementById('rehearsalGuestLookupResults');
+    const messageElement = document.getElementById('rehearsalGuestLookupMessage');
+    const guestResponseList = document.getElementById('rehearsalGuestResponseList');
+
+    if (!lookupButton || !nameInput || !resultsContainer || !messageElement) {
+        return;
+    }
+
+    const setLookupState = (text, variant = 'info') => {
+        messageElement.textContent = text;
+        messageElement.className = `guest-lookup-message is-${variant}`;
+    };
+
+    const resetResults = () => {
+        latestRehearsalGuestLookupResults = [];
+        resultsContainer.innerHTML = '';
+        if (hiddenGroupInput) {
+            hiddenGroupInput.value = '';
+        }
+        resetRehearsalGuestResponseSection();
+    };
+
+    lookupButton.addEventListener('click', async () => {
+        const query = nameInput.value.trim();
+        resetResults();
+
+        if (!query) {
+            setLookupState('Please enter your full name first.', 'error');
+            return;
+        }
+
+        const nameParts = query.split(/\s+/).filter(Boolean);
+        if (nameParts.length < 2) {
+            setLookupState('Please enter your first and last name to continue.', 'error');
+            return;
+        }
+
+        lookupButton.disabled = true;
+        lookupButton.textContent = 'Searching...';
+        setLookupState('Looking up your party...', 'info');
+
+        try {
+            const data = await window.KMDataClient.searchGuestGroups(query);
+
+            if (!data.success || !Array.isArray(data.results) || !data.results.length) {
+                setLookupState('We could not find a party with that name. Double-check the spelling or reach out to us.', 'error');
+                return;
+            }
+
+            latestRehearsalGuestLookupResults = data.results;
+            renderRehearsalGuestLookupResults(resultsContainer, data.results);
+            setLookupState('Select your party below to continue.', 'success');
+        } catch (error) {
+            console.error('Rehearsal guest lookup failed:', error);
+            setLookupState('Something went wrong while searching. Please try again or contact us.', 'error');
+        } finally {
+            lookupButton.disabled = false;
+            lookupButton.textContent = 'Find My Party';
+        }
+    });
+
+    resultsContainer.addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-select-rl-group]');
+        if (!trigger) {
+            return;
+        }
+
+        const { selectRlGroup: groupId } = trigger.dataset;
+        const selectedGroup = latestRehearsalGuestLookupResults.find(group => group.groupId === groupId);
+        if (!selectedGroup) {
+            return;
+        }
+
+        if (hiddenGroupInput) {
+            hiddenGroupInput.value = selectedGroup.groupId;
+        }
+
+        if (selectedGroup.guests?.length) {
+            nameInput.value = selectedGroup.primaryGuest || selectedGroup.guests[0].fullName;
+        }
+
+        setRehearsalActiveGuestParty(selectedGroup);
+        setRehearsalGuestResponseMessage('');
+        setLookupState(`Loaded guests for ${selectedGroup.primaryGuest || 'your party'}.`, 'success');
+    });
+
+    guestResponseList?.addEventListener('change', handleRehearsalGuestResponseListInput);
+}
+
+function renderRehearsalGuestLookupResults(container, groups) {
+    container.innerHTML = groups.map((group, index) => {
+        const guestList = group.guests?.map(guest => {
+            const role = guest.isPlusOne ? ' (plus one)' : '';
+            return `<li>${guest.fullName}${role}</li>`;
+        }).join('') || '';
+
+        return `
+            <article class="guest-result-card" data-group-id="${group.groupId}">
+                <div class="guest-result-header">
+                    <div>
+                        <p class="guest-result-label">Party ${index + 1}</p>
+                        <p class="guest-result-title">${group.primaryGuest || 'Guest Party'}</p>
+                    </div>
+                    <button type="button" class="btn btn-secondary guest-result-select" data-select-rl-group="${group.groupId}">Use This Party</button>
+                </div>
+                <p class="guest-result-summary">Guests on this invitation:</p>
+                <ul class="guest-result-list">${guestList}</ul>
+            </article>
+        `;
+    }).join('');
+}
+
+function resetRehearsalGuestResponseSection() {
+    activeRehearsalGuestParty = null;
+    rehearsalGuestResponseState.clear();
+    const section = document.getElementById('rehearsalGuestResponseSection');
+    const list = document.getElementById('rehearsalGuestResponseList');
+    setRehearsalGuestResponseMessage('');
+    if (section) {
+        section.classList.add('hidden');
+    }
+    if (list) {
+        list.innerHTML = '';
+    }
+}
+
+function setRehearsalActiveGuestParty(group) {
+    if (!group) {
+        resetRehearsalGuestResponseSection();
+        return;
+    }
+    activeRehearsalGuestParty = {
+        groupId: group.groupId,
+        guests: Array.isArray(group.guests) ? group.guests : []
+    };
+    rehearsalGuestResponseState.clear();
+    activeRehearsalGuestParty.guests.forEach(guest => {
+        const status = normalizeGuestStatus(guest.rsvpStatus);
+        rehearsalGuestResponseState.set(guest.id, { status });
+    });
+    renderRehearsalGuestResponseSection();
+}
+
+function renderRehearsalGuestResponseSection() {
+    const section = document.getElementById('rehearsalGuestResponseSection');
+    const list = document.getElementById('rehearsalGuestResponseList');
+    if (!section || !list) {
+        return;
+    }
+    if (!activeRehearsalGuestParty) {
+        section.classList.add('hidden');
+        list.innerHTML = '';
+        return;
+    }
+    section.classList.remove('hidden');
+
+    list.innerHTML = activeRehearsalGuestParty.guests.map(guest => {
+        const state = rehearsalGuestResponseState.get(guest.id) || {};
+        const guestRole = guest.isPlusOne ? 'Plus One' : '';
+        return `
+            <div class="guest-response-card" data-rl-guest-card="${guest.id}">
+                <div class="guest-response-header">
+                    <p class="guest-response-name">${escapeHtml(guest.fullName || '')}</p>
+                    ${guestRole ? `<p class="guest-response-tag">${guestRole}</p>` : ''}
+                </div>
+                <div class="guest-response-status">
+                    ${renderRehearsalGuestStatusOption(guest.id, 'accepted', 'Yes, I’ll be there', state.status === 'accepted')}
+                    ${renderRehearsalGuestStatusOption(guest.id, 'declined', 'No, I can’t make it', state.status === 'declined')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderRehearsalGuestStatusOption(guestId, value, label, isChecked) {
+    return `
+        <label>
+            <input type="radio" name="rl-guest-status-${guestId}" value="${value}" data-rl-guest-status="${guestId}" ${isChecked ? 'checked' : ''}>
+            <span>${label}</span>
+        </label>
+    `;
+}
+
+function handleRehearsalGuestResponseListInput(event) {
+    const target = event.target;
+    if (!activeRehearsalGuestParty || !target) {
+        return;
+    }
+
+    if (target.matches('[data-rl-guest-status]')) {
+        const guestId = Number(target.dataset.rlGuestStatus);
+        const state = rehearsalGuestResponseState.get(guestId) || {};
+        state.status = target.value;
+        rehearsalGuestResponseState.set(guestId, state);
+        setRehearsalGuestResponseMessage('');
+    }
+}
+
+function setRehearsalGuestResponseMessage(message = '', variant = 'error') {
+    const element = document.getElementById('rehearsalGuestResponseMessage');
+    if (!element) {
+        return;
+    }
+    element.textContent = message || '';
+    element.classList.remove('is-success');
+    if (message && variant === 'success') {
+        element.classList.add('is-success');
+    }
+}
+
+function getRehearsalGuestDisplayName(guestId) {
+    const guest = activeRehearsalGuestParty?.guests?.find(item => item.id === guestId);
+    return guest?.fullName || 'this guest';
+}
+
+function buildRehearsalGuestResponsesPayload() {
+    if (!activeRehearsalGuestParty) {
+        return [];
+    }
+
+    return activeRehearsalGuestParty.guests.map(guest => {
+        const state = rehearsalGuestResponseState.get(guest.id) || {};
+        return {
+            guestId: guest.id,
+            status: state.status || null,
+            name: guest.fullName || ''
+        };
+    });
+}
+
+function validateRehearsalGuestResponses(responses) {
+    if (!activeRehearsalGuestParty || !responses.length) {
+        return { valid: false, message: 'Please look up your party and respond for each guest.' };
+    }
+
+    const incomplete = responses.find(response => !response.status);
+    if (incomplete) {
+        return { valid: false, message: `Please choose yes or no for ${getRehearsalGuestDisplayName(incomplete.guestId)}.` };
+    }
+
+    return { valid: true };
 }
 
 function resetGuestResponseSection() {
@@ -1106,6 +1345,49 @@ function normalizeMealChoice(value) {
     }
     const legacy = LEGACY_MEAL_VALUE_MAP[normalized.toLowerCase()];
     return legacy || normalized;
+}
+
+async function handleRehearsalLunchSubmit(form) {
+    const submitButton = form.querySelector('button[type="submit"]');
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+    const email = (data.rlEmail || '').trim();
+
+    if (!data.rlGuestGroupId) {
+        setRehearsalGuestResponseMessage('Please find your party first.');
+        showMessage('rehearsalLunchRsvpMessage', 'Please look up your party before submitting your RSVP.', 'error');
+        return;
+    }
+
+    const guestResponses = buildRehearsalGuestResponsesPayload();
+    const validation = validateRehearsalGuestResponses(guestResponses);
+    if (!validation.valid) {
+        setRehearsalGuestResponseMessage(validation.message || 'Please complete the RSVP for each guest.');
+        showMessage('rehearsalLunchRsvpMessage', validation.message || 'Please complete the RSVP for each guest.', 'error');
+        return;
+    }
+
+    submitButton?.setAttribute('disabled', 'disabled');
+    submitButton?.classList.add('is-loading');
+
+    try {
+        for (const response of guestResponses) {
+            await window.KMDataClient.submitRehearsalLunchRsvp({
+                fullName: response.name,
+                email,
+                rsvpStatus: response.status
+            });
+        }
+        showMessage('rehearsalLunchRsvpMessage', 'Got it! Thanks for your RSVP.', 'success');
+        form.reset();
+        resetRehearsalGuestResponseSection();
+    } catch (error) {
+        console.error('Unable to submit rehearsal lunch RSVP:', error);
+        showMessage('rehearsalLunchRsvpMessage', error.message || 'Unable to submit. Please try again.', 'error');
+    } finally {
+        submitButton?.removeAttribute('disabled');
+        submitButton?.classList.remove('is-loading');
+    }
 }
 
 async function handleAddressSubmit(form) {

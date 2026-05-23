@@ -661,18 +661,24 @@
                     <form id="rehearsalLunchRsvpForm" class="party-hmu-form">
                         <div class="form-group">
                             <label for="rlName">Your Name *</label>
-                            <input type="text" id="rlName" name="rlName" required>
+                            <div class="guest-lookup-controls">
+                                <input type="text" id="rlName" name="rlName" required>
+                                <button type="button" id="rehearsalGuestLookupButton" class="btn btn-secondary">Find My Party</button>
+                            </div>
+                            <p class="form-hint">Use the name that appears on your invitation so we can locate your party.</p>
+                            <input type="hidden" id="rlGuestGroupId" name="rlGuestGroupId">
+                            <div id="rehearsalGuestLookupMessage" class="guest-lookup-message" role="status" aria-live="polite"></div>
+                            <div id="rehearsalGuestLookupResults" class="guest-lookup-results" aria-live="polite"></div>
+                        </div>
+                        <div id="rehearsalGuestResponseSection" class="guest-response-section hidden" aria-live="polite">
+                            <h2 class="guest-response-title">Party RSVP</h2>
+                            <p class="form-hint">Confirm each guest&rsquo;s attendance for the rehearsal lunch.</p>
+                            <div id="rehearsalGuestResponseList" class="guest-response-list"></div>
+                            <div id="rehearsalGuestResponseMessage" class="guest-response-message" role="alert"></div>
                         </div>
                         <div class="form-group">
                             <label for="rlEmail">Email *</label>
                             <input type="email" id="rlEmail" name="rlEmail" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="rlAttending">Attending?</label>
-                            <select id="rlAttending" name="rlAttending" class="form-select">
-                                <option value="accepted">Yes, I&rsquo;ll be there</option>
-                                <option value="declined">No, I can&rsquo;t make it</option>
-                            </select>
                         </div>
                         <button type="submit" class="btn btn-primary">Submit RSVP</button>
                     </form>
