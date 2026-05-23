@@ -39,6 +39,8 @@ function initAdminApp() {
     const newGuestButton = document.getElementById('newGuestButton');
     const guestIsChildInput = document.getElementById('guestIsChild');
     const guestFlyoutCloseButton = document.getElementById('guestFlyoutCloseButton');
+    const refreshHmuButton = document.getElementById('refreshHmuButton');
+    const refreshRehearsalLunchButton = document.getElementById('refreshRehearsalLunchButton');
 
     loginForm?.addEventListener('submit', handleLogin);
     logoutButton?.addEventListener('click', handleLogout);
@@ -57,6 +59,8 @@ function initAdminApp() {
             closeCsvImportModal();
         }
     });
+    refreshHmuButton?.addEventListener('click', loadHmuSubmissions);
+    refreshRehearsalLunchButton?.addEventListener('click', loadRehearsalLunchRsvps);
     guestFilterInput?.addEventListener('input', event => {
         setGuestFilter(event.target.value || '');
     });
@@ -91,7 +95,7 @@ function initAdminApp() {
     if (state.token) {
         verifySession()
             .then(() => toggleConsole(true))
-            .then(loadGuests)
+            .then(() => Promise.all([loadGuests(), loadHmuSubmissions(), loadRehearsalLunchRsvps()]))
             .catch(() => {
                 setAuthToken(null);
                 toggleConsole(false);
@@ -214,7 +218,7 @@ async function handleLogin(event) {
         toggleConsole(true);
         showMessage('adminLoginMessage', '', 'success');
         pushToast('Admin console unlocked.', 'success');
-        await loadGuests();
+        await Promise.all([loadGuests(), loadHmuSubmissions(), loadRehearsalLunchRsvps()]);
     } catch (error) {
         console.error('Login failed:', error);
         showMessage('adminLoginMessage', error.message || 'Unable to log in.', 'error');
@@ -315,7 +319,7 @@ function renderGuestTable() {
     }
 
     if (state.isLoadingGuests) {
-        const skeletonWidths = ['70%', '50%', '30%', '30%', '30%', '55%', '45%', '40%', '65%', '40%', '80%'];
+        const skeletonWidths = ['70%', '50%', '30%', '30%', '30%', '30%', '55%', '45%', '40%', '65%', '40%', '80%'];
         const skeletonRow = () => `<tr class="skeleton-row">${skeletonWidths.map(w =>
             `<td><span class="skeleton-cell" style="width:${w}"></span></td>`
         ).join('')}</tr>`;
@@ -326,7 +330,7 @@ function renderGuestTable() {
     const countEl = document.getElementById('guestFilterCount');
 
     if (!state.guests.length) {
-        tbody.innerHTML = '<tr><td colspan="11" class="table-empty">No guests on file yet. Use “+ New Guest” or import a CSV.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="table-empty">No guests on file yet. Use "+ New Guest" or import a CSV.</td></tr>';
         if (countEl) countEl.textContent = '';
         return;
     }
@@ -336,7 +340,7 @@ function renderGuestTable() {
         : state.guests;
 
     if (!visibleGuests.length) {
-        tbody.innerHTML = '<tr><td colspan="11" class="table-empty">No guests match this filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="table-empty">No guests match this filter.</td></tr>';
         if (countEl) countEl.textContent = `0 of ${state.guests.length}`;
         return;
     }
@@ -360,6 +364,7 @@ function renderGuestTable() {
             <td class="px-3 py-2">${guest.isPrimary ? 'Yes' : 'No'}</td>
             <td class="px-3 py-2">${guest.isPlusOne ? 'Yes' : 'No'}</td>
             <td class="px-3 py-2">${guest.isChild ? 'Yes' : 'No'}</td>
+            <td class="px-3 py-2">${guest.isInvitedToRehearsalLunch ? 'Yes' : 'No'}</td>
             <td class="px-3 py-2">${rsvpBadge}</td>
             <td class="px-3 py-2">${escapeHtml(getMealDisplayValue(guest) || '—')}</td>
             <td class="px-3 py-2">${escapeHtml(guest.dietaryNotes || '—')}</td>
@@ -421,6 +426,7 @@ function populateGuestForm(guest) {
     document.getElementById('guestIsPrimary').checked = Boolean(guest.isPrimary);
     document.getElementById('guestIsPlusOne').checked = Boolean(guest.isPlusOne);
     document.getElementById('guestIsChild').checked = Boolean(guest.isChild);
+    document.getElementById('guestIsInvitedToRehearsalLunch').checked = Boolean(guest.isInvitedToRehearsalLunch);
     document.getElementById('guestRsvpStatus').value = guest.rsvpStatus || 'pending';
     const mealSelect = document.getElementById('guestMealChoice');
     if (mealSelect) {
@@ -474,6 +480,7 @@ async function handleGuestSubmit(event) {
         isPrimary: formData.get('isPrimary') === 'on' || document.getElementById('guestIsPrimary').checked,
         isPlusOne: formData.get('isPlusOne') === 'on' || document.getElementById('guestIsPlusOne').checked,
         isChild: formData.get('isChild') === 'on' || document.getElementById('guestIsChild').checked,
+        isInvitedToRehearsalLunch: formData.get('isInvitedToRehearsalLunch') === 'on' || document.getElementById('guestIsInvitedToRehearsalLunch').checked,
         rsvpStatus: formData.get('rsvpStatus') || 'pending',
         mealChoice: (formData.get('isChild') === 'on' || document.getElementById('guestIsChild').checked)
             ? state.childMealLabel
@@ -754,4 +761,66 @@ function renderStats() {
     setEl('statAccepted', accepted || '0');
     setEl('statDeclined', declined || '0');
     setEl('statPending', pending || '0');
+}
+
+async function loadHmuSubmissions() {
+    try {
+        const data = await window.KMDataClient.listAdminHmuSubmissions(state.token);
+        renderHmuTable(data.submissions || []);
+    } catch (error) {
+        console.error('Unable to load HMU submissions:', error);
+        pushToast('Unable to load Hair & Makeup submissions.', 'error');
+    }
+}
+
+function renderHmuTable(submissions) {
+    const tbody = document.querySelector('#hmuTable tbody');
+    if (!tbody) {
+        return;
+    }
+    if (!submissions.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="table-empty">No hair &amp; makeup inquiries yet.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = submissions.map(s => `
+        <tr>
+            <td class="px-3 py-2">${escapeHtml(s.fullName || '')}</td>
+            <td class="px-3 py-2">${escapeHtml(s.email || '—')}</td>
+            <td class="px-3 py-2">${s.wantsHair ? 'Yes' : 'No'}</td>
+            <td class="px-3 py-2">${s.wantsMakeup ? 'Yes' : 'No'}</td>
+            <td class="px-3 py-2 whitespace-nowrap">${formatDate(s.submittedAt)}</td>
+        </tr>`
+    ).join('');
+}
+
+async function loadRehearsalLunchRsvps() {
+    try {
+        const data = await window.KMDataClient.listAdminRehearsalLunchRsvps(state.token);
+        renderRehearsalLunchTable(data.rsvps || []);
+    } catch (error) {
+        console.error('Unable to load rehearsal lunch RSVPs:', error);
+        pushToast('Unable to load rehearsal lunch RSVPs.', 'error');
+    }
+}
+
+function renderRehearsalLunchTable(rsvps) {
+    const tbody = document.querySelector('#rehearsalLunchTable tbody');
+    if (!tbody) {
+        return;
+    }
+    if (!rsvps.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="table-empty">No rehearsal lunch RSVPs yet.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = rsvps.map(r => {
+        const status = r.rsvpStatus || 'accepted';
+        const badge = `<span class="rsvp-badge rsvp-badge--${escapeHtml(status)}">${escapeHtml(status)}</span>`;
+        return `
+        <tr>
+            <td class="px-3 py-2">${escapeHtml(r.fullName || '')}</td>
+            <td class="px-3 py-2">${escapeHtml(r.email || '—')}</td>
+            <td class="px-3 py-2">${badge}</td>
+            <td class="px-3 py-2 whitespace-nowrap">${formatDate(r.submittedAt)}</td>
+        </tr>`;
+    }).join('');
 }

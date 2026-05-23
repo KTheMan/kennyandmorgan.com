@@ -2263,6 +2263,29 @@ textarea { resize: vertical; }
     max-width: 800px;
 }
 
+/* Rehearsal Lunch RSVP Section */
+.party-rehearsal-rsvp-section {
+    margin-top: 4rem;
+    padding-top: 3rem;
+    border-top: 1px solid rgba(30, 34, 24, 0.12);
+}
+
+.party-rehearsal-rsvp-section .party-hmu-form {
+    max-width: 480px;
+}
+
+.form-select {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid rgba(30, 34, 24, 0.2);
+    background: var(--surface);
+    font-family: var(--sans);
+    font-size: 0.875rem;
+    color: var(--ink);
+    appearance: none;
+    cursor: pointer;
+}
+
 .party-faq-heading {
     font-family: var(--disp);
     font-size: clamp(1.75rem, 3.5vw, 3.5rem);
