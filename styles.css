@@ -1975,6 +1975,10 @@ textarea { resize: vertical; }
     font-style: italic;
 }
 
+.rsvp-menu-note-accommodation {
+    margin: 0;
+}
+
 /* =====================================================
    FAQ ACCORDION
    ===================================================== */
@@ -2179,10 +2183,19 @@ textarea { resize: vertical; }
 }
 
 /* Hair & Makeup Section */
-.party-hmu-section {
+.party-services-grid {
     margin-top: 4rem;
     padding-top: 3rem;
     border-top: 1px solid rgba(30, 34, 24, 0.12);
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+}
+
+.party-hmu-section {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
 }
 
 .party-hmu-heading {
@@ -2265,13 +2278,24 @@ textarea { resize: vertical; }
 
 /* Rehearsal Lunch RSVP Section */
 .party-rehearsal-rsvp-section {
-    margin-top: 4rem;
-    padding-top: 3rem;
-    border-top: 1px solid rgba(30, 34, 24, 0.12);
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
 }
 
 .party-rehearsal-rsvp-section .party-hmu-form {
     max-width: 480px;
+}
+
+@media screen and (min-width: 1100px) {
+    .party-services-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
+
+    .party-services-grid .party-hmu-form {
+        max-width: 100%;
+    }
 }
 
 .form-select {
