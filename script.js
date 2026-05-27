@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     initForms();
     initHeroCarousel();
     initFaqAccordions();
-    initFaqWeatherWidget();
 
     await initAccessControl().catch(error => {
         console.error('Access control failed to initialize:', error);
@@ -43,7 +42,8 @@ const ACCESS_TOKEN_STORAGE_KEY = 'km_access_token';
 let currentAccessLevel = ACCESS_LEVELS.locked;
 let hasUnlockedOnce = false;
 const ACCESS_ORDER = [ACCESS_LEVELS.locked, ACCESS_LEVELS.family, ACCESS_LEVELS.party, ACCESS_LEVELS.admin];
-const DEFAULT_ADULT_MEALS = ['Gnocchi', 'Atlantic Salmon', 'Flank Steak'];
+const DIETARY_RESTRICTIONS_OPTION = 'See Dietary Restrictions';
+const DEFAULT_ADULT_MEALS = ['Gnocchi', 'Atlantic Salmon', 'Flank Steak', DIETARY_RESTRICTIONS_OPTION];
 const LEGACY_MEAL_VALUE_MAP = {
     gnocchi: 'Gnocchi',
     salmon: 'Atlantic Salmon',
@@ -638,9 +638,14 @@ function initForms() {
                 wantsHair: form.hmuHair.checked,
                 wantsMakeup: form.hmuMakeup.checked
             };
+            const wantsOptOut = form.hmuOptOut.checked;
+            if (!payload.wantsHair && !payload.wantsMakeup && !wantsOptOut) {
+                showMessage('hmuMessage', 'Please select Hair, Makeup, or Opt-out before submitting.', 'error');
+                return;
+            }
             try {
                 await window.KMDataClient.submitHmu(payload);
-                showMessage('hmuMessage', 'Thanks! We will reach out to confirm.', 'success');
+                showMessage('hmuMessage', 'Thanks! Your preference has been submitted.', 'success');
                 form.reset();
             } catch (error) {
                 showMessage('hmuMessage', error.message || 'Unable to submit. Please try again.', 'error');
@@ -672,6 +677,9 @@ async function loadRsvpMenuOptions() {
             ? data.adultMeals.filter(item => typeof item === 'string' && item.trim() !== '').map(item => item.trim())
             : [];
         currentAdultMealOptions = adultMeals.length ? adultMeals : [...DEFAULT_ADULT_MEALS];
+        if (!currentAdultMealOptions.includes(DIETARY_RESTRICTIONS_OPTION)) {
+            currentAdultMealOptions = [...currentAdultMealOptions, DIETARY_RESTRICTIONS_OPTION];
+        }
         currentChildMealLabel = (data.childMeal || '').toString().trim() || "Child's Meal";
         if (activeGuestParty) {
             renderGuestResponseSection();
@@ -2115,56 +2123,6 @@ function initFaqAccordions() {
             }
         });
     });
-}
-
-async function initFaqWeatherWidget() {
-    const weatherWidget = document.querySelector('.weather-widget');
-    if (!weatherWidget) {
-        return;
-    }
-
-    const status = weatherWidget.querySelector('.weather-widget-status');
-    const targetDate = weatherWidget.dataset.weatherDate || '2026-09-12';
-    const url = new URL('https://climate-api.open-meteo.com/v1/climate');
-    url.searchParams.set('latitude', '36.9741');
-    url.searchParams.set('longitude', '-122.0308');
-    url.searchParams.set('start_date', targetDate);
-    url.searchParams.set('end_date', targetDate);
-    url.searchParams.set('models', 'MRI_AGCM3_2_S');
-    url.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min,precipitation_sum');
-    url.searchParams.set('temperature_unit', 'fahrenheit');
-    url.searchParams.set('precipitation_unit', 'inch');
-    url.searchParams.set('timezone', 'America/Los_Angeles');
-
-    try {
-        const response = await fetch(url.toString());
-        if (!response.ok) {
-            throw new Error(`Weather request failed with status ${response.status}`);
-        }
-
-        const data = await response.json();
-        const daily = data?.daily;
-        const maxTemp = daily?.temperature_2m_max?.[0];
-        const minTemp = daily?.temperature_2m_min?.[0];
-        const precipitation = daily?.precipitation_sum?.[0];
-
-        if (
-            typeof maxTemp !== 'number'
-            || typeof minTemp !== 'number'
-            || typeof precipitation !== 'number'
-        ) {
-            throw new Error('Weather data unavailable');
-        }
-
-        if (status) {
-            status.textContent = `Sept 12, 2026 forecast for Santa Cruz: high ${Math.round(maxTemp)}°F, low ${Math.round(minTemp)}°F, and ${precipitation.toFixed(2)}" expected precipitation.`;
-        }
-    } catch (error) {
-        console.error('Unable to load FAQ weather forecast:', error);
-        if (status) {
-            status.textContent = 'Weather forecast data is currently unavailable. Please check again later.';
-        }
-    }
 }
 
 function escapeHtml(value) {

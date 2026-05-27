@@ -458,8 +458,8 @@ test.describe('Wedding Party Page — PartyB', () => {
         // Check subs
         const briefSubs = await page.locator('.brief-sub').allTextContents();
         expect(briefSubs.some(s => /10 AM/i.test(s))).toBeTruthy();
-        expect(briefSubs.some(s => /4:00 PM ceremony/i.test(s))).toBeTruthy();
-        expect(briefSubs.some(s => /10 PM send-off/i.test(s))).toBeTruthy();
+        expect(briefSubs.some(s => /12.*2 PM/i.test(s))).toBeTruthy();
+        expect(briefSubs.some(s => /see timeline below/i.test(s))).toBeTruthy();
         expect(briefSubs.some(s => /408.*693-4383/i.test(s))).toBeTruthy();
 
         // Wedding party grid
