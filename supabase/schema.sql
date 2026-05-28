@@ -171,7 +171,10 @@ begin
     select level
     into matched_level
     from public.access_passwords
-    where crypt(coalesce(candidate_password, ''), password_hash) = password_hash
+    where (
+        (level in ('family', 'party') and crypt(lower(coalesce(candidate_password, '')), password_hash) = password_hash)
+        or (level = 'admin' and crypt(coalesce(candidate_password, ''), password_hash) = password_hash)
+    )
     order by public.access_rank(level) desc
     limit 1;
 
