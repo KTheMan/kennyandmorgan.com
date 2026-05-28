@@ -916,3 +916,9 @@ $$;
 
 grant execute on function public.submit_rehearsal_lunch_rsvp(jsonb) to anon, authenticated;
 grant execute on function public.list_admin_rehearsal_lunch_rsvps(text) to anon, authenticated;
+
+update public.guests
+set is_invited_to_rehearsal_lunch = true,
+    is_hmu_eligible = true,
+    updated_at = timezone('utc', now())
+where lower(trim(full_name)) = 'alyssa graham';

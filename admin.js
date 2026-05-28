@@ -14,6 +14,37 @@ const state = {
     childMealLabel: "Child's Meal"
 };
 
+function parseBooleanValue(value) {
+    if (typeof value === 'boolean') {
+        return value;
+    }
+    if (typeof value === 'number') {
+        return value === 1;
+    }
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (normalized === 'true' || normalized === '1' || normalized === 'yes') {
+            return true;
+        }
+        if (normalized === 'false' || normalized === '0' || normalized === 'no') {
+            return false;
+        }
+    }
+    return false;
+}
+
+function normalizeAdminGuestRecord(guest = {}) {
+    return {
+        ...guest,
+        isInvitedToRehearsalLunch: parseBooleanValue(
+            guest.isInvitedToRehearsalLunch ?? guest.is_invited_to_rehearsal_lunch
+        ),
+        isHmuEligible: parseBooleanValue(
+            guest.isHmuEligible ?? guest.is_hmu_eligible ?? guest.isEligibleForMakeup ?? guest.is_eligible_for_makeup
+        )
+    };
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         await window.KMSiteConfig.load();
@@ -268,7 +299,7 @@ async function loadGuests() {
     renderGuestTable();
     try {
         const data = await window.KMDataClient.listAdminGuests(state.token);
-        state.guests = data.guests || [];
+        state.guests = (data.guests || []).map(normalizeAdminGuestRecord);
         applyGuestFilter();
     } catch (error) {
         console.error('Unable to load guests:', error);
@@ -497,6 +528,8 @@ async function handleGuestSubmit(event) {
         state: formData.get('state')?.toString().trim() || '',
         postalCode: formData.get('postalCode')?.toString().trim() || ''
     };
+    payload.is_invited_to_rehearsal_lunch = payload.isInvitedToRehearsalLunch;
+    payload.is_hmu_eligible = payload.isHmuEligible;
 
     let hasFieldErrors = false;
     if (!payload.fullName) {
