@@ -636,10 +636,10 @@ function initForms() {
                 fullName: form.hmuName.value.trim(),
                 email: form.hmuEmail.value.trim(),
                 wantsHair: form.hmuHair.checked,
-                wantsMakeup: form.hmuMakeup.checked
+                wantsMakeup: form.hmuMakeup.checked,
+                wantsOptOut: form.hmuOptOut.checked
             };
-            const wantsOptOut = form.hmuOptOut.checked;
-            if (!payload.wantsHair && !payload.wantsMakeup && !wantsOptOut) {
+            if (!payload.wantsHair && !payload.wantsMakeup && !payload.wantsOptOut) {
                 showMessage('hmuMessage', 'Please select Hair, Makeup, or Opt-out before submitting.', 'error');
                 return;
             }
