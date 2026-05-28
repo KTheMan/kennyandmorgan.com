@@ -54,12 +54,23 @@ cp site.config.example.json site.config.json
 3. In Supabase:
 - run `supabase/schema.sql`
 - run `supabase/seed.example.sql` after replacing the sample passwords
+- if your project already existed before PRs #39, #40, and #41, run `supabase/init-pr39-pr41.sql` (replace password placeholders first) to align function/table changes and reseed access hashes
 - verify Row Level Security remains enabled on every table
 
 4. Preview locally:
 ```bash
 npx http-server . -p 8000
 ```
+
+### Existing Supabase project upgrade (PRs #39, #40, #41)
+
+1. Open Supabase SQL Editor.
+2. Paste `supabase/init-pr39-pr41.sql`.
+3. Replace:
+   - `family-password-here`
+   - `party-password-here`
+   - `admin-password-here`
+4. Run the script once to update functions/tables and refresh access hashes.
 
 ## Runtime config
 
