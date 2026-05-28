@@ -39,7 +39,12 @@
             return 'admin';
         }
         for (const level of [...ACCESS_LEVELS].reverse()) {
-            if (passwords[level] && candidate === passwords[level]) {
+            const stored = passwords[level];
+            if (!stored) continue;
+            const match = level === 'admin'
+                ? candidate === stored
+                : candidate.toLowerCase() === stored.toLowerCase();
+            if (match) {
                 return level;
             }
         }
