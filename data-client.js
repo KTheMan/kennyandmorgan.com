@@ -507,27 +507,7 @@
     }
 
     async function submitHmu(payload) {
-        try {
-            return await callSupabaseRpc('save_hmu_submission', { payload });
-        } catch (error) {
-            if (!canUseLocalFallback()) {
-                throw error;
-            }
-            const entries = loadLocalCollection('hmu_submissions');
-            entries.push({ ...payload, submittedAt: new Date().toISOString() });
-            localStorage.setItem('hmu_submissions', JSON.stringify(entries));
-            return { success: true, storedLocally: true };
-        }
-    }
-
-    async function listAdminHmuSubmissions(token) {
-        const data = await callSupabaseRpc('list_admin_hmu_submissions', {
-            session_token: token
-        });
-        return {
-            success: true,
-            submissions: Array.isArray(data) ? data : []
-        };
+        return callSupabaseRpc('save_hmu_submission', { payload });
     }
 
     async function submitRehearsalLunchRsvp(payload) {
@@ -562,7 +542,6 @@
         submitRsvp,
         submitAddress,
         submitHmu,
-        listAdminHmuSubmissions,
         submitRehearsalLunchRsvp,
         listAdminRehearsalLunchRsvps,
         listAdminGuests,

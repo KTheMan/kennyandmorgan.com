@@ -21,8 +21,10 @@ create table if not exists public.guests (
     group_id text not null,
     is_primary boolean not null default false,
     is_plus_one boolean not null default false,
+    is_hmu_eligible boolean not null default false,
     notes text,
     rsvp_status text not null default 'pending' check (rsvp_status in ('pending', 'accepted', 'declined')),
+    hmu_selection text not null default 'not_selected',
     meal_choice text,
     dietary_notes text,
     address_line1 text,
@@ -37,6 +39,24 @@ create table if not exists public.guests (
 
 alter table public.guests
     add column if not exists is_child boolean not null default false;
+
+alter table public.guests
+    add column if not exists is_hmu_eligible boolean not null default false,
+    add column if not exists hmu_selection text not null default 'not_selected';
+
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'guests_hmu_selection_check'
+    ) then
+        alter table public.guests
+            add constraint guests_hmu_selection_check
+            check (hmu_selection in ('not_selected', 'hair', 'makeup', 'hair_makeup', 'opt_out'));
+    end if;
+end;
+$$;
 
 create index if not exists guests_group_id_idx on public.guests (group_id);
 create index if not exists guests_full_name_idx on public.guests using gin (to_tsvector('simple', coalesce(full_name, '')));
@@ -284,6 +304,8 @@ select coalesce(jsonb_agg(
                 'isPrimary', guest.is_primary,
                 'isPlusOne', guest.is_plus_one,
                 'isChild', guest.is_child,
+                'isHmuEligible', guest.is_hmu_eligible,
+                'hmuSelection', guest.hmu_selection,
                 'notes', guest.notes,
                 'rsvpStatus', guest.rsvp_status,
                 'mealChoice', guest.meal_choice,
@@ -464,6 +486,8 @@ as $$
         'isPrimary', guest.is_primary,
         'isPlusOne', guest.is_plus_one,
         'isChild', guest.is_child,
+        'isHmuEligible', guest.is_hmu_eligible,
+        'hmuSelection', guest.hmu_selection,
         'notes', guest.notes,
         'rsvpStatus', guest.rsvp_status,
         'mealChoice', guest.meal_choice,
@@ -502,8 +526,10 @@ begin
             is_primary,
             is_plus_one,
             is_child,
+            is_hmu_eligible,
             notes,
             rsvp_status,
+            hmu_selection,
             meal_choice,
             dietary_notes,
             address_line1,
@@ -519,8 +545,10 @@ begin
             coalesce((payload->>'isPrimary')::boolean, false),
             coalesce((payload->>'isPlusOne')::boolean, false),
             coalesce((payload->>'isChild')::boolean, false),
+            coalesce((payload->>'isHmuEligible')::boolean, false),
             nullif(trim(coalesce(payload->>'notes', '')), ''),
             coalesce(nullif(trim(coalesce(payload->>'rsvpStatus', '')), ''), 'pending'),
+            coalesce(nullif(trim(coalesce(payload->>'hmuSelection', '')), ''), 'not_selected'),
             nullif(trim(coalesce(payload->>'mealChoice', '')), ''),
             nullif(trim(coalesce(payload->>'dietaryNotes', '')), ''),
             nullif(trim(coalesce(payload->>'addressLine1', '')), ''),
@@ -538,8 +566,10 @@ begin
             is_primary = coalesce((payload->>'isPrimary')::boolean, false),
             is_plus_one = coalesce((payload->>'isPlusOne')::boolean, false),
             is_child = coalesce((payload->>'isChild')::boolean, false),
+            is_hmu_eligible = coalesce((payload->>'isHmuEligible')::boolean, false),
             notes = nullif(trim(coalesce(payload->>'notes', '')), ''),
             rsvp_status = coalesce(nullif(trim(coalesce(payload->>'rsvpStatus', '')), ''), 'pending'),
+            hmu_selection = coalesce(nullif(trim(coalesce(payload->>'hmuSelection', '')), ''), 'not_selected'),
             meal_choice = nullif(trim(coalesce(payload->>'mealChoice', '')), ''),
             dietary_notes = nullif(trim(coalesce(payload->>'dietaryNotes', '')), ''),
             address_line1 = nullif(trim(coalesce(payload->>'addressLine1', '')), ''),
@@ -599,8 +629,10 @@ begin
             is_primary,
             is_plus_one,
             is_child,
+            is_hmu_eligible,
             notes,
             rsvp_status,
+            hmu_selection,
             meal_choice,
             dietary_notes,
             address_line1,
@@ -615,8 +647,10 @@ begin
             coalesce((entry->>'isPrimary')::boolean, false),
             coalesce((entry->>'isPlusOne')::boolean, false),
             coalesce((entry->>'isChild')::boolean, false),
+            coalesce((entry->>'isHmuEligible')::boolean, false),
             nullif(trim(coalesce(entry->>'notes', '')), ''),
             coalesce(nullif(trim(coalesce(entry->>'rsvpStatus', '')), ''), 'pending'),
+            coalesce(nullif(trim(coalesce(entry->>'hmuSelection', '')), ''), 'not_selected'),
             nullif(trim(coalesce(entry->>'mealChoice', '')), ''),
             nullif(trim(coalesce(entry->>'dietaryNotes', '')), ''),
             nullif(trim(coalesce(entry->>'addressLine1', '')), ''),
@@ -742,17 +776,9 @@ grant execute on function public.admin_delete_guest(text, bigint) to anon, authe
 grant execute on function public.admin_import_guests(text, jsonb) to anon, authenticated;
 grant execute on function public.get_registry_items() to anon, authenticated;
 
--- HMU (Hair & Makeup) submissions
-create table if not exists public.hmu_submissions (
-    id bigint generated by default as identity primary key,
-    full_name text not null,
-    email text,
-    wants_hair boolean not null default false,
-    wants_makeup boolean not null default false,
-    submitted_at timestamptz not null default timezone('utc', now())
-);
-
-revoke all on public.hmu_submissions from anon, authenticated;
+-- HMU (Hair & Makeup) preferences are stored on guests
+drop function if exists public.list_admin_hmu_submissions(text);
+drop table if exists public.hmu_submissions;
 
 create or replace function public.save_hmu_submission(payload jsonb)
 returns jsonb
@@ -760,45 +786,74 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+    normalized_name text := trim(coalesce(payload->>'fullName', ''));
+    normalized_email text := nullif(trim(coalesce(payload->>'email', '')), '');
+    wants_hair boolean := coalesce((payload->>'wantsHair')::boolean, false);
+    wants_makeup boolean := coalesce((payload->>'wantsMakeup')::boolean, false);
+    wants_opt_out boolean := coalesce((payload->>'wantsOptOut')::boolean, false);
+    normalized_selection text := case
+        when wants_opt_out then 'opt_out'
+        when wants_hair and wants_makeup then 'hair_makeup'
+        when wants_hair then 'hair'
+        when wants_makeup then 'makeup'
+        else 'not_selected'
+    end;
+    matching_guest_id bigint;
+    is_eligible boolean := false;
+    matching_count integer := 0;
 begin
-    if trim(coalesce(payload->>'fullName', '')) = '' then
+    if normalized_name = '' then
         raise exception 'Name is required.';
     end if;
 
-    insert into public.hmu_submissions (full_name, email, wants_hair, wants_makeup)
-    values (
-        trim(payload->>'fullName'),
-        nullif(trim(coalesce(payload->>'email', '')), ''),
-        coalesce((payload->>'wantsHair')::boolean, false),
-        coalesce((payload->>'wantsMakeup')::boolean, false)
-    );
+    if normalized_selection = 'not_selected' then
+        raise exception 'Please choose Hair, Makeup, or Opt-out.';
+    end if;
+
+    select count(*)
+    into matching_count
+    from public.guests g
+    where lower(trim(g.full_name)) = lower(normalized_name)
+      and (
+            normalized_email is null
+            or lower(coalesce(g.email, '')) = lower(normalized_email)
+      );
+
+    if matching_count > 1 and normalized_email is null then
+        raise exception 'Multiple guests match that name. Please include the RSVP email.';
+    end if;
+
+    select g.id, g.is_hmu_eligible
+    into matching_guest_id, is_eligible
+    from public.guests g
+    where lower(trim(g.full_name)) = lower(normalized_name)
+      and (
+            normalized_email is null
+            or lower(coalesce(g.email, '')) = lower(normalized_email)
+      )
+    order by (case when normalized_email is not null and lower(coalesce(g.email, '')) = lower(normalized_email) then 0 else 1 end), g.id
+    limit 1;
+
+    if matching_guest_id is null then
+        raise exception 'We could not match that name/email to a guest. Please use the exact RSVP details.';
+    end if;
+
+    if not is_eligible then
+        raise exception 'This guest is not marked as eligible for hair and makeup.';
+    end if;
+
+    update public.guests
+    set hmu_selection = normalized_selection,
+        email = coalesce(normalized_email, email),
+        updated_at = timezone('utc', now())
+    where id = matching_guest_id;
 
     return jsonb_build_object('success', true, 'message', 'Thanks! We will reach out to confirm.');
 end;
 $$;
 
-create or replace function public.list_admin_hmu_submissions(session_token text)
-returns jsonb
-language sql
-security definer
-set search_path = public
-as $$
-    with authorized as (
-        select public.require_session(session_token, 'admin')
-    )
-    select coalesce(jsonb_agg(jsonb_build_object(
-        'id', h.id,
-        'fullName', h.full_name,
-        'email', h.email,
-        'wantsHair', h.wants_hair,
-        'wantsMakeup', h.wants_makeup,
-        'submittedAt', h.submitted_at
-    ) order by h.submitted_at desc), '[]'::jsonb)
-    from public.hmu_submissions h, authorized;
-$$;
-
 grant execute on function public.save_hmu_submission(jsonb) to anon, authenticated;
-grant execute on function public.list_admin_hmu_submissions(text) to anon, authenticated;
 
 -- Rehearsal lunch: invited flag on guests
 alter table public.guests
