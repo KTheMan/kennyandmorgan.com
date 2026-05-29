@@ -15,10 +15,12 @@
 
 ## Supabase Edge Functions
 
-The `fetch-registry` Edge Function proxies registry data from MyRegistry, caches it in the
-`registry_items` table, and returns the items to the static site. It refreshes the cache
-whenever it is older than 10 minutes by default (configurable via the `REGISTRY_CACHE_TTL_SECONDS`
-environment variable on the Edge Function).
+The `fetch-registry` Edge Function now uses a split flow:
+
+- `POST /functions/v1/fetch-registry` performs fast MyRegistry sync for presence/core fields when stale, then returns cached rows immediately.
+- `POST /functions/v1/fetch-registry?mode=enrich` runs high-resolution image enrichment in the background path.
+
+Fast sync stores `registry_image_url`; enrichment updates `resolved_image_url`; clients display `resolved_image_url ?? registry_image_url`.
 
 ### First-time setup
 
