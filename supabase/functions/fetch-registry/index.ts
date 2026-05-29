@@ -224,12 +224,32 @@ function isMyRegistryFlowUrl(value: string): boolean {
     }
 }
 
+function isMyRegistryUrl(value: string): boolean {
+    try {
+        const url = new URL(value);
+        return url.origin === MYREGISTRY_ORIGIN;
+    } catch {
+        return false;
+    }
+}
+
 function isHttpUrl(value: string): boolean {
     try {
         const url = new URL(value);
         return url.protocol === 'http:' || url.protocol === 'https:';
     } catch {
         return false;
+    }
+}
+
+function normalizeHttpUrlCandidate(value: string, baseUrl: string): string | null {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === '#' || /^(javascript|data|vbscript|file):/i.test(trimmed)) return null;
+    try {
+        const url = new URL(trimmed, baseUrl);
+        return isHttpUrl(url.toString()) ? url.toString() : null;
+    } catch {
+        return null;
     }
 }
 
@@ -309,17 +329,42 @@ function resolveRegistryProductUrls(
     return { productUrl, sourceProductUrl };
 }
 
-function getFirstHref(html: string): string | null {
-    HREF_ATTR_REGEX.lastIndex = 0;
-    let match: RegExpExecArray | null = HREF_ATTR_REGEX.exec(html);
-    while (match) {
-        const href = (match[1] || '').trim();
-        if (href && href !== '#' && !/^(javascript|data|vbscript|file):/i.test(href)) {
-            return href;
-        }
-        match = HREF_ATTR_REGEX.exec(html);
+function getHrefCandidates(html: string, baseUrl: string): string[] {
+    const hrefs: string[] = [];
+    for (const match of html.matchAll(HREF_ATTR_REGEX)) {
+        const normalized = normalizeHttpUrlCandidate(match[1] ?? '', baseUrl);
+        if (normalized) hrefs.push(normalized);
     }
-    return null;
+    return hrefs;
+}
+
+function collectRetailerPageCandidatesFromHtml(html: string, pageUrl: string): string[] {
+    const candidates: string[] = [];
+    const addCandidate = (value: string | null) => {
+        if (!value) return;
+        const normalized = normalizeHttpUrlCandidate(value, pageUrl);
+        if (normalized) candidates.push(normalized);
+    };
+
+    const canonicalRegex = /<link[^>]+rel=["'][^"']*\bcanonical\b[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>/gi;
+    for (const match of html.matchAll(canonicalRegex)) addCandidate(match[1]);
+
+    const ogUrlRegex = /<meta[^>]+property=["']og:url["'][^>]*content=["']([^"']+)["'][^>]*>/gi;
+    for (const match of html.matchAll(ogUrlRegex)) addCandidate(match[1]);
+
+    const hrefCandidates = getHrefCandidates(html, pageUrl);
+    for (const href of hrefCandidates) {
+        addCandidate(href);
+        for (const embedded of extractEmbeddedUrlCandidates(href)) addCandidate(embedded);
+    }
+
+    const unique = [...new Set(candidates)];
+    unique.sort((left, right) => {
+        const leftRank = isMyRegistryUrl(left) ? 1 : 0;
+        const rightRank = isMyRegistryUrl(right) ? 1 : 0;
+        return leftRank - rightRank;
+    });
+    return unique;
 }
 
 function inferItemType(raw: Record<string, unknown>): 'product' | 'fund' {
@@ -481,13 +526,44 @@ async function fetchBestImageFromMyRegistryFlowUrl(
     });
 
     if (!response.ok) return null;
+    const firstPageUrl = response.url || pageUrl;
     const html = await response.text();
-    const bestLinkedImage = collectImageCandidatesFromHtml(
-        html.length > MAX_PARSABLE_HTML_BYTES ? html.slice(0, MAX_PARSABLE_HTML_BYTES) : html,
-        response.url || pageUrl,
-    )[0];
-    if (!bestLinkedImage) return null;
+    const parsedHtml = html.length > MAX_PARSABLE_HTML_BYTES ? html.slice(0, MAX_PARSABLE_HTML_BYTES) : html;
+    const imageCandidates = collectImageCandidatesFromHtml(parsedHtml, firstPageUrl);
 
+    const followedUrls = new Set<string>([firstPageUrl]);
+    const followUpUrl = collectRetailerPageCandidatesFromHtml(parsedHtml, firstPageUrl).find(candidate =>
+        !followedUrls.has(candidate) && !isMyRegistryFlowUrl(candidate)
+    );
+
+    if (followUpUrl) {
+        try {
+            const followUpResponse = await fetch(followUpUrl, {
+                headers: {
+                    'User-Agent':
+                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                },
+                redirect: 'follow',
+            });
+            if (followUpResponse.ok) {
+                const followUpFinalUrl = followUpResponse.url || followUpUrl;
+                const followUpHtml = await followUpResponse.text();
+                const parsedFollowUpHtml = followUpHtml.length > MAX_PARSABLE_HTML_BYTES
+                    ? followUpHtml.slice(0, MAX_PARSABLE_HTML_BYTES)
+                    : followUpHtml;
+                imageCandidates.push(
+                    ...collectImageCandidatesFromHtml(parsedFollowUpHtml, followUpFinalUrl),
+                );
+            }
+        } catch {
+            // Preserve existing behavior when optional follow-up fetch fails.
+        }
+    }
+
+    const bestLinkedImage = imageCandidates[0];
+    if (!bestLinkedImage) return null;
     const currentScore = currentImageUrl ? scoreImageUrlCandidate(currentImageUrl) : Number.NEGATIVE_INFINITY;
     const linkedScore = scoreImageUrlCandidate(bestLinkedImage);
     return linkedScore > currentScore ? bestLinkedImage : null;
@@ -764,6 +840,12 @@ function parseItemsFromHtmlMarkup(html: string, fetchedAt: string, registryId: s
         const priceText = getTagText(block, 'gift-price');
         const desiredQtyText = getTagText(block, 'desiredQty');
         const receivedQtyText = getTagText(block, 'receivedQty');
+        const hrefCandidates = getHrefCandidates(block, MYREGISTRY_ORIGIN);
+        const sourceHrefCandidates = hrefCandidates.flatMap(href => [href, ...extractEmbeddedUrlCandidates(href)]);
+        const productUrl = hrefCandidates.find(isMyRegistryFlowUrl) ?? hrefCandidates[0] ?? null;
+        const sourceProductUrl = sourceHrefCandidates.find(candidate =>
+            candidate !== productUrl && !isMyRegistryFlowUrl(candidate)
+        ) ?? null;
         const rawItem: Record<string, unknown> = {
             id,
             name,
@@ -773,7 +855,8 @@ function parseItemsFromHtmlMarkup(html: string, fetchedAt: string, registryId: s
             quantityPurchased: receivedQtyText,
             imageUrl: getImageUrlFromHtml(block),
             storeName,
-            productUrl: getFirstHref(block),
+            productUrl,
+            sourceProductUrl,
             category: getTagText(block, 'gift-category'),
             isPurchased: /\bpurchased\b/i.test(block) && !/\bnot purchased\b/i.test(block),
             registryId,
