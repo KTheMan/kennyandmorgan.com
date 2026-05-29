@@ -13,6 +13,7 @@ const MYREGISTRY_ORIGIN = 'https://www.myregistry.com';
 const MYREGISTRY_IMAGE_HOST_SUFFIXES = ['myregistry.com', 'blob.core.windows.net'];
 const SOURCE_IMAGE_HINTS = ['source', 'original', 'large', 'full', 'zoom', 'hires', 'highres'];
 const THUMBNAIL_IMAGE_HINTS = ['thumb', 'thumbnail', 'small', 'icon', 'mini'];
+const MYREGISTRY_IMAGE_UPGRADE_CONCURRENCY = 4;
 const REGISTRY_URL =
     Deno.env.get('MYREGISTRY_URL') ?? 'https://www.myregistry.com/giftlist/morganandkenny';
 
@@ -365,6 +366,107 @@ function resolveBestImageUrl(raw: Record<string, unknown>): string | null {
     return collectImageCandidates(raw)[0] ?? null;
 }
 
+function shouldAttemptMyRegistryImageUpgrade(item: RegistryItem): boolean {
+    if (item.item_type === 'fund') return false;
+    if (!item.product_url || !isMyRegistryFlowUrl(item.product_url)) return false;
+    if (!item.image_url) return true;
+    if (THUMBNAIL_IMAGE_HINTS.some(hint => item.image_url?.toLowerCase().includes(hint))) return true;
+    try {
+        const url = new URL(item.image_url);
+        if (isMyRegistryImageHost(url.hostname)) return true;
+    } catch {
+        return true;
+    }
+    return false;
+}
+
+function collectImageCandidatesFromHtml(html: string, baseUrl: string): string[] {
+    const candidates: string[] = [];
+    const addCandidate = (value: unknown) => {
+        const text = toTextValue(value);
+        if (!text) return;
+        const trimmed = decodeHtmlEntities(text).trim();
+        if (!trimmed || /^(javascript|data|vbscript|file):/i.test(trimmed)) return;
+        try {
+            const resolved = new URL(trimmed, baseUrl).toString();
+            if (isProbablyImageUrl(resolved)) candidates.push(resolved);
+        } catch {
+            // Ignore malformed URLs extracted from page markup.
+        }
+    };
+
+    const metaRegex = /<meta[^>]+(?:property|name|itemprop)=["'](?:og:image|twitter:image|image)["'][^>]*content=["']([^"']+)["'][^>]*>/gi;
+    for (const match of html.matchAll(metaRegex)) addCandidate(match[1]);
+
+    const attrRegex =
+        /<(?:img|source|a)[^>]*(?:src|srcset|data-src|data-srcset|data-original|data-image|data-zoom-image|href)=["']([^"']+)["'][^>]*>/gi;
+    for (const match of html.matchAll(attrRegex)) {
+        const [firstSrcset] = String(match[1] ?? '').split(',');
+        const srcsetCandidate = firstSrcset?.trim().split(/\s+/)[0] ?? '';
+        addCandidate(srcsetCandidate || match[1]);
+    }
+
+    const backgroundImageRegex = /background-image\s*:\s*url\((['"]?)([^'")]+)\1\)/gi;
+    for (const match of html.matchAll(backgroundImageRegex)) addCandidate(match[2]);
+
+    const unique = [...new Set(candidates)];
+    unique.sort((left, right) => scoreImageUrlCandidate(right) - scoreImageUrlCandidate(left));
+    return unique;
+}
+
+async function fetchBestImageFromMyRegistryFlowUrl(
+    flowUrl: string,
+    currentImageUrl: string | null,
+): Promise<string | null> {
+    const response = await fetch(flowUrl, {
+        headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+        },
+        redirect: 'follow',
+    });
+
+    if (!response.ok) return null;
+    const html = await response.text();
+    const bestLinkedImage = collectImageCandidatesFromHtml(
+        html.length > MAX_PARSABLE_HTML_BYTES ? html.slice(0, MAX_PARSABLE_HTML_BYTES) : html,
+        response.url || flowUrl,
+    )[0];
+    if (!bestLinkedImage) return null;
+
+    const currentScore = currentImageUrl ? scoreImageUrlCandidate(currentImageUrl) : Number.NEGATIVE_INFINITY;
+    const linkedScore = scoreImageUrlCandidate(bestLinkedImage);
+    return linkedScore > currentScore ? bestLinkedImage : null;
+}
+
+async function upgradeImagesFromMyRegistryLinks(items: RegistryItem[]): Promise<RegistryItem[]> {
+    const upgradedItems = [...items];
+    const candidates = items
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => shouldAttemptMyRegistryImageUpgrade(item));
+
+    for (let start = 0; start < candidates.length; start += MYREGISTRY_IMAGE_UPGRADE_CONCURRENCY) {
+        const batch = candidates.slice(start, start + MYREGISTRY_IMAGE_UPGRADE_CONCURRENCY);
+        await Promise.all(batch.map(async ({ item, index }) => {
+            try {
+                const upgradedImageUrl = await fetchBestImageFromMyRegistryFlowUrl(
+                    item.product_url as string,
+                    item.image_url,
+                );
+                if (!upgradedImageUrl) return;
+                upgradedItems[index] = { ...item, image_url: upgradedImageUrl };
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                console.warn(`[fetch-registry] Failed to enrich image for ${item.id}: ${message}`);
+            }
+        }));
+    }
+
+    return upgradedItems;
+}
+
 function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): RegistryItem | null {
     const id = String(
         raw.id ??
@@ -685,19 +787,20 @@ async function fetchFromMyRegistry(): Promise<RegistryItem[]> {
     const registryId = getRegistryPageIdFromHtml(htmlForParsing);
 
     const nextDataItems = parseItemsFromNextData(htmlForParsing, fetchedAt, registryId);
-    if (nextDataItems.length > 0) {
-        return nextDataItems;
-    }
-
     const jsonLdItems = parseItemsFromJsonLd(htmlForParsing, fetchedAt, registryId);
     const htmlMarkupItems = parseItemsFromHtmlMarkup(htmlForParsing, fetchedAt, registryId);
 
-    if (jsonLdItems.length > 0) {
-        return mergeRegistryItems(jsonLdItems, htmlMarkupItems);
+    let parsedItems: RegistryItem[] = [];
+    if (nextDataItems.length > 0) {
+        parsedItems = nextDataItems;
+    } else if (jsonLdItems.length > 0) {
+        parsedItems = mergeRegistryItems(jsonLdItems, htmlMarkupItems);
+    } else if (htmlMarkupItems.length > 0) {
+        parsedItems = htmlMarkupItems;
     }
 
-    if (htmlMarkupItems.length > 0) {
-        return htmlMarkupItems;
+    if (parsedItems.length > 0) {
+        return await upgradeImagesFromMyRegistryLinks(parsedItems);
     }
 
     throw new Error(
