@@ -271,11 +271,13 @@ $$;
 
 -- Drop the old 2-parameter signature before recreating with the new 3-parameter one.
 drop function if exists public.search_guest_groups(text, integer);
+drop function if exists public.search_guest_groups(text, integer, boolean);
 
 create or replace function public.search_guest_groups(
     search_name text,
     max_results integer default 5,
-    require_rehearsal_eligible boolean default false
+    require_rehearsal_eligible boolean default false,
+    require_hmu_eligible boolean default false
 )
 returns jsonb
 language sql
@@ -291,6 +293,7 @@ with tokens as (
       and lower(g.full_name) like '%' || lower(t.parts[1]) || '%'
       and lower(g.full_name) like '%' || lower(t.parts[cardinality(t.parts)]) || '%'
       and (not require_rehearsal_eligible or g.is_invited_to_rehearsal_lunch = true)
+      and (not require_hmu_eligible or g.is_hmu_eligible = true)
 ), grouped as (
     select distinct group_id
     from filtered
@@ -305,6 +308,7 @@ select coalesce(jsonb_agg(
             from public.guests
             where group_id = grp.group_id
               and (not require_rehearsal_eligible or is_invited_to_rehearsal_lunch = true)
+              and (not require_hmu_eligible or is_hmu_eligible = true)
             order by is_primary desc, full_name asc
             limit 1
         ), ''),
@@ -332,6 +336,7 @@ select coalesce(jsonb_agg(
             from public.guests guest
             where guest.group_id = grp.group_id
               and (not require_rehearsal_eligible or guest.is_invited_to_rehearsal_lunch = true)
+              and (not require_hmu_eligible or guest.is_hmu_eligible = true)
         ), '[]'::jsonb)
     )
 ), '[]'::jsonb)
@@ -801,8 +806,8 @@ security definer
 set search_path = public
 as $$
 declare
+    normalized_guest_id text := nullif(trim(coalesce(payload->>'guestId', '')), '');
     normalized_name text := trim(coalesce(payload->>'fullName', ''));
-    normalized_email text := nullif(trim(coalesce(payload->>'email', '')), '');
     wants_hair boolean := coalesce((payload->>'wantsHair')::boolean, false);
     wants_makeup boolean := coalesce((payload->>'wantsMakeup')::boolean, false);
     wants_opt_out boolean := coalesce((payload->>'wantsOptOut')::boolean, false);
@@ -817,40 +822,46 @@ declare
     is_eligible boolean := false;
     matching_count integer := 0;
 begin
-    if normalized_name = '' then
-        raise exception 'Name is required.';
-    end if;
-
     if normalized_selection = 'not_selected' then
         raise exception 'Please choose Hair, Makeup, or Opt-out.';
     end if;
 
-    select count(*)
-    into matching_count
-    from public.guests g
-    where lower(trim(g.full_name)) = lower(normalized_name)
-      and (
-            normalized_email is null
-            or lower(coalesce(g.email, '')) = lower(normalized_email)
-      );
-
-    if matching_count > 1 and normalized_email is null then
-        raise exception 'Multiple guests match that name. Please include the RSVP email.';
+    if normalized_guest_id is not null and normalized_guest_id !~ '^\d+$' then
+        raise exception 'Invalid guest selection.';
     end if;
 
-    select g.id, g.is_hmu_eligible
-    into matching_guest_id, is_eligible
-    from public.guests g
-    where lower(trim(g.full_name)) = lower(normalized_name)
-      and (
-            normalized_email is null
-            or lower(coalesce(g.email, '')) = lower(normalized_email)
-      )
-    order by (case when normalized_email is not null and lower(coalesce(g.email, '')) = lower(normalized_email) then 0 else 1 end), g.id
-    limit 1;
+    if normalized_guest_id is not null then
+        select g.id, g.is_hmu_eligible
+        into matching_guest_id, is_eligible
+        from public.guests g
+        where g.id = normalized_guest_id::bigint
+        limit 1;
+    else
+        if normalized_name = '' then
+            raise exception 'Name is required.';
+        end if;
+
+        select count(*)
+        into matching_count
+        from public.guests g
+        where lower(trim(g.full_name)) = lower(normalized_name)
+          and g.is_hmu_eligible = true;
+
+        if matching_count > 1 then
+            raise exception 'Multiple eligible guests match that name. Please use Find Me and select your name.';
+        end if;
+
+        select g.id, g.is_hmu_eligible
+        into matching_guest_id, is_eligible
+        from public.guests g
+        where lower(trim(g.full_name)) = lower(normalized_name)
+          and g.is_hmu_eligible = true
+        order by g.id
+        limit 1;
+    end if;
 
     if matching_guest_id is null then
-        raise exception 'We could not match that name/email to a guest. Please use the exact RSVP details.';
+        raise exception 'We could not match that guest. Please use Find Me and select your name.';
     end if;
 
     if not is_eligible then
@@ -859,7 +870,6 @@ begin
 
     update public.guests
     set hmu_selection = normalized_selection,
-        email = coalesce(normalized_email, email),
         updated_at = timezone('utc', now())
     where id = matching_guest_id;
 

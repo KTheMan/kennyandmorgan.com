@@ -145,13 +145,19 @@
         return { success: true };
     }
 
-    async function searchGuestGroups(query, limit = 5, requireRehearsalEligible = false) {
+    async function searchGuestGroups(query, limit = 5, options = {}) {
+        const normalizedOptions = typeof options === 'boolean'
+            ? { requireRehearsalEligible: options }
+            : (options || {});
         const params = {
             search_name: query,
             max_results: limit
         };
-        if (requireRehearsalEligible) {
+        if (normalizedOptions.requireRehearsalEligible) {
             params.require_rehearsal_eligible = true;
+        }
+        if (normalizedOptions.requireHmuEligible) {
+            params.require_hmu_eligible = true;
         }
         const data = await callSupabaseRpc('search_guest_groups', params);
 
