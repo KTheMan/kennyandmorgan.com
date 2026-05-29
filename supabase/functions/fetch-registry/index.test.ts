@@ -75,6 +75,209 @@ Deno.test('upgradeImagesFromMyRegistryLinks tries source URL before CTA URL and 
     }
 });
 
+Deno.test('upgradeImagesFromMyRegistryLinks crawls deeper follow-up retailer pages for better images', async () => {
+    const fetchCalls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: string | URL | Request): Promise<Response> => {
+        const requestUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        fetchCalls.push(requestUrl);
+
+        if (requestUrl === 'https://www.target.com/p/some-listing/-/A-12345') {
+            return new Response(
+                '<html><body><a href="https://www.target.com/routing-page">Continue</a></body></html>',
+                { status: 200 },
+            );
+        }
+
+        if (requestUrl === 'https://www.target.com/routing-page') {
+            return new Response(
+                '<html><body><a href="https://www.amazon.com/dp/B000TEST">Amazon PDP</a></body></html>',
+                { status: 200 },
+            );
+        }
+
+        if (requestUrl === 'https://www.amazon.com/dp/B000TEST') {
+            return new Response(
+                '<html><head><meta property="og:image" content="https://images.amazon.com/images/I/hires-main.jpg"></head></html>',
+                { status: 200 },
+            );
+        }
+
+        return new Response('', { status: 404 });
+    };
+
+    try {
+        const [item] = await __test.upgradeImagesFromMyRegistryLinks([{
+            id: 'deep-1',
+            name: 'Deep Item',
+            description: null,
+            price: null,
+            quantity_requested: null,
+            quantity_purchased: null,
+            image_url: 'https://www.myregistry.com/images/thumb.jpg',
+            store_name: null,
+            product_url: 'https://www.myregistry.com/Visitors/Giftlist/PurchaseAssistant.aspx?giftId=111&registryId=222',
+            source_product_url: 'https://www.target.com/p/some-listing/-/A-12345',
+            category: null,
+            is_purchased: false,
+            fetched_at: new Date().toISOString(),
+            item_type: 'product',
+            action_label: null,
+        }]);
+
+        const calledUrls = new Set(fetchCalls);
+        assertEquals(calledUrls.has('https://www.target.com/routing-page'), true);
+        assertEquals(calledUrls.has('https://www.amazon.com/dp/B000TEST'), true);
+        assertEquals(item.image_url, 'https://images.amazon.com/images/I/hires-main.jpg');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+Deno.test('upgradeImagesFromMyRegistryLinks prioritizes PDP follow-up links before generic links', async () => {
+    const fetchCalls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: string | URL | Request): Promise<Response> => {
+        const requestUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        fetchCalls.push(requestUrl);
+
+        if (requestUrl === 'https://www.amazon.com/gp/registry-item') {
+            return new Response(
+                '<html><body>' +
+                    '<a href="https://www.amazon.com/s?k=test">Search</a>' +
+                    '<a href="https://www.amazon.com/dp/B000TEST">PDP</a>' +
+                    '</body></html>',
+                { status: 200 },
+            );
+        }
+        if (requestUrl === 'https://www.amazon.com/dp/B000TEST') {
+            return new Response(
+                '<html><head><meta property="og:image" content="https://images.amazon.com/images/I/pdp-large.jpg"></head></html>',
+                { status: 200 },
+            );
+        }
+        if (requestUrl === 'https://www.amazon.com/s?k=test') {
+            return new Response('<html><body>Search results</body></html>', { status: 200 });
+        }
+
+        return new Response('', { status: 404 });
+    };
+
+    try {
+        const [item] = await __test.upgradeImagesFromMyRegistryLinks([{
+            id: 'priority-1',
+            name: 'Priority Item',
+            description: null,
+            price: null,
+            quantity_requested: null,
+            quantity_purchased: null,
+            image_url: 'https://www.myregistry.com/images/thumb.jpg',
+            store_name: null,
+            product_url: 'https://www.myregistry.com/Visitors/Giftlist/PurchaseAssistant.aspx?giftId=111&registryId=222',
+            source_product_url: 'https://www.amazon.com/gp/registry-item',
+            category: null,
+            is_purchased: false,
+            fetched_at: new Date().toISOString(),
+            item_type: 'product',
+            action_label: null,
+        }]);
+
+        assertEquals(fetchCalls[1], 'https://www.amazon.com/dp/B000TEST');
+        assertEquals(item.image_url, 'https://images.amazon.com/images/I/pdp-large.jpg');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+Deno.test('upgradeImagesFromMyRegistryLinks prefers largest srcset candidate', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: string | URL | Request): Promise<Response> => {
+        const requestUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        if (requestUrl === 'https://www.target.com/p/some-listing/-/A-12345') {
+            return new Response(
+                '<html><body><img srcset="https://cdn.retailer.com/images/item-small.jpg 300w, https://cdn.retailer.com/images/item-large.jpg 1200w"></body></html>',
+                { status: 200 },
+            );
+        }
+        return new Response('', { status: 404 });
+    };
+
+    try {
+        const [item] = await __test.upgradeImagesFromMyRegistryLinks([{
+            id: 'srcset-1',
+            name: 'Srcset Item',
+            description: null,
+            price: null,
+            quantity_requested: null,
+            quantity_purchased: null,
+            image_url: 'https://www.myregistry.com/images/thumb.jpg',
+            store_name: null,
+            product_url: 'https://www.myregistry.com/Visitors/Giftlist/PurchaseAssistant.aspx?giftId=111&registryId=222',
+            source_product_url: 'https://www.target.com/p/some-listing/-/A-12345',
+            category: null,
+            is_purchased: false,
+            fetched_at: new Date().toISOString(),
+            item_type: 'product',
+            action_label: null,
+        }]);
+
+        assertEquals(item.image_url, 'https://cdn.retailer.com/images/item-large.jpg');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+Deno.test('upgradeImagesFromMyRegistryLinks treats duplicate image candidates as reranking penalty', async () => {
+    const fetchCalls: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: string | URL | Request): Promise<Response> => {
+        const requestUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        fetchCalls.push(requestUrl);
+
+        if (requestUrl === 'https://www.target.com/p/some-listing/-/A-12345') {
+            return new Response(
+                '<html><head><meta property="og:image" content="https://cdn.retailer.com/images/item.jpg?size=small"></head></html>',
+                { status: 200 },
+            );
+        }
+        if (requestUrl === 'https://www.myregistry.com/Visitors/Giftlist/PurchaseAssistant.aspx?giftId=111&registryId=222') {
+            return new Response(
+                '<html><head><meta property="og:image" content="https://cdn.retailer.com/images/item_large.jpg"></head></html>',
+                { status: 200 },
+            );
+        }
+        return new Response('', { status: 404 });
+    };
+
+    try {
+        const [item] = await __test.upgradeImagesFromMyRegistryLinks([{
+            id: 'dup-1',
+            name: 'Duplicate Item',
+            description: null,
+            price: null,
+            quantity_requested: null,
+            quantity_purchased: null,
+            image_url: 'https://cdn.retailer.com/images/item.jpg',
+            store_name: null,
+            product_url: 'https://www.myregistry.com/Visitors/Giftlist/PurchaseAssistant.aspx?giftId=111&registryId=222',
+            source_product_url: 'https://www.target.com/p/some-listing/-/A-12345',
+            category: null,
+            is_purchased: false,
+            fetched_at: new Date().toISOString(),
+            item_type: 'product',
+            action_label: null,
+        }]);
+
+        assertEquals(fetchCalls, [
+            'https://www.target.com/p/some-listing/-/A-12345',
+            'https://www.myregistry.com/Visitors/Giftlist/PurchaseAssistant.aspx?giftId=111&registryId=222',
+        ]);
+        assertEquals(item.image_url, 'https://cdn.retailer.com/images/item_large.jpg');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
 Deno.test('upgradeImagesFromMyRegistryLinks skips enrichment for fund items', async () => {
     let called = false;
     const originalFetch = globalThis.fetch;
