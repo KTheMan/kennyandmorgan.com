@@ -626,7 +626,7 @@
                     <!-- Hair & Makeup Signup -->
                     <div class="party-hmu-section">
                         <p class="section-eyebrow">Hair &amp; Makeup</p>
-                        <h3 class="party-hmu-heading"><em>Submit your name, email, and preference below.</em></h3>
+                        <h3 class="party-hmu-heading"><em>Find yourself below and submit your preference.</em></h3>
                         <div class="party-hmu-insta">
                             <a href="https://www.instagram.com/thesecretglowagency/" target="_blank" rel="noopener noreferrer" class="party-hmu-insta-link">
                                 <svg class="insta-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
@@ -637,11 +637,14 @@
                         <form id="hmuForm" class="party-hmu-form">
                             <div class="form-group">
                                 <label for="hmuName">Your Name *</label>
-                                <input type="text" id="hmuName" name="hmuName" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="hmuEmail">Email *</label>
-                                <input type="email" id="hmuEmail" name="hmuEmail" required>
+                                <div class="guest-lookup-controls">
+                                    <input type="text" id="hmuName" name="hmuName" required>
+                                    <button type="button" id="hmuGuestLookupButton" class="btn btn-secondary">Find Me</button>
+                                </div>
+                                <p class="form-hint">Use the name that appears on your invitation.</p>
+                                <input type="hidden" id="hmuGuestId" name="hmuGuestId">
+                                <div id="hmuGuestLookupMessage" class="guest-lookup-message" role="status" aria-live="polite"></div>
+                                <div id="hmuGuestLookupResults" class="guest-lookup-results" aria-live="polite"></div>
                             </div>
                             <div class="party-hmu-checks">
                                 <label class="hmu-check-label">
@@ -657,7 +660,7 @@
                                     <span>Opt-out</span>
                                 </label>
                             </div>
-                            <button type="submit" class="btn btn-primary">Submit</button>
+                            <button type="submit" class="btn btn-primary">Submit Preference</button>
                         </form>
                         <div id="hmuMessage" class="message"></div>
                     </div>
@@ -684,10 +687,6 @@
                                 <p class="form-hint">Confirm each guest&rsquo;s attendance for the rehearsal lunch.</p>
                                 <div id="rehearsalGuestResponseList" class="guest-response-list"></div>
                                 <div id="rehearsalGuestResponseMessage" class="guest-response-message" role="alert"></div>
-                            </div>
-                            <div class="form-group">
-                                <label for="rlEmail">Email *</label>
-                                <input type="email" id="rlEmail" name="rlEmail" required>
                             </div>
                             <button type="submit" class="btn btn-primary">Submit RSVP</button>
                         </form>

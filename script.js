@@ -28,6 +28,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 let latestGuestLookupResults = [];
 let activeGuestParty = null;
 const guestResponseState = new Map();
+let latestHmuGuestLookupResults = [];
+let activeHmuGuest = null;
 let latestRehearsalGuestLookupResults = [];
 let activeRehearsalGuestParty = null;
 const rehearsalGuestResponseState = new Map();
@@ -633,12 +635,16 @@ function initForms() {
             e.preventDefault();
             const form = e.target;
             const payload = {
-                fullName: form.hmuName.value.trim(),
-                email: form.hmuEmail.value.trim(),
+                guestId: form.hmuGuestId?.value ? Number(form.hmuGuestId.value) : null,
+                fullName: activeHmuGuest?.fullName || form.hmuName.value.trim(),
                 wantsHair: form.hmuHair.checked,
                 wantsMakeup: form.hmuMakeup.checked,
                 wantsOptOut: form.hmuOptOut.checked
             };
+            if (!payload.guestId) {
+                showMessage('hmuMessage', 'Please use Find Me and choose your name before submitting.', 'error');
+                return;
+            }
             if (!payload.wantsHair && !payload.wantsMakeup && !payload.wantsOptOut) {
                 showMessage('hmuMessage', 'Please select Hair, Makeup, or Opt-out before submitting.', 'error');
                 return;
@@ -647,6 +653,9 @@ function initForms() {
                 await window.KMDataClient.submitHmu(payload);
                 showMessage('hmuMessage', 'Thanks! Your preference has been submitted.', 'success');
                 form.reset();
+                resetHmuGuestLookupSelection();
+                document.getElementById('hmuGuestLookupResults').innerHTML = '';
+                document.getElementById('hmuGuestLookupMessage').textContent = '';
             } catch (error) {
                 showMessage('hmuMessage', error.message || 'Unable to submit. Please try again.', 'error');
             }
@@ -663,8 +672,123 @@ function initForms() {
     }
 
     setupGuestLookup();
+    setupHmuGuestLookup();
     setupRehearsalGuestLookup();
     loadRsvpMenuOptions();
+}
+
+function setupHmuGuestLookup() {
+    const lookupButton = document.getElementById('hmuGuestLookupButton');
+    const nameInput = document.getElementById('hmuName');
+    const hiddenGuestInput = document.getElementById('hmuGuestId');
+    const resultsContainer = document.getElementById('hmuGuestLookupResults');
+    const messageElement = document.getElementById('hmuGuestLookupMessage');
+
+    if (!lookupButton || !nameInput || !hiddenGuestInput || !resultsContainer || !messageElement) {
+        return;
+    }
+
+    const setLookupState = (text, variant = 'info') => {
+        messageElement.textContent = text;
+        messageElement.className = `guest-lookup-message is-${variant}`;
+    };
+
+    const clearLookupResults = () => {
+        latestHmuGuestLookupResults = [];
+        resultsContainer.innerHTML = '';
+        resetHmuGuestLookupSelection();
+    };
+
+    lookupButton.addEventListener('click', async () => {
+        const query = nameInput.value.trim();
+        clearLookupResults();
+
+        if (!query) {
+            setLookupState('Please enter your full name first.', 'error');
+            return;
+        }
+
+        const nameParts = query.split(/\s+/).filter(Boolean);
+        if (nameParts.length < 2) {
+            setLookupState('Please enter your first and last name to continue.', 'error');
+            return;
+        }
+
+        lookupButton.disabled = true;
+        lookupButton.textContent = 'Searching...';
+        setLookupState('Looking up eligible guests...', 'info');
+
+        try {
+            const data = await window.KMDataClient.searchGuestGroups(query, 5, { requireHmuEligible: true });
+            const matchingGuests = (data?.results || [])
+                .flatMap(group => (group.guests || []).filter(guest => guest.isHmuEligible));
+
+            if (!data?.success || !matchingGuests.length) {
+                setLookupState('We could not find an eligible HMU guest with that name. Please check spelling or contact us.', 'error');
+                return;
+            }
+
+            latestHmuGuestLookupResults = matchingGuests;
+            renderHmuGuestLookupResults(resultsContainer, matchingGuests);
+            setLookupState('Select your name below to continue.', 'success');
+        } catch (error) {
+            console.error('HMU guest lookup failed:', error);
+            setLookupState('Something went wrong while searching. Please try again or contact us.', 'error');
+        } finally {
+            lookupButton.disabled = false;
+            lookupButton.textContent = 'Find Me';
+        }
+    });
+
+    resultsContainer.addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-select-hmu-guest]');
+        if (!trigger) {
+            return;
+        }
+
+        const guestId = Number(trigger.dataset.selectHmuGuest);
+        const selectedGuest = latestHmuGuestLookupResults.find(guest => guest.id === guestId);
+        if (!selectedGuest) {
+            return;
+        }
+
+        setActiveHmuGuest(selectedGuest);
+        setLookupState(`Loaded ${selectedGuest.fullName}.`, 'success');
+    });
+}
+
+function renderHmuGuestLookupResults(container, guests) {
+    container.innerHTML = guests.map(guest => `
+        <article class="guest-result-card">
+            <div class="guest-result-header">
+                <div>
+                    <p class="guest-result-label">Eligible guest</p>
+                    <p class="guest-result-title">${escapeHtml(guest.fullName || '')}</p>
+                </div>
+                <button type="button" class="btn btn-secondary guest-result-select" data-select-hmu-guest="${guest.id}">Use This Name</button>
+            </div>
+        </article>
+    `).join('');
+}
+
+function resetHmuGuestLookupSelection() {
+    activeHmuGuest = null;
+    const hiddenGuestInput = document.getElementById('hmuGuestId');
+    if (hiddenGuestInput) {
+        hiddenGuestInput.value = '';
+    }
+}
+
+function setActiveHmuGuest(guest) {
+    const hiddenGuestInput = document.getElementById('hmuGuestId');
+    const nameInput = document.getElementById('hmuName');
+    activeHmuGuest = guest || null;
+    if (hiddenGuestInput) {
+        hiddenGuestInput.value = guest?.id ? String(guest.id) : '';
+    }
+    if (nameInput && guest?.fullName) {
+        nameInput.value = guest.fullName;
+    }
 }
 
 async function loadRsvpMenuOptions() {
@@ -852,7 +976,7 @@ function setupRehearsalGuestLookup() {
         setLookupState('Looking up your party...', 'info');
 
         try {
-            const data = await window.KMDataClient.searchGuestGroups(query, 5, true);
+            const data = await window.KMDataClient.searchGuestGroups(query, 5, { requireRehearsalEligible: true });
 
             if (!data.success || !Array.isArray(data.results) || !data.results.length) {
                 setLookupState('We could not find a party with that name. Double-check the spelling or reach out to us.', 'error');
@@ -1361,7 +1485,6 @@ async function handleRehearsalLunchSubmit(form) {
     const submitButton = form.querySelector('button[type="submit"]');
     const formData = new FormData(form);
     const data = Object.fromEntries(formData.entries());
-    const email = (data.rlEmail || '').trim();
 
     if (!data.rlGuestGroupId) {
         setRehearsalGuestResponseMessage('Please find your party first.');
@@ -1384,7 +1507,6 @@ async function handleRehearsalLunchSubmit(form) {
         for (const response of guestResponses) {
             await window.KMDataClient.submitRehearsalLunchRsvp({
                 fullName: response.name,
-                email,
                 rsvpStatus: response.status
             });
         }
