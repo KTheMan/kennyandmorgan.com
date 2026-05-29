@@ -29,6 +29,8 @@ interface RegistryItem {
     quantity_requested: number | null;
     quantity_purchased: number | null;
     image_url: string | null;
+    registry_image_url?: string | null;
+    resolved_image_url?: string | null;
     store_name: string | null;
     product_url: string | null;
     source_product_url?: string | null;
@@ -37,9 +39,31 @@ interface RegistryItem {
     fetched_at: string;
     item_type?: 'product' | 'fund';
     action_label?: string | null;
+    image_marked_for_retry?: boolean;
+    image_manually_cleared?: boolean;
+    image_blacklisted?: boolean;
+    image_suspicious?: boolean;
+    image_low_confidence?: boolean;
 }
 
-const OPTIONAL_REGISTRY_COLUMNS = ['item_type', 'action_label', 'source_product_url'] as const;
+type SyncMeta = {
+    didSync: boolean;
+    wasStale: boolean;
+    cacheAgeMs: number;
+};
+
+const OPTIONAL_REGISTRY_COLUMNS = [
+    'item_type',
+    'action_label',
+    'source_product_url',
+    'registry_image_url',
+    'resolved_image_url',
+    'image_marked_for_retry',
+    'image_manually_cleared',
+    'image_blacklisted',
+    'image_suspicious',
+    'image_low_confidence',
+] as const;
 const MAX_SCHEMA_COMPATIBILITY_ATTEMPTS = OPTIONAL_REGISTRY_COLUMNS.length + 1;
 
 const CORS_HEADERS: Record<string, string> = {
@@ -457,7 +481,8 @@ function scoreImageUrlCandidate(value: string): number {
     return score;
 }
 
-function normalizeImageIdentity(value: string): string | null {
+function normalizeImageIdentity(value: string | null | undefined): string | null {
+    if (!value) return null;
     try {
         const url = new URL(value);
         return `${url.hostname.toLowerCase()}${url.pathname}`.replace(/\/+$/, '');
@@ -536,20 +561,62 @@ function resolveBestImageUrl(raw: Record<string, unknown>): string | null {
     return collectImageCandidates(raw)[0] ?? null;
 }
 
-function shouldAttemptMyRegistryImageUpgrade(item: RegistryItem): boolean {
+function isMyRegistryHostedImage(value: string | null | undefined): boolean {
+    if (!value) return false;
+    try {
+        return isMyRegistryImageHost(new URL(value).hostname);
+    } catch {
+        return true;
+    }
+}
+
+function isLowQualityImageUrl(value: string | null | undefined): boolean {
+    if (!value) return true;
+    const lower = value.toLowerCase();
+    if (THUMBNAIL_IMAGE_HINTS.some(hint => lower.includes(hint))) return true;
+    const tinySizeMatch = lower.match(/(?:[?&](?:w|width|h|height)=)(\d{1,3})(?:[&#]|$)/);
+    if (tinySizeMatch) {
+        const size = parseInt(tinySizeMatch[1], 10);
+        if (Number.isFinite(size) && size <= 160) return true;
+    }
+    return false;
+}
+
+function getDisplayImageUrl(item: RegistryItem): string | null {
+    return item.resolved_image_url ?? item.registry_image_url ?? item.image_url ?? null;
+}
+
+function buildSuspiciousImageIdentitySet(items: RegistryItem[]): Set<string> {
+    const counts = new Map<string, number>();
+    for (const item of items) {
+        const identity = normalizeImageIdentity(item.resolved_image_url ?? item.image_url ?? null);
+        if (!identity) continue;
+        counts.set(identity, (counts.get(identity) ?? 0) + 1);
+    }
+    return new Set(Array.from(counts.entries()).filter(([, count]) => count > 1).map(([identity]) => identity));
+}
+
+function hasGoodResolvedImage(item: RegistryItem, suspiciousImageIdentities: Set<string>): boolean {
+    const resolvedImage = item.resolved_image_url ?? null;
+    if (!resolvedImage) return false;
+    if (item.image_marked_for_retry || item.image_manually_cleared || item.image_blacklisted) return false;
+    if (item.image_suspicious || item.image_low_confidence) return false;
+    if (isMyRegistryHostedImage(resolvedImage) || isLowQualityImageUrl(resolvedImage)) return false;
+    const identity = normalizeImageIdentity(resolvedImage);
+    if (identity && suspiciousImageIdentities.has(identity)) return false;
+    return true;
+}
+
+function shouldAttemptMyRegistryImageUpgrade(
+    item: RegistryItem,
+    suspiciousImageIdentities: Set<string> = new Set(),
+): boolean {
     if (item.item_type === 'fund') return false;
     const enrichmentUrls = [item.source_product_url, item.product_url]
         .filter((value): value is string => Boolean(value) && isHttpUrl(value));
     if (enrichmentUrls.length === 0) return false;
-    if (!item.image_url) return true;
-    if (THUMBNAIL_IMAGE_HINTS.some(hint => item.image_url?.toLowerCase().includes(hint))) return true;
-    try {
-        const url = new URL(item.image_url);
-        if (isMyRegistryImageHost(url.hostname)) return true;
-    } catch {
-        return true;
-    }
-    return false;
+    if (hasGoodResolvedImage(item, suspiciousImageIdentities)) return false;
+    return true;
 }
 
 function collectImageCandidatesFromHtml(html: string, baseUrl: string): string[] {
@@ -714,9 +781,10 @@ async function fetchBestImageFromMyRegistryFlowUrl(
 async function upgradeImagesFromMyRegistryLinks(items: RegistryItem[]): Promise<RegistryItem[]> {
     const upgradedItems = [...items];
     let upgradeCount = 0;
+    const suspiciousImageIdentities = buildSuspiciousImageIdentitySet(items);
     const candidates = items
         .map((item, index) => ({ item, index }))
-        .filter(({ item }) => shouldAttemptMyRegistryImageUpgrade(item));
+        .filter(({ item }) => shouldAttemptMyRegistryImageUpgrade(item, suspiciousImageIdentities));
 
     for (let start = 0; start < candidates.length; start += MYREGISTRY_IMAGE_UPGRADE_CONCURRENCY) {
         const batch = candidates.slice(start, start + MYREGISTRY_IMAGE_UPGRADE_CONCURRENCY);
@@ -728,12 +796,21 @@ async function upgradeImagesFromMyRegistryLinks(items: RegistryItem[]): Promise<
                 for (const enrichmentUrl of enrichmentUrls) {
                     upgradedImageUrl = await fetchBestImageFromMyRegistryFlowUrl(
                         enrichmentUrl,
-                        item.image_url,
+                        item.resolved_image_url ?? item.registry_image_url ?? item.image_url,
                     );
                     if (upgradedImageUrl) break;
                 }
                 if (!upgradedImageUrl) return;
-                upgradedItems[index] = { ...item, image_url: upgradedImageUrl };
+                upgradedItems[index] = {
+                    ...item,
+                    resolved_image_url: upgradedImageUrl,
+                    image_url: upgradedImageUrl,
+                    image_marked_for_retry: false,
+                    image_manually_cleared: false,
+                    image_blacklisted: false,
+                    image_suspicious: false,
+                    image_low_confidence: isLowQualityImageUrl(upgradedImageUrl),
+                };
                 upgradeCount += 1;
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
@@ -784,6 +861,9 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
     }
 
     const imageUrl = resolveBestImageUrl(raw);
+    const registryImageUrl = toTextValue(raw.registry_image_url) ?? imageUrl;
+    const resolvedImageUrl = toTextValue(raw.resolved_image_url);
+    const displayImageUrl = resolvedImageUrl ?? registryImageUrl ?? imageUrl;
 
     const rawActionLabel = String(raw.action_label ?? raw.actionLabel ?? '').trim() || null;
     const { productUrl, sourceProductUrl } = resolveRegistryProductUrls(raw, itemType);
@@ -795,7 +875,9 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
         price: toNumber(raw.price ?? raw.priceAmount ?? raw.currentPrice ?? raw.retailPrice),
         quantity_requested: quantityRequested,
         quantity_purchased: quantityPurchased,
-        image_url: imageUrl,
+        image_url: displayImageUrl,
+        registry_image_url: registryImageUrl,
+        resolved_image_url: resolvedImageUrl,
         store_name:
             String(raw.storeName ?? raw.store_name ?? raw.retailer ?? raw.store ?? raw.retailerName ?? '').trim() ||
             null,
@@ -806,6 +888,11 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
         fetched_at: fetchedAt,
         item_type: itemType,
         action_label: itemType === 'fund' ? rawActionLabel ?? 'Contribute' : null,
+        image_marked_for_retry: Boolean(raw.image_marked_for_retry),
+        image_manually_cleared: Boolean(raw.image_manually_cleared),
+        image_blacklisted: Boolean(raw.image_blacklisted),
+        image_suspicious: Boolean(raw.image_suspicious),
+        image_low_confidence: Boolean(raw.image_low_confidence),
     };
 }
 
@@ -860,7 +947,11 @@ function normalizeCachedItems(rawItems: unknown[] | null | undefined): RegistryI
 function getMissingRegistrySchemaCacheColumns(message: string): Set<(typeof OPTIONAL_REGISTRY_COLUMNS)[number]> {
     const unsupportedColumns = new Set<(typeof OPTIONAL_REGISTRY_COLUMNS)[number]>();
     for (const column of OPTIONAL_REGISTRY_COLUMNS) {
-        if (message.includes(`Could not find the '${column}' column of 'registry_items' in the schema cache`)) {
+        if (
+            message.includes(`Could not find the '${column}' column of 'registry_items' in the schema cache`)
+            || message.includes(`'${column}'`)
+            || message.includes(`"${column}"`)
+        ) {
             unsupportedColumns.add(column);
         }
     }
@@ -1043,7 +1134,9 @@ function mergeRegistryItems(primaryItems: RegistryItem[], fallbackItems: Registr
             price: current.price ?? fallback.price,
             quantity_requested: current.quantity_requested ?? fallback.quantity_requested,
             quantity_purchased: current.quantity_purchased ?? fallback.quantity_purchased,
-            image_url: current.image_url ?? fallback.image_url,
+            image_url: getDisplayImageUrl(current) ?? getDisplayImageUrl(fallback),
+            registry_image_url: current.registry_image_url ?? fallback.registry_image_url ?? current.image_url ?? fallback.image_url,
+            resolved_image_url: current.resolved_image_url ?? fallback.resolved_image_url ?? null,
             store_name: current.store_name ?? fallback.store_name,
             product_url: current.product_url ?? fallback.product_url,
             source_product_url: current.source_product_url ?? fallback.source_product_url ?? null,
@@ -1052,6 +1145,11 @@ function mergeRegistryItems(primaryItems: RegistryItem[], fallbackItems: Registr
             fetched_at: current.fetched_at || fallback.fetched_at,
             item_type: itemType,
             action_label: actionLabel,
+            image_marked_for_retry: current.image_marked_for_retry ?? fallback.image_marked_for_retry ?? false,
+            image_manually_cleared: current.image_manually_cleared ?? fallback.image_manually_cleared ?? false,
+            image_blacklisted: current.image_blacklisted ?? fallback.image_blacklisted ?? false,
+            image_suspicious: current.image_suspicious ?? fallback.image_suspicious ?? false,
+            image_low_confidence: current.image_low_confidence ?? fallback.image_low_confidence ?? false,
         });
     }
 
@@ -1090,9 +1188,7 @@ async function fetchFromMyRegistry(): Promise<RegistryItem[]> {
         parsedItems = htmlMarkupItems;
     }
 
-    if (parsedItems.length > 0) {
-        return await upgradeImagesFromMyRegistryLinks(parsedItems);
-    }
+    if (parsedItems.length > 0) return parsedItems;
 
     throw new Error(
         'No registry items found from __NEXT_DATA__, JSON-LD, or HTML markup. The MyRegistry page structure may have changed.',
@@ -1148,6 +1244,128 @@ async function cacheRegistryItems(
     );
 }
 
+function buildFastSyncPayload(
+    freshItems: RegistryItem[],
+    existingItemsById: Map<string, RegistryItem>,
+): RegistryItem[] {
+    return freshItems.map(item => {
+        const existing = existingItemsById.get(item.id);
+        const preservedResolvedImage = existing?.resolved_image_url ?? null;
+        const registryImage = item.registry_image_url ?? item.image_url ?? null;
+        const displayImage = preservedResolvedImage ?? existing?.image_url ?? registryImage;
+        return {
+            ...item,
+            registry_image_url: registryImage,
+            resolved_image_url: preservedResolvedImage,
+            image_url: displayImage,
+            image_marked_for_retry: existing?.image_marked_for_retry ?? false,
+            image_manually_cleared: existing?.image_manually_cleared ?? false,
+            image_blacklisted: existing?.image_blacklisted ?? false,
+            image_suspicious: existing?.image_suspicious ?? false,
+            image_low_confidence: existing?.image_low_confidence ?? false,
+        };
+    });
+}
+
+async function syncRegistryItemsFast(
+    supabase: ReturnType<typeof createClient>,
+    freshItems: RegistryItem[],
+): Promise<void> {
+    const existingItems = await getCachedRegistryItems(supabase);
+    const existingItemsById = new Map(existingItems.map(item => [item.id, item]));
+    const payload = buildFastSyncPayload(freshItems, existingItemsById);
+
+    const unsupportedColumns = new Set<(typeof OPTIONAL_REGISTRY_COLUMNS)[number]>();
+    for (let retryAttempt = 0; retryAttempt < MAX_SCHEMA_COMPATIBILITY_ATTEMPTS; retryAttempt += 1) {
+        const upsertPayload = stripUnsupportedRegistryColumns(payload, unsupportedColumns);
+        const { error } = await supabase
+            .from('registry_items')
+            .upsert(upsertPayload, { onConflict: 'id' });
+        if (!error) break;
+        const missingColumns = getMissingRegistrySchemaCacheColumns(error.message);
+        const newUnsupportedColumns = [...missingColumns].filter(column => !unsupportedColumns.has(column));
+        if (newUnsupportedColumns.length === 0) {
+            throw new Error(`Failed to upsert registry items: ${error.message}`);
+        }
+        newUnsupportedColumns.forEach(column => unsupportedColumns.add(column));
+    }
+
+    if (freshItems.length === 0) {
+        await supabase.from('registry_items').delete().neq('id', '');
+        return;
+    }
+
+    const incomingIds = new Set(freshItems.map(item => item.id));
+    const staleIds = existingItems.filter(item => !incomingIds.has(item.id)).map(item => item.id);
+    if (staleIds.length > 0) {
+        const { error } = await supabase.from('registry_items').delete().in('id', staleIds);
+        if (error) throw new Error(`Failed to delete stale registry items: ${error.message}`);
+    }
+}
+
+async function ensureFastRegistrySyncIfStale(
+    supabase: ReturnType<typeof createClient>,
+): Promise<SyncMeta> {
+    const { data: latestRow } = await supabase
+        .from('registry_items')
+        .select('fetched_at')
+        .order('fetched_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    const ageMs = latestRow?.fetched_at
+        ? Date.now() - new Date(latestRow.fetched_at).getTime()
+        : Infinity;
+    const isStale = ageMs > CACHE_TTL_SECONDS * 1000;
+    if (!isStale) {
+        console.info(`[fetch-registry] Returning cached registry items; cache_age_ms=${ageMs}`);
+        return { didSync: false, wasStale: false, cacheAgeMs: ageMs };
+    }
+
+    console.info(`[fetch-registry] Cache stale (age_ms=${ageMs}); running fast MyRegistry sync`);
+    const freshItems = await fetchFromMyRegistry();
+    await syncRegistryItemsFast(supabase, freshItems);
+    console.info(`[fetch-registry] Fast MyRegistry sync completed; deferred image enrichment to background path`);
+    return { didSync: true, wasStale: true, cacheAgeMs: ageMs };
+}
+
+async function runBackgroundImageEnrichment(
+    supabase: ReturnType<typeof createClient>,
+): Promise<{ total: number; upgraded: number; skipped: number }> {
+    const cachedItems = await getCachedRegistryItems(supabase);
+    const upgradedItems = await upgradeImagesFromMyRegistryLinks(cachedItems);
+    let upgraded = 0;
+    const updates = upgradedItems.filter((item, index) => {
+        const before = cachedItems[index];
+        const beforeResolved = before?.resolved_image_url ?? null;
+        const afterResolved = item.resolved_image_url ?? null;
+        if (afterResolved && afterResolved !== beforeResolved) {
+            upgraded += 1;
+            return true;
+        }
+        return false;
+    });
+
+    if (updates.length > 0) {
+        const unsupportedColumns = new Set<(typeof OPTIONAL_REGISTRY_COLUMNS)[number]>();
+        for (let retryAttempt = 0; retryAttempt < MAX_SCHEMA_COMPATIBILITY_ATTEMPTS; retryAttempt += 1) {
+            const payload = stripUnsupportedRegistryColumns(updates, unsupportedColumns);
+            const { error } = await supabase.from('registry_items').upsert(payload, { onConflict: 'id' });
+            if (!error) break;
+            const missingColumns = getMissingRegistrySchemaCacheColumns(error.message);
+            const newUnsupportedColumns = [...missingColumns].filter(column => !unsupportedColumns.has(column));
+            if (newUnsupportedColumns.length === 0) {
+                throw new Error(`Failed to persist enriched registry images: ${error.message}`);
+            }
+            newUnsupportedColumns.forEach(column => unsupportedColumns.add(column));
+        }
+    }
+
+    const skipped = Math.max(cachedItems.length - upgraded, 0);
+    console.info(`[fetch-registry] Background image enrichment complete; total=${cachedItems.length} upgraded=${upgraded} skipped=${skipped}`);
+    return { total: cachedItems.length, upgraded, skipped };
+}
+
 export const __test = {
     resolveRegistryProductUrls,
     shouldAttemptMyRegistryImageUpgrade,
@@ -1170,34 +1388,37 @@ if (import.meta.main) {
         }
 
         const supabase = createClient(supabaseUrl, serviceRoleKey);
+        const requestUrl = new URL(req.url);
 
         try {
-            // Check whether cached data is fresh enough
-            const { data: latestRow } = await supabase
-                .from('registry_items')
-                .select('fetched_at')
-                .order('fetched_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-
-            const ageMs = latestRow?.fetched_at
-                ? Date.now() - new Date(latestRow.fetched_at).getTime()
-                : Infinity;
-            const isStale = ageMs > CACHE_TTL_SECONDS * 1000;
-            let items: RegistryItem[] = [];
-
-            if (isStale) {
-                const freshItems = await fetchFromMyRegistry();
-
-                // Replace all cached items with the freshly fetched set
-                await supabase.from('registry_items').delete().lte('fetched_at', new Date().toISOString());
-                await cacheRegistryItems(supabase, freshItems);
-                items = freshItems;
-            } else {
-                items = await getCachedRegistryItems(supabase);
+            const mode = requestUrl.searchParams.get('mode') ?? '';
+            const isBackgroundEnrichmentRequest = mode === 'enrich'
+                || (req.method === 'POST' && requestUrl.searchParams.get('background') === 'image-enrichment');
+            if (isBackgroundEnrichmentRequest) {
+                const enrichment = await runBackgroundImageEnrichment(supabase);
+                return new Response(JSON.stringify({
+                    success: true,
+                    mode: 'background-enrichment',
+                    enrichment,
+                }), {
+                    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+                });
             }
 
-            return new Response(JSON.stringify({ success: true, items }), {
+            const syncMeta = await ensureFastRegistrySyncIfStale(supabase);
+            const items = await getCachedRegistryItems(supabase);
+            const responseItems = items.map(item => ({
+                ...item,
+                image_url: getDisplayImageUrl(item),
+            }));
+
+            return new Response(JSON.stringify({
+                success: true,
+                mode: syncMeta.didSync ? 'fast-sync' : 'cached',
+                enrichment: 'deferred',
+                cache_age_ms: syncMeta.cacheAgeMs,
+                items: responseItems,
+            }), {
                 headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
             });
         } catch (err) {

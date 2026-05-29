@@ -1825,6 +1825,7 @@ function renderRegistryCard(item) {
     const isFund = isFundRegistryItem(item);
     const itemName = String(item.name || '');
     const itemUrl = item.product_url || getRegistryPageUrl();
+    const cardImageUrl = item.resolved_image_url || item.registry_image_url || item.image_url || null;
     const price = typeof item.price === 'number' ? `$${item.price.toFixed(2)}` : '';
 
     const article = document.createElement('article');
@@ -1835,9 +1836,9 @@ function renderRegistryCard(item) {
     const media = document.createElement('div');
     media.className = 'registry-card-media';
 
-    if (item.image_url) {
+    if (cardImageUrl) {
         const img = document.createElement('img');
-        img.src = String(item.image_url);
+        img.src = String(cardImageUrl);
         img.alt = itemName;
         img.className = 'registry-card-img';
         img.loading = 'lazy';

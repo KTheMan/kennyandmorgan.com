@@ -727,7 +727,18 @@ $$;
 
 alter table public.registry_items
     add column if not exists item_type text,
-    add column if not exists action_label text;
+    add column if not exists action_label text,
+    add column if not exists source_product_url text,
+    add column if not exists source_store_name text,
+    add column if not exists page_url text,
+    add column if not exists registry_id text,
+    add column if not exists registry_image_url text,
+    add column if not exists resolved_image_url text,
+    add column if not exists image_marked_for_retry boolean not null default false,
+    add column if not exists image_manually_cleared boolean not null default false,
+    add column if not exists image_blacklisted boolean not null default false,
+    add column if not exists image_suspicious boolean not null default false,
+    add column if not exists image_low_confidence boolean not null default false;
 
 drop function if exists public.get_registry_items();
 
@@ -740,13 +751,19 @@ returns table (
     quantity_requested integer,
     quantity_purchased integer,
     image_url text,
+    registry_image_url text,
+    resolved_image_url text,
     store_name text,
     product_url text,
+    source_product_url text,
+    source_store_name text,
     category text,
     is_purchased boolean,
     fetched_at timestamptz,
     item_type text,
-    action_label text
+    action_label text,
+    page_url text,
+    registry_id text
 )
 language sql
 security definer
@@ -755,9 +772,9 @@ as $$
     select
         id, name, description, price,
         quantity_requested, quantity_purchased,
-        image_url, store_name, product_url, category,
+        image_url, registry_image_url, resolved_image_url, store_name, product_url, source_product_url, source_store_name, category,
         is_purchased, fetched_at,
-        item_type, action_label
+        item_type, action_label, page_url, registry_id
     from public.registry_items
     order by is_purchased asc, name asc;
 $$;

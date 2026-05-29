@@ -103,4 +103,74 @@ test.describe('Registry rendering', () => {
         await expect(productCard.locator('.registry-card-btn')).toHaveAttribute('target', '_blank');
         await expect(productCard.locator('.registry-card-img')).toHaveAttribute('src', 'https://example.com/toaster.jpg');
     });
+
+    test('prefers resolved image and falls back to registry image', async ({ page }) => {
+        await page.route('**/site.config.json', async route => {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    registryPageUrl: 'https://www.myregistry.com/giftlist/morganandkenny',
+                    supabase: {
+                        url: 'https://example.supabase.co',
+                        anonKey: 'public-anon-key',
+                        sessionTtlMs: 3600000,
+                    },
+                }),
+            });
+        });
+
+        await page.route('**/functions/v1/fetch-registry', async route => {
+            await route.fulfill({
+                status: 200,
+                headers: {
+                    'access-control-allow-origin': '*',
+                    'content-type': 'application/json',
+                },
+                body: JSON.stringify({
+                    success: true,
+                    items: [
+                        {
+                            id: 'item-resolved',
+                            name: 'Resolved Image Item',
+                            quantity_requested: 1,
+                            quantity_purchased: 0,
+                            resolved_image_url: 'https://example.com/resolved.jpg',
+                            registry_image_url: 'https://example.com/registry.jpg',
+                            image_url: 'https://example.com/legacy.jpg',
+                            product_url: 'https://example.com/item-resolved',
+                            is_purchased: false,
+                            fetched_at: new Date().toISOString(),
+                            item_type: 'product',
+                        },
+                        {
+                            id: 'item-fallback',
+                            name: 'Fallback Image Item',
+                            quantity_requested: 1,
+                            quantity_purchased: 0,
+                            resolved_image_url: null,
+                            registry_image_url: 'https://example.com/fallback.jpg',
+                            image_url: null,
+                            product_url: 'https://example.com/item-fallback',
+                            is_purchased: false,
+                            fetched_at: new Date().toISOString(),
+                            item_type: 'product',
+                        },
+                    ],
+                }),
+            });
+        });
+
+        await page.goto('/index.html');
+        await page.fill('#accessPassword', ACCESS_PASSWORD);
+        await page.click('#accessForm button[type="submit"]');
+        await expect(page.locator('#accessOverlay')).toBeHidden({ timeout: 5000 });
+        await page.click('a[href="#registry"]');
+        await expect(page.locator('#registry')).toBeVisible();
+
+        const cards = page.locator('#registryGrid .registry-card');
+        await expect(cards).toHaveCount(2);
+        await expect(cards.nth(0).locator('.registry-card-img')).toHaveAttribute('src', 'https://example.com/resolved.jpg');
+        await expect(cards.nth(1).locator('.registry-card-img')).toHaveAttribute('src', 'https://example.com/fallback.jpg');
+    });
 });
