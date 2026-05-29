@@ -852,7 +852,7 @@ function setupRehearsalGuestLookup() {
         setLookupState('Looking up your party...', 'info');
 
         try {
-            const data = await window.KMDataClient.searchGuestGroups(query);
+            const data = await window.KMDataClient.searchGuestGroups(query, 5, true);
 
             if (!data.success || !Array.isArray(data.results) || !data.results.length) {
                 setLookupState('We could not find a party with that name. Double-check the spelling or reach out to us.', 'error');
@@ -941,9 +941,11 @@ function setRehearsalActiveGuestParty(group) {
         resetRehearsalGuestResponseSection();
         return;
     }
+    const allGuests = Array.isArray(group.guests) ? group.guests : [];
+    const eligibleGuests = allGuests.filter(guest => guest.isInvitedToRehearsalLunch);
     activeRehearsalGuestParty = {
         groupId: group.groupId,
-        guests: Array.isArray(group.guests) ? group.guests : []
+        guests: eligibleGuests
     };
     rehearsalGuestResponseState.clear();
     activeRehearsalGuestParty.guests.forEach(guest => {
