@@ -145,11 +145,15 @@
         return { success: true };
     }
 
-    async function searchGuestGroups(query, limit = 5) {
-        const data = await callSupabaseRpc('search_guest_groups', {
+    async function searchGuestGroups(query, limit = 5, requireRehearsalEligible = false) {
+        const params = {
             search_name: query,
             max_results: limit
-        });
+        };
+        if (requireRehearsalEligible) {
+            params.require_rehearsal_eligible = true;
+        }
+        const data = await callSupabaseRpc('search_guest_groups', params);
 
         return {
             success: true,

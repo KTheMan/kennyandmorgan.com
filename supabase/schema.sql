@@ -269,7 +269,14 @@ begin
 end;
 $$;
 
-create or replace function public.search_guest_groups(search_name text, max_results integer default 5)
+-- Drop the old 2-parameter signature before recreating with the new 3-parameter one.
+drop function if exists public.search_guest_groups(text, integer);
+
+create or replace function public.search_guest_groups(
+    search_name text,
+    max_results integer default 5,
+    require_rehearsal_eligible boolean default false
+)
 returns jsonb
 language sql
 security definer
@@ -283,6 +290,7 @@ with tokens as (
     where cardinality(t.parts) >= 2
       and lower(g.full_name) like '%' || lower(t.parts[1]) || '%'
       and lower(g.full_name) like '%' || lower(t.parts[cardinality(t.parts)]) || '%'
+      and (not require_rehearsal_eligible or g.is_invited_to_rehearsal_lunch = true)
 ), grouped as (
     select distinct group_id
     from filtered
@@ -296,6 +304,7 @@ select coalesce(jsonb_agg(
             select full_name
             from public.guests
             where group_id = grp.group_id
+              and (not require_rehearsal_eligible or is_invited_to_rehearsal_lunch = true)
             order by is_primary desc, full_name asc
             limit 1
         ), ''),
@@ -308,6 +317,7 @@ select coalesce(jsonb_agg(
                 'isPlusOne', guest.is_plus_one,
                 'isChild', guest.is_child,
                 'isHmuEligible', guest.is_hmu_eligible,
+                'isInvitedToRehearsalLunch', guest.is_invited_to_rehearsal_lunch,
                 'hmuSelection', guest.hmu_selection,
                 'notes', guest.notes,
                 'rsvpStatus', guest.rsvp_status,
@@ -321,6 +331,7 @@ select coalesce(jsonb_agg(
             ) order by guest.is_primary desc, guest.full_name asc)
             from public.guests guest
             where guest.group_id = grp.group_id
+              and (not require_rehearsal_eligible or guest.is_invited_to_rehearsal_lunch = true)
         ), '[]'::jsonb)
     )
 ), '[]'::jsonb)
@@ -769,7 +780,7 @@ revoke all on public.address_submissions from anon, authenticated;
 grant execute on function public.login_access(text, bigint) to anon, authenticated;
 grant execute on function public.get_access_session(text) to anon, authenticated;
 grant execute on function public.logout_access(text) to anon, authenticated;
-grant execute on function public.search_guest_groups(text, integer) to anon, authenticated;
+grant execute on function public.search_guest_groups(text, integer, boolean) to anon, authenticated;
 grant execute on function public.submit_rsvp(jsonb) to anon, authenticated;
 grant execute on function public.save_address_submission(jsonb) to anon, authenticated;
 grant execute on function public.get_menu_options() to anon, authenticated;
