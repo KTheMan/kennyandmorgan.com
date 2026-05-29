@@ -27,6 +27,7 @@ interface RegistryItem {
     image_url: string | null;
     store_name: string | null;
     product_url: string | null;
+    source_product_url?: string | null;
     category: string | null;
     is_purchased: boolean;
     fetched_at: string;
@@ -34,7 +35,7 @@ interface RegistryItem {
     action_label?: string | null;
 }
 
-const OPTIONAL_REGISTRY_COLUMNS = ['item_type', 'action_label'] as const;
+const OPTIONAL_REGISTRY_COLUMNS = ['item_type', 'action_label', 'source_product_url'] as const;
 const MAX_SCHEMA_COMPATIBILITY_ATTEMPTS = OPTIONAL_REGISTRY_COLUMNS.length + 1;
 
 const CORS_HEADERS: Record<string, string> = {
@@ -223,11 +224,33 @@ function isMyRegistryFlowUrl(value: string): boolean {
     }
 }
 
-function resolveRegistryProductUrl(
-    raw: Record<string, unknown>,
-    itemType: 'product' | 'fund',
-): string | null {
-    const urlCandidates = [
+function isHttpUrl(value: string): boolean {
+    try {
+        const url = new URL(value);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
+
+function extractEmbeddedUrlCandidates(value: string): string[] {
+    try {
+        const url = new URL(value);
+        const embeddedCandidates: string[] = [];
+        for (const [key, paramValue] of url.searchParams.entries()) {
+            if (!/(url|target|redirect|dest|retailer|product|item|link)/i.test(key)) continue;
+            const normalizedValue = paramValue.trim();
+            if (!normalizedValue) continue;
+            if (isHttpUrl(normalizedValue)) embeddedCandidates.push(normalizedValue);
+        }
+        return embeddedCandidates;
+    } catch {
+        return [];
+    }
+}
+
+function collectProductUrlCandidates(raw: Record<string, unknown>): string[] {
+    const candidates = [
         raw.productUrl,
         raw.product_url,
         raw.purchaseUrl,
@@ -236,27 +259,54 @@ function resolveRegistryProductUrl(
         raw.itemUrl,
     ]
         .map(toTextValue)
-        .filter((value): value is string => Boolean(value));
+        .filter((value): value is string => Boolean(value) && isHttpUrl(value));
+    return [...new Set(candidates)];
+}
+
+function resolveRegistryProductUrls(
+    raw: Record<string, unknown>,
+    itemType: 'product' | 'fund',
+): { productUrl: string | null; sourceProductUrl: string | null } {
+    const urlCandidates = collectProductUrlCandidates(raw);
 
     const flowUrl = urlCandidates.find(isMyRegistryFlowUrl);
+    const sourceUrlCandidates = [
+        raw.sourceProductUrl,
+        raw.source_product_url,
+        raw.retailerUrl,
+        raw.retailer_url,
+        ...urlCandidates,
+    ]
+        .map(toTextValue)
+        .filter((value): value is string => Boolean(value) && isHttpUrl(value))
+        .flatMap(value => [value, ...extractEmbeddedUrlCandidates(value)]);
+    const uniqueSourceUrlCandidates = [...new Set(sourceUrlCandidates)];
+
+    let productUrl: string | null = null;
     if (flowUrl) {
         const registryId = getRegistryIdFromUrl(flowUrl);
         const itemId = getRegistryItemIdFromUrl(flowUrl);
-        return buildMyRegistryFlowUrl(itemType, registryId, itemId) ?? flowUrl;
+        productUrl = buildMyRegistryFlowUrl(itemType, registryId, itemId) ?? flowUrl;
     }
-
-    let registryId = toTextValue(raw.registryId ?? raw.registry_id) || null;
-    if (!registryId) {
-        for (const urlCandidate of urlCandidates) {
-            registryId = getRegistryIdFromUrl(urlCandidate);
-            if (registryId) break;
+    if (!productUrl) {
+        let registryId = toTextValue(raw.registryId ?? raw.registry_id) || null;
+        if (!registryId) {
+            for (const urlCandidate of urlCandidates) {
+                registryId = getRegistryIdFromUrl(urlCandidate);
+                if (registryId) break;
+            }
         }
+        const itemId = itemType === 'fund'
+            ? toTextValue(raw.cashGiftId ?? raw.cashgiftid ?? raw.id)
+            : toTextValue(raw.giftId ?? raw.giftid ?? raw.id);
+        productUrl = buildMyRegistryFlowUrl(itemType, registryId, itemId) ?? urlCandidates[0] ?? null;
     }
-    const itemId = itemType === 'fund'
-        ? toTextValue(raw.cashGiftId ?? raw.cashgiftid ?? raw.id)
-        : toTextValue(raw.giftId ?? raw.giftid ?? raw.id);
 
-    return buildMyRegistryFlowUrl(itemType, registryId, itemId) ?? urlCandidates[0] ?? null;
+    const sourceProductUrl = uniqueSourceUrlCandidates.find(candidate =>
+        candidate !== productUrl && !isMyRegistryFlowUrl(candidate)
+    ) ?? null;
+
+    return { productUrl, sourceProductUrl };
 }
 
 function getFirstHref(html: string): string | null {
@@ -368,7 +418,9 @@ function resolveBestImageUrl(raw: Record<string, unknown>): string | null {
 
 function shouldAttemptMyRegistryImageUpgrade(item: RegistryItem): boolean {
     if (item.item_type === 'fund') return false;
-    if (!item.product_url || !isMyRegistryFlowUrl(item.product_url)) return false;
+    const enrichmentUrls = [item.source_product_url, item.product_url]
+        .filter((value): value is string => Boolean(value) && isHttpUrl(value));
+    if (enrichmentUrls.length === 0) return false;
     if (!item.image_url) return true;
     if (THUMBNAIL_IMAGE_HINTS.some(hint => item.image_url?.toLowerCase().includes(hint))) return true;
     try {
@@ -415,10 +467,10 @@ function collectImageCandidatesFromHtml(html: string, baseUrl: string): string[]
 }
 
 async function fetchBestImageFromMyRegistryFlowUrl(
-    flowUrl: string,
+    pageUrl: string,
     currentImageUrl: string | null,
 ): Promise<string | null> {
-    const response = await fetch(flowUrl, {
+    const response = await fetch(pageUrl, {
         headers: {
             'User-Agent':
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -432,7 +484,7 @@ async function fetchBestImageFromMyRegistryFlowUrl(
     const html = await response.text();
     const bestLinkedImage = collectImageCandidatesFromHtml(
         html.length > MAX_PARSABLE_HTML_BYTES ? html.slice(0, MAX_PARSABLE_HTML_BYTES) : html,
-        response.url || flowUrl,
+        response.url || pageUrl,
     )[0];
     if (!bestLinkedImage) return null;
 
@@ -443,6 +495,7 @@ async function fetchBestImageFromMyRegistryFlowUrl(
 
 async function upgradeImagesFromMyRegistryLinks(items: RegistryItem[]): Promise<RegistryItem[]> {
     const upgradedItems = [...items];
+    let upgradeCount = 0;
     const candidates = items
         .map((item, index) => ({ item, index }))
         .filter(({ item }) => shouldAttemptMyRegistryImageUpgrade(item));
@@ -451,12 +504,19 @@ async function upgradeImagesFromMyRegistryLinks(items: RegistryItem[]): Promise<
         const batch = candidates.slice(start, start + MYREGISTRY_IMAGE_UPGRADE_CONCURRENCY);
         await Promise.all(batch.map(async ({ item, index }) => {
             try {
-                const upgradedImageUrl = await fetchBestImageFromMyRegistryFlowUrl(
-                    item.product_url as string,
-                    item.image_url,
-                );
+                const enrichmentUrls = [item.source_product_url, item.product_url]
+                    .filter((value): value is string => Boolean(value) && isHttpUrl(value));
+                let upgradedImageUrl: string | null = null;
+                for (const enrichmentUrl of enrichmentUrls) {
+                    upgradedImageUrl = await fetchBestImageFromMyRegistryFlowUrl(
+                        enrichmentUrl,
+                        item.image_url,
+                    );
+                    if (upgradedImageUrl) break;
+                }
                 if (!upgradedImageUrl) return;
                 upgradedItems[index] = { ...item, image_url: upgradedImageUrl };
+                upgradeCount += 1;
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 console.warn(`[fetch-registry] Failed to enrich image for ${item.id}: ${message}`);
@@ -464,6 +524,9 @@ async function upgradeImagesFromMyRegistryLinks(items: RegistryItem[]): Promise<
         }));
     }
 
+    if (upgradeCount > 0) {
+        console.info(`[fetch-registry] Upgraded ${upgradeCount} item image(s) using direct-first URL enrichment.`);
+    }
     return upgradedItems;
 }
 
@@ -505,7 +568,7 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
     const imageUrl = resolveBestImageUrl(raw);
 
     const rawActionLabel = String(raw.action_label ?? raw.actionLabel ?? '').trim() || null;
-    const productUrl = resolveRegistryProductUrl(raw, itemType);
+    const { productUrl, sourceProductUrl } = resolveRegistryProductUrls(raw, itemType);
 
     return {
         id,
@@ -519,6 +582,7 @@ function normalizeItem(raw: Record<string, unknown>, fetchedAt: string): Registr
             String(raw.storeName ?? raw.store_name ?? raw.retailer ?? raw.store ?? raw.retailerName ?? '').trim() ||
             null,
         product_url: productUrl,
+        source_product_url: sourceProductUrl,
         category: String(raw.category ?? raw.categoryName ?? raw.department ?? '').trim() || null,
         is_purchased: isPurchased,
         fetched_at: fetchedAt,
@@ -661,9 +725,10 @@ function parseItemsFromJsonLd(html: string, fetchedAt: string, registryId: strin
                 quantityRequested: eligibleQuantity.maxValue ?? null,
                 quantityPurchased: eligibleQuantity.value ?? null,
                 imageUrl: toTextValue(imageValue),
-                // Prefer MyRegistry's purchase flow URL over direct retailer URLs so guests stay in
-                // the assistant workflow that supports contribution/purchase tracking.
+                // Preserve both URLs: keep CTA behavior on MyRegistry flow while retaining a
+                // direct source URL for image enrichment quality.
                 productUrl: toTextValue(node.url ?? offers.url),
+                sourceProductUrl: toTextValue(offers.url ?? node.url),
                 storeName: toTextValue(seller.name),
                 category: toTextValue(node.category ?? itemOffered.category),
                 registryId,
@@ -756,6 +821,7 @@ function mergeRegistryItems(primaryItems: RegistryItem[], fallbackItems: Registr
             image_url: current.image_url ?? fallback.image_url,
             store_name: current.store_name ?? fallback.store_name,
             product_url: current.product_url ?? fallback.product_url,
+            source_product_url: current.source_product_url ?? fallback.source_product_url ?? null,
             category: current.category ?? fallback.category,
             is_purchased: current.is_purchased,
             fetched_at: current.fetched_at || fallback.fetched_at,
@@ -857,65 +923,73 @@ async function cacheRegistryItems(
     );
 }
 
-Deno.serve(async (req: Request) => {
-    if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: CORS_HEADERS });
-    }
+export const __test = {
+    resolveRegistryProductUrls,
+    shouldAttemptMyRegistryImageUpgrade,
+    upgradeImagesFromMyRegistryLinks,
+};
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    if (!supabaseUrl || !serviceRoleKey) {
-        return new Response(
-            JSON.stringify({ success: false, error: 'Supabase environment not configured.', items: [] }),
-            { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-        );
-    }
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-
-    try {
-        // Check whether cached data is fresh enough
-        const { data: latestRow } = await supabase
-            .from('registry_items')
-            .select('fetched_at')
-            .order('fetched_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-        const ageMs = latestRow?.fetched_at
-            ? Date.now() - new Date(latestRow.fetched_at).getTime()
-            : Infinity;
-        const isStale = ageMs > CACHE_TTL_SECONDS * 1000;
-        let items: RegistryItem[] = [];
-
-        if (isStale) {
-            const freshItems = await fetchFromMyRegistry();
-
-            // Replace all cached items with the freshly fetched set
-            await supabase.from('registry_items').delete().lte('fetched_at', new Date().toISOString());
-            await cacheRegistryItems(supabase, freshItems);
-            items = freshItems;
-        } else {
-            items = await getCachedRegistryItems(supabase);
+if (import.meta.main) {
+    Deno.serve(async (req: Request) => {
+        if (req.method === 'OPTIONS') {
+            return new Response('ok', { headers: CORS_HEADERS });
         }
 
-        return new Response(JSON.stringify({ success: true, items }), {
-            headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-        });
-    } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        console.error('[fetch-registry]', message);
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        if (!supabaseUrl || !serviceRoleKey) {
+            return new Response(
+                JSON.stringify({ success: false, error: 'Supabase environment not configured.', items: [] }),
+                { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
+            );
+        }
 
-        // On error, try to return whatever is cached rather than an empty response
-        const cachedItems = await getCachedRegistryItems(supabase).catch(() => []);
+        const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-        return new Response(
-            JSON.stringify({
-                success: false,
-                error: message,
-                items: cachedItems ?? [],
-            }),
-            { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-        );
-    }
-});
+        try {
+            // Check whether cached data is fresh enough
+            const { data: latestRow } = await supabase
+                .from('registry_items')
+                .select('fetched_at')
+                .order('fetched_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            const ageMs = latestRow?.fetched_at
+                ? Date.now() - new Date(latestRow.fetched_at).getTime()
+                : Infinity;
+            const isStale = ageMs > CACHE_TTL_SECONDS * 1000;
+            let items: RegistryItem[] = [];
+
+            if (isStale) {
+                const freshItems = await fetchFromMyRegistry();
+
+                // Replace all cached items with the freshly fetched set
+                await supabase.from('registry_items').delete().lte('fetched_at', new Date().toISOString());
+                await cacheRegistryItems(supabase, freshItems);
+                items = freshItems;
+            } else {
+                items = await getCachedRegistryItems(supabase);
+            }
+
+            return new Response(JSON.stringify({ success: true, items }), {
+                headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+            });
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unknown error';
+            console.error('[fetch-registry]', message);
+
+            // On error, try to return whatever is cached rather than an empty response
+            const cachedItems = await getCachedRegistryItems(supabase).catch(() => []);
+
+            return new Response(
+                JSON.stringify({
+                    success: false,
+                    error: message,
+                    items: cachedItems ?? [],
+                }),
+                { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
+            );
+        }
+    });
+}
