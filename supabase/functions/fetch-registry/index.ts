@@ -13,7 +13,11 @@ const MYREGISTRY_ORIGIN = 'https://www.myregistry.com';
 const MYREGISTRY_IMAGE_HOST_SUFFIXES = ['myregistry.com', 'blob.core.windows.net'];
 const SOURCE_IMAGE_HINTS = ['source', 'original', 'large', 'full', 'zoom', 'hires', 'highres'];
 const THUMBNAIL_IMAGE_HINTS = ['thumb', 'thumbnail', 'small', 'icon', 'mini'];
+const RETAILER_PDP_HINTS = ['/dp/', '/gp/product/', '/product/', '/products/', '/p/', '/itm/'];
 const MYREGISTRY_IMAGE_UPGRADE_CONCURRENCY = 4;
+const MAX_IMAGE_ENRICHMENT_FETCH_PAGES = 5;
+const MAX_IMAGE_ENRICHMENT_FOLLOW_UP_DEPTH = 2;
+const MAX_RETAILER_CANDIDATES_PER_PAGE = 12;
 const REGISTRY_URL =
     Deno.env.get('MYREGISTRY_URL') ?? 'https://www.myregistry.com/giftlist/morganandkenny';
 
@@ -394,6 +398,48 @@ function isProbablyImageUrl(value: string): boolean {
     return lower.includes('/image') || lower.includes('giftimages');
 }
 
+function getHostName(value: string): string | null {
+    try {
+        return new URL(value).hostname.toLowerCase();
+    } catch {
+        return null;
+    }
+}
+
+function isLikelyRetailerPdpUrl(value: string): boolean {
+    try {
+        const url = new URL(value);
+        const lowerPath = url.pathname.toLowerCase();
+        if (RETAILER_PDP_HINTS.some(hint => lowerPath.includes(hint))) return true;
+        return /(asin|sku|item|product(?:id)?|pid)/i.test(url.search);
+    } catch {
+        return false;
+    }
+}
+
+function scoreRetailerPageCandidate(value: string, preferredHost: string | null): number {
+    let score = 0;
+    if (!isMyRegistryUrl(value)) score += 40;
+    if (isLikelyRetailerPdpUrl(value)) score += 50;
+    const host = getHostName(value);
+    if (preferredHost && host === preferredHost) score += 30;
+    if (/redirect|signin|login|account|wishlist|cart|search|\/s\//i.test(value)) score -= 20;
+    if (isMyRegistryFlowUrl(value)) score -= 100;
+    return score;
+}
+
+function prioritizeRetailerPageCandidates(
+    candidates: string[],
+    preferredHost: string | null,
+    excluded: Set<string>,
+): string[] {
+    const unique = [...new Set(candidates)].filter(candidate => !excluded.has(candidate));
+    unique.sort((left, right) =>
+        scoreRetailerPageCandidate(right, preferredHost) - scoreRetailerPageCandidate(left, preferredHost)
+    );
+    return unique.slice(0, MAX_RETAILER_CANDIDATES_PER_PAGE);
+}
+
 function scoreImageUrlCandidate(value: string): number {
     let score = 0;
     try {
@@ -408,6 +454,35 @@ function scoreImageUrlCandidate(value: string): number {
     } catch {
         score -= 100;
     }
+    return score;
+}
+
+function normalizeImageIdentity(value: string): string | null {
+    try {
+        const url = new URL(value);
+        return `${url.hostname.toLowerCase()}${url.pathname}`.replace(/\/+$/, '');
+    } catch {
+        return null;
+    }
+}
+
+function isDuplicateImageCandidate(value: string, currentImageUrl: string | null): boolean {
+    if (!currentImageUrl) return false;
+    const candidateIdentity = normalizeImageIdentity(value);
+    const currentIdentity = normalizeImageIdentity(currentImageUrl);
+    if (!candidateIdentity || !currentIdentity) return value === currentImageUrl;
+    return candidateIdentity === currentIdentity;
+}
+
+function scoreImageSelectionCandidate(
+    value: string,
+    currentImageUrl: string | null,
+    seenImageIdentities: Set<string>,
+): number {
+    let score = scoreImageUrlCandidate(value);
+    if (isDuplicateImageCandidate(value, currentImageUrl)) score -= 80;
+    const identity = normalizeImageIdentity(value);
+    if (identity && seenImageIdentities.has(identity)) score -= 25;
     return score;
 }
 
@@ -495,12 +570,42 @@ function collectImageCandidatesFromHtml(html: string, baseUrl: string): string[]
     const metaRegex = /<meta[^>]+(?:property|name|itemprop)=["'](?:og:image|twitter:image|image)["'][^>]*content=["']([^"']+)["'][^>]*>/gi;
     for (const match of html.matchAll(metaRegex)) addCandidate(match[1]);
 
+    const getBestSrcsetCandidate = (srcsetValue: string): string | null => {
+        const entries = srcsetValue.split(',').map(entry => entry.trim()).filter(Boolean);
+        let bestUrl: string | null = null;
+        let bestScore = Number.NEGATIVE_INFINITY;
+
+        for (const entry of entries) {
+            const [candidateUrl, descriptor] = entry.split(/\s+/, 2);
+            if (!candidateUrl) continue;
+            let descriptorScore = 0;
+            if (descriptor?.endsWith('w')) {
+                const width = parseInt(descriptor.slice(0, -1), 10);
+                if (Number.isFinite(width)) descriptorScore = width;
+            } else if (descriptor?.endsWith('x')) {
+                const multiplier = parseFloat(descriptor.slice(0, -1));
+                if (Number.isFinite(multiplier)) descriptorScore = Math.round(multiplier * 1000);
+            }
+            if (descriptorScore >= bestScore) {
+                bestScore = descriptorScore;
+                bestUrl = candidateUrl;
+            }
+        }
+
+        return bestUrl;
+    };
+
     const attrRegex =
-        /<(?:img|source|a)[^>]*(?:src|srcset|data-src|data-srcset|data-original|data-image|data-zoom-image|href)=["']([^"']+)["'][^>]*>/gi;
+        /<(?:img|source|a)[^>]*\b(src|srcset|data-src|data-srcset|data-original|data-image|data-zoom-image|href)=["']([^"']+)["'][^>]*>/gi;
     for (const match of html.matchAll(attrRegex)) {
-        const [firstSrcset] = String(match[1] ?? '').split(',');
-        const srcsetCandidate = firstSrcset?.trim().split(/\s+/)[0] ?? '';
-        addCandidate(srcsetCandidate || match[1]);
+        const attributeName = String(match[1] ?? '').toLowerCase();
+        const attributeValue = String(match[2] ?? '');
+        if (attributeName.includes('srcset')) {
+            const srcsetCandidate = getBestSrcsetCandidate(attributeValue);
+            addCandidate(srcsetCandidate ?? attributeValue);
+            continue;
+        }
+        addCandidate(attributeValue);
     }
 
     const backgroundImageRegex = /background-image\s*:\s*url\((['"]?)([^'")]+)\1\)/gi;
@@ -515,30 +620,23 @@ async function fetchBestImageFromMyRegistryFlowUrl(
     pageUrl: string,
     currentImageUrl: string | null,
 ): Promise<string | null> {
-    const response = await fetch(pageUrl, {
-        headers: {
-            'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-        },
-        redirect: 'follow',
-    });
+    const sourceHost = getHostName(pageUrl);
+    const preferredHost = sourceHost && !isMyRegistryUrl(pageUrl) ? sourceHost : null;
+    const attemptedUrls: string[] = [];
+    const queuedUrls = new Set<string>([pageUrl]);
+    const visitedUrls = new Set<string>();
+    const queue: Array<{ url: string; depth: number }> = [{ url: pageUrl, depth: 0 }];
+    const imageCandidates: string[] = [];
 
-    if (!response.ok) return null;
-    const firstPageUrl = response.url || pageUrl;
-    const html = await response.text();
-    const parsedHtml = html.length > MAX_PARSABLE_HTML_BYTES ? html.slice(0, MAX_PARSABLE_HTML_BYTES) : html;
-    const imageCandidates = collectImageCandidatesFromHtml(parsedHtml, firstPageUrl);
+    while (queue.length > 0 && visitedUrls.size < MAX_IMAGE_ENRICHMENT_FETCH_PAGES) {
+        const current = queue.shift();
+        if (!current) break;
+        if (visitedUrls.has(current.url)) continue;
+        visitedUrls.add(current.url);
+        attemptedUrls.push(current.url);
 
-    const followedUrls = new Set<string>([firstPageUrl]);
-    const followUpUrl = collectRetailerPageCandidatesFromHtml(parsedHtml, firstPageUrl).find(candidate =>
-        !followedUrls.has(candidate) && !isMyRegistryFlowUrl(candidate)
-    );
-
-    if (followUpUrl) {
         try {
-            const followUpResponse = await fetch(followUpUrl, {
+            const response = await fetch(current.url, {
                 headers: {
                     'User-Agent':
                         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -547,26 +645,70 @@ async function fetchBestImageFromMyRegistryFlowUrl(
                 },
                 redirect: 'follow',
             });
-            if (followUpResponse.ok) {
-                const followUpFinalUrl = followUpResponse.url || followUpUrl;
-                const followUpHtml = await followUpResponse.text();
-                const parsedFollowUpHtml = followUpHtml.length > MAX_PARSABLE_HTML_BYTES
-                    ? followUpHtml.slice(0, MAX_PARSABLE_HTML_BYTES)
-                    : followUpHtml;
-                imageCandidates.push(
-                    ...collectImageCandidatesFromHtml(parsedFollowUpHtml, followUpFinalUrl),
-                );
+            if (!response.ok) continue;
+            const finalUrl = response.url || current.url;
+            queuedUrls.add(finalUrl);
+            const html = await response.text();
+            const parsedHtml = html.length > MAX_PARSABLE_HTML_BYTES ? html.slice(0, MAX_PARSABLE_HTML_BYTES) : html;
+
+            imageCandidates.push(...collectImageCandidatesFromHtml(parsedHtml, finalUrl));
+
+            if (current.depth >= MAX_IMAGE_ENRICHMENT_FOLLOW_UP_DEPTH) continue;
+            const followUpCandidates = prioritizeRetailerPageCandidates(
+                collectRetailerPageCandidatesFromHtml(parsedHtml, finalUrl).filter(candidate =>
+                    !isMyRegistryFlowUrl(candidate)
+                ),
+                preferredHost,
+                queuedUrls,
+            );
+            for (const candidate of followUpCandidates) {
+                if (queuedUrls.has(candidate)) continue;
+                queuedUrls.add(candidate);
+                queue.push({ url: candidate, depth: current.depth + 1 });
+                if (queuedUrls.size >= MAX_IMAGE_ENRICHMENT_FETCH_PAGES + 1) break;
             }
         } catch {
             // Preserve existing behavior when optional follow-up fetch fails.
         }
     }
 
-    const bestLinkedImage = imageCandidates[0];
-    if (!bestLinkedImage) return null;
+    const uniqueImageCandidates = [...new Set(imageCandidates)];
+    const seenImageIdentities = new Set<string>();
+    let bestLinkedImage: string | null = null;
+    let bestLinkedScore = Number.NEGATIVE_INFINITY;
+    for (const candidate of uniqueImageCandidates) {
+        const score = scoreImageSelectionCandidate(candidate, currentImageUrl, seenImageIdentities);
+        const identity = normalizeImageIdentity(candidate);
+        if (identity) seenImageIdentities.add(identity);
+        if (score > bestLinkedScore) {
+            bestLinkedScore = score;
+            bestLinkedImage = candidate;
+        }
+    }
+
+    if (!bestLinkedImage) {
+        console.info(`[fetch-registry] Image enrichment trace ${JSON.stringify({
+            startUrl: pageUrl,
+            attemptedUrls,
+            candidateCount: 0,
+            selectedImage: null,
+            reason: 'no-candidates',
+        })}`);
+        return null;
+    }
     const currentScore = currentImageUrl ? scoreImageUrlCandidate(currentImageUrl) : Number.NEGATIVE_INFINITY;
-    const linkedScore = scoreImageUrlCandidate(bestLinkedImage);
-    return linkedScore > currentScore ? bestLinkedImage : null;
+    const selectedImage = bestLinkedScore > currentScore ? bestLinkedImage : null;
+    console.info(`[fetch-registry] Image enrichment trace ${JSON.stringify({
+        startUrl: pageUrl,
+        attemptedUrls,
+        candidateCount: uniqueImageCandidates.length,
+        bestCandidate: bestLinkedImage,
+        bestCandidateScore: bestLinkedScore,
+        currentScore,
+        selectedImage,
+        reason: selectedImage ? 'selected' : 'not-better-than-current',
+    })}`);
+    return selectedImage;
 }
 
 async function upgradeImagesFromMyRegistryLinks(items: RegistryItem[]): Promise<RegistryItem[]> {
