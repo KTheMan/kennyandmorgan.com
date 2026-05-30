@@ -1468,9 +1468,14 @@ main { margin-top: 61px; }
 }
 
 .guest-response-status input[type="radio"] { display: none; }
-.guest-response-status input[type="radio"]:checked + span {
-    background: var(--deep-charcoal);
+.guest-response-status label:has(input[type="radio"]:checked) {
+    background: var(--accent);
     color: var(--soft-white);
+    border-color: var(--accent);
+}
+.guest-response-status label:not(:has(input[type="radio"]:checked)):hover {
+    border-color: var(--accent);
+    color: var(--accent);
 }
 .guest-response-status span { display: block; }
 
