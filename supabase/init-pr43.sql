@@ -42,10 +42,28 @@ as $$
         'city', guest.city,
         'state', guest.state,
         'postalCode', guest.postal_code,
+        'rsvpSubmitterName', latest_rsvp.submitter_name,
+        'rsvpSubmitterEmail', latest_rsvp.submitter_email,
+        'rsvpSpecialMessage', latest_rsvp.special_message,
+        'rsvpSongRequest', latest_rsvp.song_request,
+        'rsvpSubmittedAt', latest_rsvp.created_at,
         'lastRsvpAt', guest.last_rsvp_at,
         'isInvitedToRehearsalLunch', guest.is_invited_to_rehearsal_lunch
     ) order by guest.group_id, guest.is_primary desc, guest.full_name asc), '[]'::jsonb)
-    from public.guests guest, authorized;
+    from public.guests guest
+    cross join authorized
+    left join lateral (
+        select
+            r.submitter_name,
+            r.submitter_email,
+            r.special_message,
+            r.song_request,
+            r.created_at
+        from public.rsvp_submissions r
+        where r.group_id = guest.group_id
+        order by r.created_at desc, r.id desc
+        limit 1
+    ) latest_rsvp on true;
 $$;
 
 -- admin_upsert_guest: persist all fields including is_child and eligibility flags

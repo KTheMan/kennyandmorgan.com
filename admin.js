@@ -324,6 +324,10 @@ function applyGuestFilter() {
             guest.fullName,
             guest.groupId,
             guest.email,
+            guest.rsvpSubmitterName,
+            guest.rsvpSubmitterEmail,
+            guest.rsvpSongRequest,
+            guest.rsvpSpecialMessage,
             guest.notes,
             guest.addressLine1,
             guest.addressLine2,
@@ -348,7 +352,7 @@ function renderGuestTable() {
     }
 
     if (state.isLoadingGuests) {
-        const skeletonWidths = ['70%', '50%', '30%', '30%', '30%', '35%', '45%', '55%', '45%', '40%', '65%', '40%', '80%', '60%'];
+        const skeletonWidths = ['70%', '50%', '30%', '30%', '30%', '35%', '45%', '55%', '45%', '40%', '65%', '50%', '55%', '55%', '80%', '40%', '80%', '60%'];
         const skeletonRow = () => `<tr class="skeleton-row">${skeletonWidths.map(w =>
             `<td><span class="skeleton-cell" style="width:${w}"></span></td>`
         ).join('')}</tr>`;
@@ -359,7 +363,7 @@ function renderGuestTable() {
     const countEl = document.getElementById('guestFilterCount');
 
     if (!state.guests.length) {
-        tbody.innerHTML = '<tr><td colspan="14" class="table-empty">No guests on file yet. Use "+ New Guest" or import a CSV.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="18" class="table-empty">No guests on file yet. Use "+ New Guest" or import a CSV.</td></tr>';
         if (countEl) countEl.textContent = '';
         return;
     }
@@ -369,7 +373,7 @@ function renderGuestTable() {
         : state.guests;
 
     if (!visibleGuests.length) {
-        tbody.innerHTML = '<tr><td colspan="14" class="table-empty">No guests match this filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="18" class="table-empty">No guests match this filter.</td></tr>';
         if (countEl) countEl.textContent = `0 of ${state.guests.length}`;
         return;
     }
@@ -399,6 +403,10 @@ function renderGuestTable() {
             <td class="px-3 py-2">${rsvpBadge}</td>
             <td class="px-3 py-2">${escapeHtml(getMealDisplayValue(guest) || '—')}</td>
             <td class="px-3 py-2">${escapeHtml(guest.dietaryNotes || '—')}</td>
+            <td class="px-3 py-2 whitespace-normal max-w-[14rem] align-top">${escapeHtml(guest.rsvpSubmitterName || '—')}</td>
+            <td class="px-3 py-2 whitespace-normal max-w-[14rem] align-top">${escapeHtml(guest.rsvpSubmitterEmail || '—')}</td>
+            <td class="px-3 py-2 whitespace-normal max-w-[14rem] align-top">${escapeHtml(guest.rsvpSongRequest || '—')}</td>
+            <td class="px-3 py-2 whitespace-normal max-w-[18rem] align-top">${escapeHtml(guest.rsvpSpecialMessage || '—')}</td>
             <td class="px-3 py-2">${escapeHtml(formatGuestAddress(guest) || '—')}</td>
             <td class="px-3 py-2 whitespace-nowrap">${formatDate(guest.lastRsvpAt)}</td>
             <td class="px-3 py-2 table-actions whitespace-nowrap">
