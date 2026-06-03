@@ -637,6 +637,7 @@ function initForms() {
             const payload = {
                 guestId: form.hmuGuestId?.value ? Number(form.hmuGuestId.value) : null,
                 fullName: activeHmuGuest?.fullName || form.hmuName.value.trim(),
+                email: activeHmuGuest?.email || '',
                 wantsHair: form.hmuHair.checked,
                 wantsMakeup: form.hmuMakeup.checked,
                 wantsOptOut: form.hmuOptOut.checked
