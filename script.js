@@ -720,7 +720,7 @@ function setupHmuGuestLookup() {
         setLookupState('Looking up eligible guests...', 'info');
 
         try {
-            const data = await window.KMDataClient.searchGuestGroups(query, 5, { requireHmuEligible: true });
+            const data = await window.KMDataClient.searchGuestGroups(query, 5);
             const matchingGuests = (data?.results || [])
                 .flatMap(group => (group.guests || []).filter(guest => guest.isHmuEligible));
 
