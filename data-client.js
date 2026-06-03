@@ -159,7 +159,19 @@
         if (normalizedOptions.requireHmuEligible) {
             params.require_hmu_eligible = true;
         }
-        const data = await callSupabaseRpc('search_guest_groups', params);
+        let data;
+        try {
+            data = await callSupabaseRpc('search_guest_groups', params);
+        } catch (error) {
+            const fallbackParams = {
+                search_name: query,
+                max_results: limit
+            };
+            if (normalizedOptions.requireRehearsalEligible) {
+                fallbackParams.require_rehearsal_eligible = true;
+            }
+            data = await callSupabaseRpc('search_guest_groups', fallbackParams);
+        }
 
         return {
             success: true,
