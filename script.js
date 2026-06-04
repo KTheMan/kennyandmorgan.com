@@ -1546,9 +1546,13 @@ async function handleRSVPSubmit(form) {
         name: data.rsvpName,
         email: data.rsvpEmail,
         dietaryRestrictions: data.dietaryRestrictions || '',
+        dietary_restrictions: data.dietaryRestrictions || '',
         specialMessage: data.specialMessage || data.songRequest || '',
+        special_message: data.specialMessage || data.songRequest || '',
         songRequest: data.songRequest || '',
-        guestGroupId: data.guestGroupId || ''
+        song_request: data.songRequest || '',
+        guestGroupId: data.guestGroupId || '',
+        guest_group_id: data.guestGroupId || ''
     };
 
     if (!payload.guestGroupId) {
@@ -1566,10 +1570,19 @@ async function handleRSVPSubmit(form) {
     }
 
     payload.guestResponses = guestResponses;
+    payload.guest_responses = guestResponses.map(response => ({
+        guestId: response.guestId,
+        guest_id: response.guestId,
+        status: response.status,
+        mealChoice: response.mealChoice,
+        meal_choice: response.mealChoice,
+        name: response.name
+    }));
     payload.attending = guestResponses.some(response => response.status === 'accepted');
     const attendingCount = guestResponses.filter(response => response.status === 'accepted').length;
     if (attendingCount > 0) {
         payload.guestCount = attendingCount;
+        payload.guest_count = attendingCount;
     }
 
     submitButton?.setAttribute('disabled', 'disabled');
