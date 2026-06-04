@@ -1235,13 +1235,12 @@ function renderGuestResponseSection() {
     list.innerHTML = activeGuestParty.guests.map(guest => {
         const state = guestResponseState.get(guest.id) || {};
         const displayName = (state.nameOverride && state.nameOverride.trim()) || guest.fullName;
-        const isPlusOne = guest.isPlusOne;
         const isChild = isGuestChild(guest);
-        const requiresNameField = isPlusOne || guest.fullName.toLowerCase().includes('guest');
+        const requiresNameField = guestRequiresName(guest);
         const mealWrapperClass = state.status === 'accepted' && !isChild ? 'guest-response-meal' : 'guest-response-meal hidden';
         const childMealWrapperClass = state.status === 'accepted' && isChild ? 'guest-response-meal' : 'guest-response-meal hidden';
-        const nameInputHidden = isPlusOne && state.status !== 'accepted';
-        const guestRole = isPlusOne ? 'Plus One' : '';
+        const nameInputHidden = requiresNameField && state.status !== 'accepted';
+        const guestRole = guest.isPlusOne ? 'Plus One' : '';
         return `
             <div class="guest-response-card${requiresNameField ? ' is-guest-placeholder' : ''}" data-guest-card="${guest.id}">
                 <div class="guest-response-header">
@@ -1266,7 +1265,7 @@ function renderGuestResponseSection() {
                         <span>${escapeHtml(currentChildMealLabel)}</span>
                     </label>
                 </div>
-                ${requiresNameField ? renderGuestNameInput(guest.id, state.nameOverride, isPlusOne, nameInputHidden) : ''}
+                ${requiresNameField ? renderGuestNameInput(guest.id, state.nameOverride, requiresNameField, nameInputHidden) : ''}
             </div>
         `;
     }).join('');
@@ -1293,12 +1292,12 @@ function renderMealOptions(selectedValue) {
 }
 
 function renderGuestNameInput(guestId, currentValue = '', isRequired = false, isHidden = false) {
-    const labelText = isRequired ? 'Guest Name' : 'Guest Name (optional)';
+    const labelText = isRequired ? 'Guest Name *' : 'Guest Name';
     return `
         <div class="guest-response-name-input${isHidden ? ' hidden' : ''}" data-guest-name-wrapper="${guestId}">
             <label>
                 ${labelText}
-                <input type="text" placeholder="Add their name" data-guest-name="${guestId}" value="${escapeHtmlAttr(currentValue || '')}">
+                <input type="text" placeholder="Enter their full name" data-guest-name="${guestId}" value="${escapeHtmlAttr(currentValue || '')}">
             </label>
         </div>
     `;
@@ -1330,9 +1329,9 @@ function handleGuestResponseListInput(event) {
             const guest = activeGuestParty.guests.find(g => g.id === guestId);
             childMealWrapper.classList.toggle('hidden', state.status !== 'accepted' || !isGuestChild(guest));
         }
-        // For plus-one guests: show name input only when attending
+        // For plus-one/placeholder guests: show name input only when attending.
         const guest = activeGuestParty.guests.find(g => g.id === guestId);
-        if (guest?.isPlusOne) {
+        if (guestRequiresName(guest)) {
             const nameWrapper = document.querySelector(`[data-guest-name-wrapper="${guestId}"]`);
             if (nameWrapper) {
                 nameWrapper.classList.toggle('hidden', state.status !== 'accepted');
@@ -1387,12 +1386,12 @@ function validateGuestResponses(responses) {
         return { valid: false, message: `Select a meal for ${getGuestDisplayName(missingMeal.guestId)}.` };
     }
 
-    const missingPlusOneName = responses.find(response => {
+    const missingGuestName = responses.find(response => {
         if (response.status !== 'accepted') return false;
         const guest = activeGuestParty.guests.find(g => g.id === response.guestId);
-        return guest?.isPlusOne && !response.name?.trim();
+        return guestRequiresName(guest) && !response.name?.trim();
     });
-    if (missingPlusOneName) {
+    if (missingGuestName) {
         return { valid: false, message: 'Please enter the name for your plus one.' };
     }
 
@@ -1451,6 +1450,14 @@ function isGuestChild(guest = {}) {
         ?? guest.children
         ?? false
     );
+}
+
+function isGuestPlaceholderName(name = '') {
+    return /\b(guest|plus\s*one)\b/i.test(String(name || ''));
+}
+
+function guestRequiresName(guest = {}) {
+    return Boolean(guest?.isPlusOne || guest?.is_plus_one || isGuestPlaceholderName(guest?.fullName || guest?.full_name));
 }
 
 function setGuestResponseMessage(message = '', variant = 'error') {

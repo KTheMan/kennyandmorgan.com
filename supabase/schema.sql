@@ -381,6 +381,22 @@ begin
         raise exception 'guestGroupId is required when submitting per-guest responses.';
     end if;
 
+    if exists (
+        select 1
+        from jsonb_array_elements(guest_responses) as entry(value)
+        join public.guests guest
+          on guest.id = nullif(entry.value->>'guestId', '')::bigint
+         and guest.group_id = guest_group_id
+        where lower(coalesce(entry.value->>'status', '')) = 'accepted'
+          and (
+              guest.is_plus_one = true
+              or lower(coalesce(guest.full_name, '')) ~ '\m(guest|plus\s*one)\M'
+          )
+          and nullif(trim(coalesce(entry.value->>'name', '')), '') is null
+    ) then
+        raise exception 'Please enter the name for your plus one.';
+    end if;
+
     select count(*) filter (where lower(coalesce(entry.value->>'status', '')) = 'accepted')
     into accepted_count
     from jsonb_array_elements(guest_responses) as entry(value);
