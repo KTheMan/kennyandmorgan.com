@@ -84,13 +84,18 @@ jobs:
             --use-copy \
             --file "${backup_dir}/public_data.sql"
 
-          supabase db dump \
+          if ! supabase db dump \
             --linked \
             --password "$SUPABASE_DB_PASSWORD" \
             --schema supabase_migrations \
             --data-only \
             --use-copy \
-            --file "${backup_dir}/migration_history.sql"
+            --file "${backup_dir}/migration_history.sql"; then
+            cat > "${backup_dir}/migration_history.sql" <<'EOF'
+          -- The supabase_migrations schema was not present when this backup was created.
+          -- This is expected before the production baseline has been marked applied.
+          EOF
+          fi
 
           supabase db dump \
             --linked \
