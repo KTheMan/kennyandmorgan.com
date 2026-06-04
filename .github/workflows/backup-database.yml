@@ -1,0 +1,176 @@
+name: Backup Supabase Database
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 10 * * *'
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_BACKUP_PASSPHRASE: ${{ secrets.SUPABASE_BACKUP_PASSPHRASE }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+  SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate required configuration
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "Missing secret: SUPABASE_ACCESS_TOKEN" >&2
+            exit 1
+          fi
+          if [ -z "$SUPABASE_DB_PASSWORD" ]; then
+            echo "Missing secret: SUPABASE_DB_PASSWORD" >&2
+            exit 1
+          fi
+          if [ -z "$SUPABASE_BACKUP_PASSPHRASE" ]; then
+            echo "Missing secret: SUPABASE_BACKUP_PASSPHRASE" >&2
+            exit 1
+          fi
+          if [ -z "$SUPABASE_PROJECT_ID" ]; then
+            echo "Missing variable: SUPABASE_PROJECT_ID" >&2
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link Supabase project
+        run: |
+          supabase link \
+            --project-ref "$SUPABASE_PROJECT_ID" \
+            --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Create logical database dump
+        run: |
+          set -euo pipefail
+
+          backup_stamp="$(date -u +'%Y%m%dT%H%M%SZ')"
+          backup_name="kennyandmorgan-supabase-${SUPABASE_PROJECT_ID}-${backup_stamp}"
+          backup_dir="backup/${backup_name}"
+
+          echo "BACKUP_NAME=${backup_name}" >> "$GITHUB_ENV"
+
+          mkdir -p "$backup_dir"
+          cat > "${backup_dir}/manifest.txt" <<EOF
+          project_ref=${SUPABASE_PROJECT_ID}
+          created_at_utc=${backup_stamp}
+          github_repository=${GITHUB_REPOSITORY}
+          github_run_id=${GITHUB_RUN_ID}
+          contents=public schema, public data, role definitions, migration history
+          EOF
+
+          supabase db dump \
+            --linked \
+            --password "$SUPABASE_DB_PASSWORD" \
+            --schema public \
+            --file "${backup_dir}/public_schema.sql"
+
+          supabase db dump \
+            --linked \
+            --password "$SUPABASE_DB_PASSWORD" \
+            --schema public \
+            --data-only \
+            --use-copy \
+            --file "${backup_dir}/public_data.sql"
+
+          supabase db dump \
+            --linked \
+            --password "$SUPABASE_DB_PASSWORD" \
+            --schema supabase_migrations \
+            --data-only \
+            --use-copy \
+            --file "${backup_dir}/migration_history.sql"
+
+          supabase db dump \
+            --linked \
+            --password "$SUPABASE_DB_PASSWORD" \
+            --role-only \
+            --file "${backup_dir}/roles.sql"
+
+          tar -czf "${backup_name}.tar.gz" -C backup "$backup_name"
+          printf '%s' "$SUPABASE_BACKUP_PASSPHRASE" |
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase-fd 0 \
+              --symmetric \
+              --cipher-algo AES256 \
+              --output "${backup_name}.tar.gz.gpg" \
+              "${backup_name}.tar.gz"
+
+          sha256sum "${backup_name}.tar.gz.gpg" > "${backup_name}.tar.gz.gpg.sha256"
+          rm -rf backup "${backup_name}.tar.gz"
+
+      - name: Upload encrypted backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BACKUP_NAME }}
+          path: |
+            ${{ env.BACKUP_NAME }}.tar.gz.gpg
+            ${{ env.BACKUP_NAME }}.tar.gz.gpg.sha256
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Upload encrypted backup to S3-compatible storage
+        if: vars.SUPABASE_BACKUP_S3_BUCKET != ''
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SUPABASE_BACKUP_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_BACKUP_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ vars.SUPABASE_BACKUP_S3_REGION || 'auto' }}
+          S3_BUCKET: ${{ vars.SUPABASE_BACKUP_S3_BUCKET }}
+          S3_ENDPOINT_URL: ${{ vars.SUPABASE_BACKUP_S3_ENDPOINT_URL }}
+          S3_PREFIX: ${{ vars.SUPABASE_BACKUP_S3_PREFIX || 'supabase/hewiaylxiueuqtokaczg' }}
+        run: |
+          set -euo pipefail
+
+          if ! command -v aws >/dev/null 2>&1; then
+            python -m pip install --user awscli
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.local/bin:$PATH"
+          fi
+
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "S3 bucket is configured, but S3 access key secrets are missing." >&2
+            exit 1
+          fi
+
+          aws_args=()
+          if [ -n "$S3_ENDPOINT_URL" ]; then
+            aws_args+=(--endpoint-url "$S3_ENDPOINT_URL")
+          fi
+
+          aws s3 cp "${BACKUP_NAME}.tar.gz.gpg" \
+            "s3://${S3_BUCKET}/${S3_PREFIX}/${BACKUP_NAME}.tar.gz.gpg" \
+            "${aws_args[@]}" \
+            --no-progress
+
+          aws s3 cp "${BACKUP_NAME}.tar.gz.gpg.sha256" \
+            "s3://${S3_BUCKET}/${S3_PREFIX}/${BACKUP_NAME}.tar.gz.gpg.sha256" \
+            "${aws_args[@]}" \
+            --no-progress
+
+      - name: Backup summary
+        env:
+          S3_BUCKET: ${{ vars.SUPABASE_BACKUP_S3_BUCKET }}
+        run: |
+          s3_state="not configured"
+          if [ -n "$S3_BUCKET" ]; then
+            s3_state="enabled"
+          fi
+
+          {
+            echo "### Encrypted backup created"
+            echo ""
+            echo "- Backup: ${BACKUP_NAME}.tar.gz.gpg"
+            echo "- Artifact retention: 90 days"
+            echo "- S3/R2 upload: ${s3_state}"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -42,3 +42,8 @@ Thumbs.db
 # Test output
 playwright-report/
 test-results/
+
+# Local backup artifacts
+backup/
+*.tar.gz.gpg
+*.tar.gz.gpg.sha256

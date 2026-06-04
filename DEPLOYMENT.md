@@ -9,11 +9,128 @@
 
 ## Supabase setup
 
-1. Open the Supabase SQL editor.
-2. Run or re-run `supabase/schema.sql` to create/update tables, RPCs, and
-   supporting functions.
-3. Run `supabase/seed.example.sql` after replacing the sample passwords.
-4. Verify Row Level Security is enabled on every table.
+Use the Supabase CLI migration workflow for all new database changes. The live
+production database is treated as the source of truth through the current
+baseline migration, and future changes should be added as new files in
+`supabase/migrations/`.
+
+Do not run `supabase db reset --linked`, `supabase db reset --db-url`, or the
+full `supabase/schema.sql` against production. Remote reset drops user-created
+database objects.
+
+### First-time production baseline
+
+The current production schema is captured in:
+
+```text
+supabase/migrations/20260604070000_production_baseline.sql
+```
+
+That file intentionally refuses to run against any existing database that
+already contains the wedding site tables. For production, mark it as applied in
+Supabase migration history instead of executing it.
+
+After GitHub repository secrets/variables are configured, run the manual
+**Baseline Supabase Database Migrations** workflow with this confirmation value:
+
+```text
+hewiaylxiueuqtokaczg/20260604070000
+```
+
+If the workflow completes and the dry run reports no pending production SQL, set
+this repository variable:
+
+```text
+SUPABASE_DB_MIGRATIONS_BASELINED=true
+```
+
+Production database deployments stay disabled until that variable is set.
+
+If Supabase reports old remote-only migration history entries, repair the
+history before enabling deployment. The archived versions are:
+
+```bash
+supabase migration repair 20260529080000 20260603000000 20260604000000 20260604053000 \
+  --status reverted \
+  --linked
+```
+
+Then mark the baseline applied:
+
+```bash
+supabase migration repair 20260604070000 --status applied --linked
+supabase db push --linked --dry-run
+```
+
+Those commands change only Supabase's migration history table. They do not drop
+or rewrite guest RSVP data.
+
+### Automated database deployment via GitHub Actions
+
+`deploy-database.yml` deploys database migrations on pushes to `main` that
+change `supabase/config.toml` or files under `supabase/migrations/`. It requires:
+
+- **Repository secret**: `SUPABASE_ACCESS_TOKEN`
+- **Repository secret**: `SUPABASE_DB_PASSWORD`
+- **Repository variable**: `SUPABASE_PROJECT_ID`
+- **Repository variable**: `SUPABASE_DB_MIGRATIONS_BASELINED`
+
+`verify-database-migrations.yml` starts an ephemeral local Supabase database for
+pull requests and applies the migration files there first. This only touches the
+temporary CI database.
+
+For future schema changes:
+
+1. Create a new migration under `supabase/migrations/`.
+2. Keep `supabase/schema.sql` updated as the readable current-state reference.
+3. Open a PR so the local migration verification workflow runs.
+4. Merge to `main`; GitHub Actions runs `supabase db push` against production.
+
+### Database backups
+
+Supabase manages daily backups for Pro, Team, and Enterprise projects. Free
+projects should create their own logical backups with the Supabase CLI and keep
+them off-site. This repo includes `backup-database.yml` for that portable backup
+path.
+
+The backup workflow:
+
+- dumps the `public` schema
+- dumps `public` table data with `COPY`
+- dumps role definitions
+- dumps Supabase migration history
+- writes a small manifest
+- encrypts the archive before uploading anything
+
+Because this repository is public, raw backup SQL must never be committed or
+uploaded as an unencrypted artifact.
+
+Required backup configuration:
+
+- **Repository secret**: `SUPABASE_ACCESS_TOKEN`
+- **Repository secret**: `SUPABASE_DB_PASSWORD`
+- **Repository secret**: `SUPABASE_BACKUP_PASSPHRASE`
+- **Repository variable**: `SUPABASE_PROJECT_ID`
+
+The encrypted GitHub Actions artifact is retained for 90 days. For longer-lived
+off-site storage, configure an S3-compatible bucket such as Cloudflare R2:
+
+- **Repository variable**: `SUPABASE_BACKUP_S3_BUCKET`
+- **Repository variable**: `SUPABASE_BACKUP_S3_PREFIX` (optional)
+- **Repository variable**: `SUPABASE_BACKUP_S3_REGION` (optional)
+- **Repository variable**: `SUPABASE_BACKUP_S3_ENDPOINT_URL` (for R2/B2/etc.)
+- **Repository secret**: `SUPABASE_BACKUP_S3_ACCESS_KEY_ID`
+- **Repository secret**: `SUPABASE_BACKUP_S3_SECRET_ACCESS_KEY`
+
+To decrypt a downloaded backup:
+
+```bash
+gpg --decrypt kennyandmorgan-supabase-*.tar.gz.gpg > backup.tar.gz
+tar -xzf backup.tar.gz
+```
+
+Restore into a disposable/new database first, then verify before pointing the
+production site at restored data.
 
 ## Supabase Edge Functions
 

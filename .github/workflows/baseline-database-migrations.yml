@@ -1,0 +1,97 @@
+name: Baseline Supabase Database Migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type hewiaylxiueuqtokaczg/20260604070000 to mark the production baseline applied'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  ARCHIVED_MIGRATION_VERSIONS: '20260529080000 20260603000000 20260604000000 20260604053000'
+  BASELINE_VERSION: '20260604070000'
+  BASELINE_CONFIRMATION: ${{ inputs.confirmation }}
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+  SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate required configuration
+        run: |
+          if [ "$BASELINE_CONFIRMATION" != "hewiaylxiueuqtokaczg/${BASELINE_VERSION}" ]; then
+            echo "Confirmation did not match the production project/baseline version." >&2
+            exit 1
+          fi
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "Missing secret: SUPABASE_ACCESS_TOKEN" >&2
+            exit 1
+          fi
+          if [ -z "$SUPABASE_DB_PASSWORD" ]; then
+            echo "Missing secret: SUPABASE_DB_PASSWORD" >&2
+            exit 1
+          fi
+          if [ -z "$SUPABASE_PROJECT_ID" ]; then
+            echo "Missing variable: SUPABASE_PROJECT_ID" >&2
+            exit 1
+          fi
+          if [ "$SUPABASE_PROJECT_ID" != "hewiaylxiueuqtokaczg" ]; then
+            echo "SUPABASE_PROJECT_ID does not match the production project ref." >&2
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link Supabase project
+        run: |
+          supabase link \
+            --project-ref "$SUPABASE_PROJECT_ID" \
+            --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Show migration status before repair
+        run: supabase migration list --linked --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Mark archived patch migrations as reverted if present
+        run: |
+          set -euo pipefail
+
+          migration_status="$(supabase migration list --linked --password "$SUPABASE_DB_PASSWORD")"
+          for version in $ARCHIVED_MIGRATION_VERSIONS; do
+            if printf '%s\n' "$migration_status" | grep -q "$version"; then
+              supabase migration repair "$version" \
+                --status reverted \
+                --linked \
+                --password "$SUPABASE_DB_PASSWORD"
+            fi
+          done
+
+      - name: Mark baseline as applied
+        run: |
+          supabase migration repair "$BASELINE_VERSION" \
+            --status applied \
+            --linked \
+            --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Confirm no pending migration execution
+        run: supabase db push --linked --dry-run --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Next step
+        run: |
+          {
+            echo "### Baseline complete"
+            echo ""
+            echo "Baseline ${BASELINE_VERSION} is marked applied in Supabase migration history."
+            echo "Set repository variable SUPABASE_DB_MIGRATIONS_BASELINED=true to enable production database deploys."
+          } >> "$GITHUB_STEP_SUMMARY"
