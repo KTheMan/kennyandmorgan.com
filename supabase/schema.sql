@@ -405,7 +405,7 @@ begin
         greatest(coalesce(nullif(payload->>'guestCount', '')::integer, accepted_count, 1), 1),
         normalized_meal_choice,
         normalized_dietary,
-        coalesce(normalized_message, normalized_song_request),
+        normalized_message,
         normalized_song_request
     );
 
