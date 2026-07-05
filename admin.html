@@ -205,7 +205,7 @@
                         <div class="flex flex-wrap items-center justify-between gap-3">
                             <div>
                                 <h3 class="text-lg font-semibold">Guest List</h3>
-                                <p class="text-sm text-muted-foreground">Use search to quickly find guests or groups. <span id="guestFilterCount" class="font-medium text-foreground"></span></p>
+                                <p class="text-sm text-muted-foreground">Manage guests and RSVPs. <span id="guestFilterCount" class="font-medium text-foreground"></span></p>
                             </div>
                             <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                                 <button type="button" id="newGuestButton" class="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90">+ New Guest</button>
@@ -218,7 +218,78 @@
                             </div>
                         </div>
 
-                        <div class="mt-4 overflow-x-auto rounded-md border border-border">
+                        <!-- Enhanced Toolbar -->
+                        <div class="mt-4 flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-medium uppercase tracking-wider text-muted-foreground">View:</span>
+                                <div class="inline-flex rounded-md border border-input bg-muted/30 p-1">
+                                    <button type="button" id="viewTableButton" class="inline-flex h-8 items-center justify-center rounded-sm px-3 text-xs font-medium transition-all duration-200 bg-white shadow-sm text-foreground">Table</button>
+                                    <button type="button" id="viewCardButton" class="inline-flex h-8 items-center justify-center rounded-sm px-3 text-xs font-medium transition-all duration-200 text-muted-foreground hover:text-foreground">Cards</button>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <button type="button" id="toggleFiltersButton" class="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-muted">
+                                    Filters
+                                </button>
+                                <button type="button" id="toggleColumnsButton" class="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-muted">
+                                    Columns
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Filter Panel (Hidden by default) -->
+                        <div id="filterPanel" class="hidden mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3 p-4 rounded-lg bg-secondary/30 border border-border">
+                            <div class="space-y-2">
+                                <label class="text-xs font-semibold uppercase text-muted-foreground">RSVP Status</label>
+                                <div class="flex flex-wrap gap-2">
+                                    <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                        <input type="checkbox" checked name="statusFilter" value="pending" class="rounded border-input accent-accent"> Pending
+                                    </label>
+                                    <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                        <input type="checkbox" checked name="statusFilter" value="accepted" class="rounded border-input accent-accent"> Accepted
+                                    </label>
+                                    <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                        <input type="checkbox" checked name="statusFilter" value="declined" class="rounded border-input accent-accent"> Declined
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-xs font-semibold uppercase text-muted-foreground">Guest Type</label>
+                                <div class="flex flex-wrap gap-2">
+                                    <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                        <input type="checkbox" name="typeFilter" value="isPrimary" class="rounded border-input accent-accent"> Primary
+                                    </label>
+                                    <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                        <input type="checkbox" name="typeFilter" value="isPlusOne" class="rounded border-input accent-accent"> Plus One
+                                    </label>
+                                    <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                        <input type="checkbox" name="typeFilter" value="isChild" class="rounded border-input accent-accent"> Child
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-xs font-semibold uppercase text-muted-foreground">Other</label>
+                                <div class="flex flex-wrap gap-2">
+                                    <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                        <input type="checkbox" name="typeFilter" value="isInvitedToRehearsalLunch" class="rounded border-input accent-accent"> Rehearsal Lunch
+                                    </label>
+                                    <label class="flex items-center gap-1 text-xs cursor-pointer">
+                                        <input type="checkbox" name="typeFilter" value="isHmuEligible" class="rounded border-input accent-accent"> HMU Eligible
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Columns Panel (Hidden by default) -->
+                        <div id="columnsPanel" class="hidden mt-4 p-4 rounded-lg bg-secondary/30 border border-border">
+                            <label class="text-xs font-semibold uppercase text-muted-foreground block mb-3">Visible Columns</label>
+                            <div id="columnToggles" class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                                <!-- JS generated -->
+                            </div>
+                        </div>
+
+                        <div id="guestTableContainer" class="mt-4 overflow-x-auto rounded-md border border-border">
                             <table id="guestTable" class="min-w-full text-left text-sm">
                                 <thead class="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
                                     <tr>

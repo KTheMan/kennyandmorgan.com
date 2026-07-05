@@ -1,5 +1,10 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/assert_equals.ts";
-import { __test } from "./index.ts";
+import {
+  parseBackgroundEnrichmentLimit,
+  resolveRegistryProductUrls,
+  selectBackgroundEnrichmentCandidates,
+  upgradeImagesFromMyRegistryLinks,
+} from "./scrapers/myregistry.ts";
 
 Deno.test("resolveRegistryProductUrls keeps MyRegistry flow URL for CTA and preserves direct listing URL", () => {
   const raw = {
@@ -7,7 +12,7 @@ Deno.test("resolveRegistryProductUrls keeps MyRegistry flow URL for CTA and pres
     purchaseUrl:
       "https://www.myregistry.com/Visitors/Giftlist/PurchaseAssistant.aspx?giftId=111&registryId=222",
   };
-  const result = __test.resolveRegistryProductUrls(raw, "product");
+  const result = resolveRegistryProductUrls(raw, "product");
 
   assertEquals(
     result.productUrl,
@@ -24,7 +29,7 @@ Deno.test("resolveRegistryProductUrls extracts direct listing URL from flow quer
     purchaseUrl:
       "https://www.myregistry.com/Visitors/Giftlist/PurchaseAssistant.aspx?giftId=111&registryId=222&url=https%3A%2F%2Fwww.amazon.com%2Fdp%2FB000TEST",
   };
-  const result = __test.resolveRegistryProductUrls(raw, "product");
+  const result = resolveRegistryProductUrls(raw, "product");
 
   assertEquals(result.productUrl?.includes("PurchaseAssistant.aspx"), true);
   assertEquals(result.sourceProductUrl, "https://www.amazon.com/dp/B000TEST");
@@ -60,7 +65,7 @@ Deno.test("upgradeImagesFromMyRegistryLinks tries source URL before CTA URL and 
   };
 
   try {
-    const [item] = await __test.upgradeImagesFromMyRegistryLinks([{
+    const [item] = await upgradeImagesFromMyRegistryLinks([{
       id: "1",
       name: "Item",
       description: null,
@@ -130,7 +135,7 @@ Deno.test("upgradeImagesFromMyRegistryLinks crawls deeper follow-up retailer pag
   };
 
   try {
-    const [item] = await __test.upgradeImagesFromMyRegistryLinks([{
+    const [item] = await upgradeImagesFromMyRegistryLinks([{
       id: "deep-1",
       name: "Deep Item",
       description: null,
@@ -199,7 +204,7 @@ Deno.test("upgradeImagesFromMyRegistryLinks prioritizes PDP follow-up links befo
   };
 
   try {
-    const [item] = await __test.upgradeImagesFromMyRegistryLinks([{
+    const [item] = await upgradeImagesFromMyRegistryLinks([{
       id: "priority-1",
       name: "Priority Item",
       description: null,
@@ -248,7 +253,7 @@ Deno.test("upgradeImagesFromMyRegistryLinks prefers largest srcset candidate", a
   };
 
   try {
-    const [item] = await __test.upgradeImagesFromMyRegistryLinks([{
+    const [item] = await upgradeImagesFromMyRegistryLinks([{
       id: "srcset-1",
       name: "Srcset Item",
       description: null,
@@ -308,7 +313,7 @@ Deno.test("upgradeImagesFromMyRegistryLinks treats duplicate image candidates as
   };
 
   try {
-    const [item] = await __test.upgradeImagesFromMyRegistryLinks([{
+    const [item] = await upgradeImagesFromMyRegistryLinks([{
       id: "dup-1",
       name: "Duplicate Item",
       description: null,
@@ -349,7 +354,7 @@ Deno.test("upgradeImagesFromMyRegistryLinks skips enrichment for fund items", as
   };
 
   try {
-    const [item] = await __test.upgradeImagesFromMyRegistryLinks([{
+    const [item] = await upgradeImagesFromMyRegistryLinks([{
       id: "fund-1",
       name: "Cash Fund",
       description: null,
@@ -377,8 +382,8 @@ Deno.test("upgradeImagesFromMyRegistryLinks skips enrichment for fund items", as
 
 Deno.test("selectBackgroundEnrichmentCandidates prioritizes neediest items and respects limit", () => {
   const fetchedAt = new Date().toISOString();
-  const { candidates, totalEligible, skippedAlreadyGood } = __test
-    .selectBackgroundEnrichmentCandidates([
+  const { candidates, totalEligible, skippedAlreadyGood } =
+    selectBackgroundEnrichmentCandidates([
       {
         id: "good",
         name: "Already Good",
@@ -516,13 +521,13 @@ Deno.test("selectBackgroundEnrichmentCandidates prioritizes neediest items and r
 
 Deno.test("parseBackgroundEnrichmentLimit uses default for unset or invalid values", () => {
   assertEquals(
-    __test.parseBackgroundEnrichmentLimit(
+    parseBackgroundEnrichmentLimit(
       new URL("https://example.com/functions/v1/fetch-registry?mode=enrich"),
     ),
     5,
   );
   assertEquals(
-    __test.parseBackgroundEnrichmentLimit(
+    parseBackgroundEnrichmentLimit(
       new URL(
         "https://example.com/functions/v1/fetch-registry?mode=enrich&limit=0",
       ),
@@ -530,7 +535,7 @@ Deno.test("parseBackgroundEnrichmentLimit uses default for unset or invalid valu
     5,
   );
   assertEquals(
-    __test.parseBackgroundEnrichmentLimit(
+    parseBackgroundEnrichmentLimit(
       new URL(
         "https://example.com/functions/v1/fetch-registry?mode=enrich&limit=abc",
       ),
@@ -538,7 +543,7 @@ Deno.test("parseBackgroundEnrichmentLimit uses default for unset or invalid valu
     5,
   );
   assertEquals(
-    __test.parseBackgroundEnrichmentLimit(
+    parseBackgroundEnrichmentLimit(
       new URL(
         "https://example.com/functions/v1/fetch-registry?mode=enrich&limit=7",
       ),
