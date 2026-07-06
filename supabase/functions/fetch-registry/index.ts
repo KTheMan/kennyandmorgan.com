@@ -41,6 +41,21 @@ function normalizeProductUrlKey(url: string | null | undefined): string | null {
   }
 }
 
+function normalizeImageUrlKey(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    // Use host + first 2 path segments to allow some query-string variation
+    // but still be product-specific.
+    const pathParts = parsed.pathname.split("/").filter(Boolean);
+    const path = pathParts.slice(0, 2).join("/");
+    return `${host}/${path}`;
+  } catch {
+    return null;
+  }
+}
+
 const DEFAULT_REGISTRY_URLS = parseRegistryUrls(Deno.env.get("REGISTRY_URL"));
 
 const OPTIONAL_REGISTRY_COLUMNS = [
@@ -457,19 +472,24 @@ if (import.meta.main) {
         const nativeRegistryUrls = new Set(urls);
         const nativeSourceKeys = new Set<string>();
         const nativeProductKeys = new Set<string>();
+        const nativeImageKeys = new Set<string>();
         for (const item of freshItems) {
           const sk = normalizeProductUrlKey(item.source_product_url);
           const pk = normalizeProductUrlKey(item.product_url);
+          const ik = normalizeImageUrlKey(item.image_url);
           if (sk) nativeSourceKeys.add(sk);
           if (pk) nativeProductKeys.add(pk);
+          if (ik) nativeImageKeys.add(ik);
         }
 
         const foreignItemsToRemove = existingItems.filter((item) => {
           if (nativeRegistryUrls.has(item.registry_url ?? "")) return false;
           const sk = normalizeProductUrlKey(item.source_product_url);
           const pk = normalizeProductUrlKey(item.product_url);
+          const ik = normalizeImageUrlKey(item.image_url);
           return (sk !== null && nativeSourceKeys.has(sk)) ||
-            (pk !== null && nativeProductKeys.has(pk));
+            (pk !== null && nativeProductKeys.has(pk)) ||
+            (ik !== null && nativeImageKeys.has(ik));
         });
 
         if (foreignItemsToRemove.length > 0) {
