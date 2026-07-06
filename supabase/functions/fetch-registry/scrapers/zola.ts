@@ -1,4 +1,4 @@
-import * as cheerio from "https://esm.sh/cheerio";
+import * as cheerio from "https://esm.sh/cheerio@1.0.0-rc.12";
 import { BaseRegistryScraper, normalizeScraperItems } from "./base.ts";
 import { fetchTextWithAntiBotHeaders } from "../lib/http.ts";
 import { normalizeHttpUrlCandidate } from "../lib/normalize.ts";
