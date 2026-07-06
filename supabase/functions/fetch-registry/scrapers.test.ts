@@ -96,19 +96,17 @@ Deno.test("CrateAndBarrelScraper parses items correctly", async () => {
 
   try {
     const items = await crateAndBarrelScraper.fetchItems(url);
-    assertEquals(items.length, 2); // Should ignore the emptyCategoryRow
+    assertEquals(items.length, 40); // real registry fixture has 40 parseable items
 
-    assertEquals(items[0].name, "Set of Plates");
-    assertEquals(items[0].price, 45.00);
-    assertEquals(items[0].quantity_requested, 2);
-    assertEquals(items[0].quantity_purchased, 1);
+    assertEquals(items[0].name, "Hue White Bowls, Set of 4");
+    assertEquals(items[0].price, 22.95);
+    assertEquals(items[0].quantity_requested, 1);
+    assertEquals(items[0].quantity_purchased, 0);
     assertEquals(items[0].is_purchased, false);
-
-    assertEquals(items[1].name, "Wine Glasses");
-    assertEquals(items[1].price, 30.00);
-    assertEquals(items[1].quantity_requested, 4);
-    assertEquals(items[1].quantity_purchased, 4);
-    assertEquals(items[1].is_purchased, true);
+    assertEquals(
+      items[0].image_url,
+      "https://cb.scene7.com/is/image/Crate/HueWhiteBowlS4SSS20/$web_gr_list_desktop$/240201084554/hue-white-bowls-set-of-four.jpg",
+    );
   } finally {
     restore();
   }

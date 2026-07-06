@@ -42,7 +42,14 @@ export class ScrapeDoScraper implements RegistryScraper {
     url: string,
     _config: ScraperConfig = {},
   ): Promise<RegistryItem[]> {
-    const html = await fetchViaScrapeDo(url, { render: true, premium: true });
+    const host = new URL(url).hostname.toLowerCase();
+    // C&B serves products in static HTML — skip JS rendering to avoid rotation errors
+    const isCB = host.includes("crateandbarrel.com") || host.includes("cb2.com");
+    const html = await fetchViaScrapeDo(url, {
+      render: !isCB,
+      premium: !isCB, // premium only when we need JS rendering
+      timeout: 60,
+    });
     // Dispatch to the retailer-specific parser based on hostname
     if (hostMatches(url, "amazon.com")) {
       return amazonScraper.parseAndNormalize(html, url);
