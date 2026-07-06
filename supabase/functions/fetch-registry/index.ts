@@ -1,7 +1,7 @@
 import { createSupabaseClient } from "./lib/supabase.ts";
 import type { SupabaseClient } from "./lib/supabase.ts";
 import { createScraper } from "./scrapers/registry.ts";
-import type { RegistryItem, SyncMeta } from "./types.ts";
+import type { RegistryItem } from "./types.ts";
 import {
   DEFAULT_BACKGROUND_ENRICHMENT_LIMIT,
   parseBackgroundEnrichmentLimit,
@@ -21,8 +21,27 @@ const CACHE_TTL_SECONDS = parseInt(
   10,
 );
 
-const DEFAULT_REGISTRY_URL = Deno.env.get("MYREGISTRY_URL") ??
-  "https://www.myregistry.com/giftlist/morganandkenny";
+function parseRegistryUrls(envValue: string | null | undefined): string[] {
+  if (!envValue) return [];
+  return envValue
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function normalizeProductUrlKey(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.replace(/\/+$/, "");
+    return `${host}${path}`;
+  } catch {
+    return null;
+  }
+}
+
+const DEFAULT_REGISTRY_URLS = parseRegistryUrls(Deno.env.get("REGISTRY_URL"));
 
 const OPTIONAL_REGISTRY_COLUMNS = [
   "item_type",
@@ -114,7 +133,7 @@ function normalizeCachedItem(raw: unknown): RegistryItem | null {
     image_blacklisted: Boolean(record.image_blacklisted),
     image_suspicious: Boolean(record.image_suspicious),
     image_low_confidence: Boolean(record.image_low_confidence),
-    registry_url: toTextValue(record.registry_url),
+    registry_url: toTextValue(record.registry_url) ?? undefined,
   };
 }
 
@@ -146,7 +165,6 @@ async function getCachedRegistryItems(
 function buildFastSyncPayload(
   freshItems: RegistryItem[],
   existingItemsById: Map<string, RegistryItem>,
-  registryUrl: string,
 ): RegistryItem[] {
   return freshItems.map((item) => {
     const existing = existingItemsById.get(item.id);
@@ -164,21 +182,16 @@ function buildFastSyncPayload(
       image_blacklisted: existing?.image_blacklisted ?? false,
       image_suspicious: existing?.image_suspicious ?? false,
       image_low_confidence: existing?.image_low_confidence ?? false,
-      registry_url: registryUrl,
+      registry_url: item.registry_url ?? existing?.registry_url ?? undefined,
     };
   });
 }
 
-async function syncRegistryItemsFast(
+async function upsertRegistryItems(
   supabase: SupabaseClient,
-  freshItems: RegistryItem[],
-  registryUrl: string,
+  payload: RegistryItem[],
 ): Promise<void> {
-  const existingItems = await getCachedRegistryItems(supabase);
-  const existingItemsById = new Map(
-    existingItems.map((item) => [item.id, item]),
-  );
-  const payload = buildFastSyncPayload(freshItems, existingItemsById, registryUrl);
+  if (payload.length === 0) return;
 
   const unsupportedColumns = new Set<
     (typeof OPTIONAL_REGISTRY_COLUMNS)[number]
@@ -205,16 +218,33 @@ async function syncRegistryItemsFast(
     }
     newUnsupportedColumns.forEach((column) => unsupportedColumns.add(column));
   }
+}
 
+async function deleteStaleRegistryItems(
+  supabase: SupabaseClient,
+  freshItems: RegistryItem[],
+  registryUrl: string,
+  existingItems: RegistryItem[],
+): Promise<void> {
   if (freshItems.length === 0) {
-    await supabase.from("registry_items").delete().eq("registry_url", registryUrl);
+    const { error } = await supabase
+      .from("registry_items")
+      .delete()
+      .eq("registry_url", registryUrl);
+    if (error) {
+      throw new Error(
+        `Failed to delete stale registry items: ${error.message}`,
+      );
+    }
     return;
   }
 
   const incomingIds = new Set(freshItems.map((item) => item.id));
-  const staleIds = existingItems.filter((item) =>
-    item.registry_url === registryUrl && !incomingIds.has(item.id)
-  ).map((item) => item.id);
+  const staleIds = existingItems
+    .filter((item) =>
+      item.registry_url === registryUrl && !incomingIds.has(item.id)
+    )
+    .map((item) => item.id);
   if (staleIds.length > 0) {
     const { error } = await supabase.from("registry_items").delete().in(
       "id",
@@ -226,40 +256,6 @@ async function syncRegistryItemsFast(
       );
     }
   }
-}
-
-async function ensureFastRegistrySyncIfStale(
-  supabase: SupabaseClient,
-  url: string,
-): Promise<SyncMeta> {
-  const { data: latestRow } = await supabase
-    .from("registry_items")
-    .select("fetched_at")
-    .order("fetched_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const ageMs = latestRow?.fetched_at
-    ? Date.now() - new Date(latestRow.fetched_at).getTime()
-    : Infinity;
-  const isStale = ageMs > CACHE_TTL_SECONDS * 1000;
-  if (!isStale) {
-    console.info(
-      `[fetch-registry] Returning cached registry items; cache_age_ms=${ageMs}`,
-    );
-    return { didSync: false, wasStale: false, cacheAgeMs: ageMs };
-  }
-
-  console.info(
-    `[fetch-registry] Cache stale (age_ms=${ageMs}); running fast registry sync for ${url}`,
-  );
-  const scraper = createScraper(url);
-  const freshItems = await scraper.fetchItems(url);
-  await syncRegistryItemsFast(supabase, freshItems, url);
-  console.info(
-    `[fetch-registry] Fast registry sync completed; deferred image enrichment to background path`,
-  );
-  return { didSync: true, wasStale: true, cacheAgeMs: ageMs };
 }
 
 async function runBackgroundImageEnrichment(
@@ -347,19 +343,25 @@ async function runBackgroundImageEnrichment(
   };
 }
 
-async function resolveTargetUrl(req: Request): Promise<string> {
-  if (req.method !== "POST") return DEFAULT_REGISTRY_URL;
-
-  try {
-    const body = await req.json();
-    if (body && typeof body === "object" && typeof body.url === "string") {
-      return body.url;
+async function resolveTargetUrls(req: Request): Promise<string[]> {
+  if (req.method === "POST") {
+    try {
+      const body = await req.json();
+      if (
+        Array.isArray(body?.urls) &&
+        body.urls.every((u: unknown) => typeof u === "string")
+      ) {
+        return body.urls as string[];
+      }
+      if (typeof body?.url === "string") {
+        return [body.url];
+      }
+    } catch {
+      // Invalid or empty body; fall back to the env registry list.
     }
-  } catch {
-    // Invalid or empty body; fall back to the default registry URL.
   }
 
-  return DEFAULT_REGISTRY_URL;
+  return DEFAULT_REGISTRY_URLS;
 }
 
 if (import.meta.main) {
@@ -410,8 +412,100 @@ if (import.meta.main) {
         );
       }
 
-      const url = await resolveTargetUrl(req);
-      const syncMeta = await ensureFastRegistrySyncIfStale(supabase, url);
+      const urls = await resolveTargetUrls(req);
+
+      const { data: latestRow } = await supabase
+        .from("registry_items")
+        .select("fetched_at")
+        .order("fetched_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const latestFetchedAt = toTextValue(
+        (latestRow as Record<string, unknown> | null)?.fetched_at,
+      );
+      const ageMs = latestFetchedAt
+        ? Date.now() - new Date(latestFetchedAt).getTime()
+        : Infinity;
+      const isStale = ageMs > CACHE_TTL_SECONDS * 1000;
+      let didSync = false;
+
+      if (!isStale) {
+        console.info(
+          `[fetch-registry] Returning cached registry items; cache_age_ms=${ageMs}`,
+        );
+      } else if (urls.length > 0) {
+        console.info(
+          `[fetch-registry] Cache stale (age_ms=${ageMs}); running multi-registry sync for ${
+            urls.join(", ")
+          }`,
+        );
+
+        const freshItems: RegistryItem[] = [];
+        for (const url of urls) {
+          const scraper = createScraper(url);
+          const items = await scraper.fetchItems(url);
+          for (const item of items) {
+            freshItems.push({ ...item, registry_url: url });
+          }
+        }
+
+        const existingItems = await getCachedRegistryItems(supabase);
+        const existingItemsById = new Map(
+          existingItems.map((item) => [item.id, item]),
+        );
+
+        const nativeRegistryUrls = new Set(urls);
+        const nativeSourceKeys = new Set<string>();
+        const nativeProductKeys = new Set<string>();
+        for (const item of freshItems) {
+          const sk = normalizeProductUrlKey(item.source_product_url);
+          const pk = normalizeProductUrlKey(item.product_url);
+          if (sk) nativeSourceKeys.add(sk);
+          if (pk) nativeProductKeys.add(pk);
+        }
+
+        const foreignItemsToRemove = existingItems.filter((item) => {
+          if (nativeRegistryUrls.has(item.registry_url ?? "")) return false;
+          const sk = normalizeProductUrlKey(item.source_product_url);
+          const pk = normalizeProductUrlKey(item.product_url);
+          return (sk !== null && nativeSourceKeys.has(sk)) ||
+            (pk !== null && nativeProductKeys.has(pk));
+        });
+
+        if (foreignItemsToRemove.length > 0) {
+          const ids = foreignItemsToRemove.map((item) => item.id);
+          const { error } = await supabase
+            .from("registry_items")
+            .delete()
+            .in("id", ids);
+          if (error) {
+            throw new Error(
+              `Failed to delete superseded registry items: ${error.message}`,
+            );
+          }
+        }
+
+        const payload = buildFastSyncPayload(freshItems, existingItemsById);
+        await upsertRegistryItems(supabase, payload);
+
+        for (const url of urls) {
+          const itemsForUrl = freshItems.filter((item) =>
+            item.registry_url === url
+          );
+          await deleteStaleRegistryItems(
+            supabase,
+            itemsForUrl,
+            url,
+            existingItems,
+          );
+        }
+
+        didSync = true;
+        console.info(
+          `[fetch-registry] Multi-registry sync completed; deferred image enrichment to background path`,
+        );
+      }
+
       const items = await getCachedRegistryItems(supabase);
       const responseItems = items.map((item) => ({
         ...item,
@@ -421,9 +515,9 @@ if (import.meta.main) {
       return new Response(
         JSON.stringify({
           success: true,
-          mode: syncMeta.didSync ? "fast-sync" : "cached",
+          mode: didSync ? "fast-sync" : "cached",
           enrichment: "deferred",
-          cache_age_ms: syncMeta.cacheAgeMs,
+          cache_age_ms: ageMs,
           items: responseItems,
         }),
         {
