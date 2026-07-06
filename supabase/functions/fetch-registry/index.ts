@@ -1,3 +1,6 @@
+// Force-pin undici@6 via the import map to avoid undici@7's node:sqlite import
+// (Supabase edge runtime / Deno does not support node:sqlite).
+import "undici";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createScraper } from "./scrapers/registry.ts";
 import type { RegistryItem, SyncMeta } from "./types.ts";
