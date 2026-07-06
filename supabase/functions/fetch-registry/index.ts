@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2?bundle&target=denonext";
 import { createScraper } from "./scrapers/registry.ts";
 import type { RegistryItem, SyncMeta } from "./types.ts";
 import {
