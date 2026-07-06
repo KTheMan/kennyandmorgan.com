@@ -3,11 +3,13 @@ import { myRegistryScraper } from "./myregistry.ts";
 import { amazonScraper } from "./amazon.ts";
 import { crateAndBarrelScraper } from "./crateandbarrel.ts";
 import { zolaScraper } from "./zola.ts";
+import { theKnotScraper } from "./theknot.ts";
 
 export const registryScrapers: RegistryScraper[] = [
   amazonScraper,
   crateAndBarrelScraper,
   zolaScraper,
+  theKnotScraper,
 ];
 
 /**
@@ -32,4 +34,10 @@ export async function scrapeRegistry(
   return await scraper.fetchItems(url, config);
 }
 
-export { amazonScraper, crateAndBarrelScraper, myRegistryScraper, zolaScraper };
+export {
+  amazonScraper,
+  crateAndBarrelScraper,
+  myRegistryScraper,
+  theKnotScraper,
+  zolaScraper,
+};

@@ -6,6 +6,7 @@ import {
   crateAndBarrelScraper,
   zolaScraper,
   myRegistryScraper,
+  theKnotScraper,
 } from "./scrapers/registry.ts";
 
 const FIXTURES_DIR = "./__fixtures__";
@@ -37,6 +38,7 @@ Deno.test("createScraper routes URLs to correct scrapers", () => {
   assertEquals(createScraper("https://www.crateandbarrel.com/gift-registry/view-registry/123").key, "crateandbarrel");
   assertEquals(createScraper("https://www.zola.com/registry/123").key, "zola");
   assertEquals(createScraper("https://www.myregistry.com/giftlist/123").key, "myregistry");
+  assertEquals(createScraper("https://www.theknot.com/us/jordan-and-casey/registry").key, "theknot");
   assertEquals(createScraper("https://www.unknown.com/registry/123").key, "myregistry"); // Fallback
 });
 
@@ -133,6 +135,30 @@ Deno.test("MyRegistryScraper parses items from JSON-LD and HTML markup", async (
     assertEquals(fundItem?.name, "Cash Fund");
     assertEquals(fundItem?.item_type, "fund");
     assertEquals(fundItem?.action_label, "Contribute");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("TheKnotScraper parses items from __NEXT_DATA__", async () => {
+  const html = await loadFixture("theknot-registry.html");
+  const url = "https://www.theknot.com/us/jordan-and-casey/registry";
+  const restore = mockFetch(html, url);
+  
+  try {
+    const items = await theKnotScraper.fetchItems(url);
+    assertEquals(items.length, 2);
+
+    assertEquals(items[0].name, "Stand Mixer");
+    assertEquals(items[0].price, 299.99);
+    assertEquals(items[0].store_name, "Amazon");
+    assertEquals(items[0].product_url, "https://www.amazon.com/dp/B012345678");
+    assertEquals(items[0].is_purchased, false);
+
+    assertEquals(items[1].name, "Wine Glasses");
+    assertEquals(items[1].price, 45);
+    assertEquals(items[1].store_name, "Crate & Barrel");
+    assertEquals(items[1].is_purchased, true);
   } finally {
     restore();
   }

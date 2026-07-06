@@ -49,4 +49,9 @@ export interface RegistryScraper {
   fetchItems(url: string, config?: ScraperConfig): Promise<RegistryItem[]>;
 }
 
-export type RetailerKey = "myregistry" | "amazon" | "crateandbarrel" | "zola";
+export type RetailerKey =
+  | "myregistry"
+  | "amazon"
+  | "crateandbarrel"
+  | "zola"
+  | "theknot";
