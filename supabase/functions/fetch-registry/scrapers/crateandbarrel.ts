@@ -15,7 +15,7 @@ export class CrateAndBarrelScraper extends BaseRegistryScraper {
       const host = parsed.hostname.toLowerCase();
       return (
         (host === "crateandbarrel.com" || host.endsWith(".crateandbarrel.com")) &&
-        parsed.pathname.toLowerCase().includes("/gift-registry/view-registry")
+        parsed.pathname.toLowerCase().startsWith("/gift-registry/")
       );
     } catch {
       return false;
