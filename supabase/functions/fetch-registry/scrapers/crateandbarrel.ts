@@ -14,7 +14,8 @@ export class CrateAndBarrelScraper extends BaseRegistryScraper {
       const parsed = new URL(url);
       const host = parsed.hostname.toLowerCase();
       return (
-        (host === "crateandbarrel.com" || host.endsWith(".crateandbarrel.com")) &&
+        (host === "crateandbarrel.com" ||
+          host.endsWith(".crateandbarrel.com")) &&
         parsed.pathname.toLowerCase().startsWith("/gift-registry/")
       );
     } catch {
@@ -22,9 +23,16 @@ export class CrateAndBarrelScraper extends BaseRegistryScraper {
     }
   }
 
-  async fetchItems(url: string, config: ScraperConfig = {}): Promise<RegistryItem[]> {
+  async fetchItems(
+    url: string,
+    config: ScraperConfig = {},
+  ): Promise<RegistryItem[]> {
     const { text } = await fetchTextWithAntiBotHeaders(url, config);
-    const rawItems = this.parseHtml(text, url);
+    return this.parseAndNormalize(text, url);
+  }
+
+  parseAndNormalize(html: string, pageUrl: string): RegistryItem[] {
+    const rawItems = this.parseHtml(html, pageUrl);
     return normalizeScraperItems(rawItems, this.key);
   }
 

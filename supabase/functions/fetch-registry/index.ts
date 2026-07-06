@@ -1,6 +1,13 @@
+// ============================================================
+// OPTIONAL: Third-party scraping services as fallbacks
+// ============================================================
+// SCRAPEDO_KEY     - scrape.do API key (https://scrape.do) — used as fallback for Akamai-blocked sites
+// SCRAPINGBEE_KEY  - ScrapingBee API key (https://scrapingbee.com) — used as a third-tier fallback
+// These are OPTIONAL. If unset, the function falls back to native scraping + cached data.
+
 import { createSupabaseClient } from "./lib/supabase.ts";
 import type { SupabaseClient } from "./lib/supabase.ts";
-import { createScraper } from "./scrapers/registry.ts";
+import { createFallbackStrategies } from "./scrapers/registry.ts";
 import type { RegistryItem } from "./types.ts";
 import {
   DEFAULT_BACKGROUND_ENRICHMENT_LIMIT,
@@ -454,8 +461,33 @@ if (import.meta.main) {
 
         const freshItems: RegistryItem[] = [];
         for (const url of urls) {
-          const scraper = createScraper(url);
-          const items = await scraper.fetchItems(url);
+          const strategies = createFallbackStrategies(url);
+          let items: RegistryItem[] = [];
+          let lastError: string | null = null;
+          for (const strategy of strategies) {
+            try {
+              items = await strategy.fetchItems(url);
+              if (items.length > 0) {
+                console.info(
+                  `[fetch-registry] ${url} succeeded with ${strategy.name}`,
+                );
+                break;
+              }
+            } catch (error) {
+              const message = error instanceof Error
+                ? error.message
+                : String(error);
+              lastError = message;
+              console.warn(
+                `[fetch-registry] ${strategy.name} failed for ${url}: ${message}`,
+              );
+            }
+          }
+          if (items.length === 0 && lastError) {
+            console.error(
+              `[fetch-registry] All strategies failed for ${url}: ${lastError}`,
+            );
+          }
           for (const item of items) {
             freshItems.push({ ...item, registry_url: url });
           }

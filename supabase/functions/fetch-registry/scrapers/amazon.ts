@@ -25,9 +25,16 @@ export class AmazonScraper extends BaseRegistryScraper {
     }
   }
 
-  async fetchItems(url: string, config: ScraperConfig = {}): Promise<RegistryItem[]> {
+  async fetchItems(
+    url: string,
+    config: ScraperConfig = {},
+  ): Promise<RegistryItem[]> {
     const { text } = await fetchTextWithAntiBotHeaders(url, config);
-    const rawItems = this.parseHtml(text, url);
+    return this.parseAndNormalize(text, url);
+  }
+
+  parseAndNormalize(html: string, pageUrl: string): RegistryItem[] {
+    const rawItems = this.parseHtml(html, pageUrl);
     return normalizeScraperItems(rawItems, this.key);
   }
 
@@ -39,14 +46,13 @@ export class AmazonScraper extends BaseRegistryScraper {
       (index, element) => {
         const $item = $(element);
 
-        const name =
-          $item.find(".a-link-normal[title]").attr("title") ??
-            $item.find("h5, h3, .a-size-base-plus").first().text().trim() ?? "";
+        const name = $item.find(".a-link-normal[title]").attr("title") ??
+          $item.find("h5, h3, .a-size-base-plus").first().text().trim() ?? "";
         if (!name) return;
 
         const priceStr =
           $item.find(".a-price .a-offscreen").first().text().trim() ||
-            $item.find(".a-price-whole").first().text().trim() || "";
+          $item.find(".a-price-whole").first().text().trim() || "";
 
         let imageUrl = $item.find("img").first().attr("src") || "";
         if (imageUrl && !imageUrl.startsWith("http")) {

@@ -21,7 +21,11 @@ export class TheKnotScraper extends BaseRegistryScraper {
     config: ScraperConfig = {},
   ): Promise<RegistryItem[]> {
     const { text } = await fetchTextWithAntiBotHeaders(url, config);
-    const rawItems = this.parseHtml(text, url);
+    return this.parseAndNormalize(text, url);
+  }
+
+  parseAndNormalize(html: string, pageUrl: string): RegistryItem[] {
+    const rawItems = this.parseHtml(html, pageUrl);
     return normalizeScraperItems(rawItems, this.key);
   }
 
