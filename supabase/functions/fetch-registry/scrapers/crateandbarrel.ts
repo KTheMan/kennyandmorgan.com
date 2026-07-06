@@ -40,43 +40,45 @@ export class CrateAndBarrelScraper extends BaseRegistryScraper {
     const $ = cheerio.load(html);
     const rawItems: RawItem[] = [];
 
-    $(".jsItemRow:not(.emptyCategoryRow)").each((index, element) => {
+    $('article[data-testid="registry-item"]').each((index, element) => {
       const $item = $(element);
-      const name = $item.find(".itemTitle").text().trim();
-      if (!name) return;
 
-      const skuText = $item.find(".skuNum").text().trim();
-      const skuMatch = skuText.match(/SKU\s+(\S+)/i);
+      const name = (
+        $item.find('[data-testid="registry-item-details-btn"]').attr("title") ||
+        $item.find(".title_1ycQU").first().text().trim() ||
+        $item.attr("aria-label") ||
+        ""
+      ).trim();
+
+      if (!name) return;
+      if (name === "Free Shipping Eligible - View Details") return;
+
+      const skuText = $item.find('[data-testid="registry-item-sku"]')
+        .text().trim();
+      const skuMatch = skuText.match(/(\d{4,})/);
       const sku = skuMatch ? skuMatch[1] : "";
 
-      const salePriceText = $item.find(".salePrice").text().trim();
-      const regPriceText = $item.find(".regPrice").text().trim();
+      const salePriceText = $item.find(".salePrice").first().text().trim();
+      const regPriceText = $item.find(".regPrice").first().text().trim();
       const priceText = salePriceText || regPriceText;
 
-      let imageUrl = $item.find("img").first().attr("src") || "";
-      if (imageUrl && imageUrl.includes("$web_itembasket$")) {
-        imageUrl = imageUrl.replace(
-          /\$web_itembasket\$/,
-          "&$web_popup_zoom$&wid=379&hei=379",
-        );
-      }
+      let imageUrl =
+        $item.find('[data-testid="registry-item-image-btn"] img').first()
+          .attr("src") || "";
       if (imageUrl && !imageUrl.startsWith("http")) {
         imageUrl = `${this.baseUrl}${imageUrl}`;
       }
 
-      const cells = $item.find("td");
-      const desired = parseInt(
-        cells.eq(4).find(".itemHas").text().trim(),
-        10,
-      ) || 0;
-      const fulfilled = parseInt(
-        cells.eq(5).find(".itemHas").text().trim(),
-        10,
-      ) || 0;
-      const remaining = Math.max(desired - fulfilled, 0);
+      const qtyText = $item.find('[data-testid="registry-item-qty-purchased"]')
+        .text().trim();
+      const qtyMatch = qtyText.match(/(\d+)\s+of\s+(\d+)\s+purchased/i);
+      const qtyPurchased = qtyMatch ? parseInt(qtyMatch[1], 10) : 0;
+      const qtyRequested = qtyMatch ? parseInt(qtyMatch[2], 10) : 1;
 
       const productUrl = normalizeHttpUrlCandidate(
-        $item.find(".itemTitle a").attr("href") || "",
+        $item.find('[data-testid="registry-item-image-btn"]').attr(
+          "data-href",
+        ) || "",
         pageUrl,
       ) ?? pageUrl;
 
@@ -87,9 +89,9 @@ export class CrateAndBarrelScraper extends BaseRegistryScraper {
         price: this.parsePrice(priceText),
         image: imageUrl || null,
         url: productUrl,
-        isPurchased: remaining <= 0,
-        quantityRequested: desired,
-        quantityPurchased: fulfilled,
+        isPurchased: qtyPurchased >= qtyRequested && qtyRequested > 0,
+        quantityRequested: qtyRequested,
+        quantityPurchased: qtyPurchased,
       });
     });
 
