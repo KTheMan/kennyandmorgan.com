@@ -238,38 +238,35 @@ async function upsertRegistryItems(
 async function deleteStaleRegistryItems(
   supabase: SupabaseClient,
   freshItems: RegistryItem[],
-  registryUrl: string,
   existingItems: RegistryItem[],
 ): Promise<void> {
-  if (freshItems.length === 0) {
-    const { error } = await supabase
-      .from("registry_items")
-      .delete()
-      .eq("registry_url", registryUrl);
-    if (error) {
-      throw new Error(
-        `Failed to delete stale registry items: ${error.message}`,
-      );
-    }
-    return;
-  }
+  // Compute IDs of items that came from any of the native URLs being synced.
+  // We identify "same source" by registry_url match.
+  const syncedRegistryUrls = new Set(
+    freshItems.map((item) => item.registry_url).filter((u): u is string =>
+      Boolean(u)
+    ),
+  );
 
   const incomingIds = new Set(freshItems.map((item) => item.id));
   const staleIds = existingItems
-    .filter((item) =>
-      item.registry_url === registryUrl && !incomingIds.has(item.id)
-    )
+    .filter((item) => {
+      if (!item.registry_url) return false;
+      if (!syncedRegistryUrls.has(item.registry_url)) return false;
+      return !incomingIds.has(item.id);
+    })
     .map((item) => item.id);
-  if (staleIds.length > 0) {
-    const { error } = await supabase.from("registry_items").delete().in(
-      "id",
-      staleIds,
+
+  if (staleIds.length === 0) return;
+
+  const { error } = await supabase
+    .from("registry_items")
+    .delete()
+    .in("id", staleIds);
+  if (error) {
+    throw new Error(
+      `Failed to delete stale registry items: ${error.message}`,
     );
-    if (error) {
-      throw new Error(
-        `Failed to delete stale registry items: ${error.message}`,
-      );
-    }
   }
 }
 
@@ -515,7 +512,6 @@ if (import.meta.main) {
           await deleteStaleRegistryItems(
             supabase,
             itemsForUrl,
-            url,
             existingItems,
           );
         }
