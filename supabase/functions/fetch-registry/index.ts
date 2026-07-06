@@ -8,9 +8,10 @@
 import { createSupabaseClient } from "./lib/supabase.ts";
 import type { SupabaseClient } from "./lib/supabase.ts";
 import { createFallbackStrategies } from "./scrapers/registry.ts";
-import type { RegistryItem } from "./types.ts";
+import type { RegistryItem, ScraperConfig } from "./types.ts";
 import {
   DEFAULT_BACKGROUND_ENRICHMENT_LIMIT,
+  myRegistryScraper,
   parseBackgroundEnrichmentLimit,
   selectBackgroundEnrichmentCandidates,
   upgradeImagesFromMyRegistryLinks,
@@ -64,6 +65,9 @@ function normalizeImageUrlKey(url: string | null | undefined): string | null {
 }
 
 const DEFAULT_REGISTRY_URLS = parseRegistryUrls(Deno.env.get("REGISTRY_URL"));
+
+const DEFAULT_MYREGISTRY_URL = Deno.env.get("MYREGISTRY_URL") ??
+  "https://www.myregistry.com/giftlist/morganandkenny";
 
 const OPTIONAL_REGISTRY_COLUMNS = [
   "item_type",
@@ -362,7 +366,7 @@ async function runBackgroundImageEnrichment(
   };
 }
 
-async function resolveTargetUrls(req: Request): Promise<string[]> {
+async function resolveExplicitUrls(req: Request): Promise<string[]> {
   if (req.method === "POST") {
     try {
       const body = await req.json();
@@ -381,6 +385,16 @@ async function resolveTargetUrls(req: Request): Promise<string[]> {
   }
 
   return DEFAULT_REGISTRY_URLS;
+}
+
+async function resolveTargetUrls(req: Request): Promise<string[]> {
+  const explicit = await resolveExplicitUrls(req);
+  const myRegistryUrl = DEFAULT_MYREGISTRY_URL;
+  const all = [...explicit];
+  if (myRegistryUrl && !all.includes(myRegistryUrl)) {
+    all.push(myRegistryUrl);
+  }
+  return all;
 }
 
 if (import.meta.main) {
@@ -464,9 +478,13 @@ if (import.meta.main) {
           const strategies = createFallbackStrategies(url);
           let items: RegistryItem[] = [];
           let lastError: string | null = null;
+          const config: ScraperConfig & { excludeStores?: string[] } = {};
+          if (myRegistryScraper.matches(url)) {
+            config.excludeStores = ["Crate & Barrel"];
+          }
           for (const strategy of strategies) {
             try {
-              items = await strategy.fetchItems(url);
+              items = await strategy.fetchItems(url, config);
               if (items.length > 0) {
                 console.info(
                   `[fetch-registry] ${url} succeeded with ${strategy.name}`,

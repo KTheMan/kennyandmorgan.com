@@ -1,5 +1,6 @@
 import { fetchTextWithAntiBotHeaders } from "../lib/http.ts";
 import {
+  asRecord,
   decodeHtmlEntities,
   extractEmbeddedUrlCandidates,
   getDisplayImageUrl,
@@ -73,6 +74,9 @@ export class MyRegistryScraper extends BaseRegistryScraper {
 
   private registryUrl: string;
 
+  /** Stores to exclude from the output (e.g., ["Crate & Barrel"] when we have a native C&B scraper). */
+  excludeStores: string[] = [];
+
   constructor(registryUrl?: string) {
     super();
     this.registryUrl = registryUrl ??
@@ -90,8 +94,19 @@ export class MyRegistryScraper extends BaseRegistryScraper {
     }
   }
 
-  async fetchItems(url: string, config: ScraperConfig = {}): Promise<RegistryItem[]> {
-    return fetchFromMyRegistry(url, config);
+  async fetchItems(
+    url: string,
+    config: ScraperConfig & { excludeStores?: string[] } = {},
+  ): Promise<RegistryItem[]> {
+    const items = await fetchFromMyRegistry(url, config);
+    const excludedStores = config.excludeStores ?? this.excludeStores;
+    if (excludedStores.length === 0) return items;
+
+    const excluded = excludedStores.map((store) => store.toLowerCase());
+    return items.filter((item) => {
+      const store = (item.store_name ?? "").toLowerCase();
+      return !excluded.some((excludedStore) => store.includes(excludedStore));
+    });
   }
 
   get registryUrlValue(): string {
