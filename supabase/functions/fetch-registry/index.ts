@@ -1,7 +1,5 @@
-// Force-pin undici@6 via the import map to avoid undici@7's node:sqlite import
-// (Supabase edge runtime / Deno does not support node:sqlite).
-import "undici";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createSupabaseClient } from "./lib/supabase.ts";
+import type { SupabaseClient } from "./lib/supabase.ts";
 import { createScraper } from "./scrapers/registry.ts";
 import type { RegistryItem, SyncMeta } from "./types.ts";
 import {
@@ -130,7 +128,7 @@ function normalizeCachedItems(
 }
 
 async function getCachedRegistryItems(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
 ): Promise<RegistryItem[]> {
   const { data, error } = await supabase
     .from("registry_items")
@@ -172,7 +170,7 @@ function buildFastSyncPayload(
 }
 
 async function syncRegistryItemsFast(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   freshItems: RegistryItem[],
   registryUrl: string,
 ): Promise<void> {
@@ -231,7 +229,7 @@ async function syncRegistryItemsFast(
 }
 
 async function ensureFastRegistrySyncIfStale(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   url: string,
 ): Promise<SyncMeta> {
   const { data: latestRow } = await supabase
@@ -265,7 +263,7 @@ async function ensureFastRegistrySyncIfStale(
 }
 
 async function runBackgroundImageEnrichment(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   limit: number = DEFAULT_BACKGROUND_ENRICHMENT_LIMIT,
 ): Promise<{
   total: number;
@@ -386,7 +384,7 @@ if (import.meta.main) {
       );
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = createSupabaseClient(supabaseUrl, serviceRoleKey);
     const requestUrl = new URL(req.url);
 
     try {
