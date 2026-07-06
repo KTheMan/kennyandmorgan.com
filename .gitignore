@@ -47,3 +47,6 @@ test-results/
 backup/
 *.tar.gz.gpg
 *.tar.gz.gpg.sha256
+
+# Deno build artifacts
+deno.lock
