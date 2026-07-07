@@ -446,6 +446,18 @@ if (import.meta.main) {
       }
 
       const urls = await resolveTargetUrls(req);
+      const debugInfo = requestUrl.searchParams.has("debug")
+        ? {
+          urls: urls,
+          attempts: [] as Array<{
+            url: string;
+            strategy: string;
+            success: boolean;
+            itemCount: number;
+            error: string | null;
+          }>,
+        }
+        : null;
 
       const { data: latestRow } = await supabase
         .from("registry_items")
@@ -486,16 +498,43 @@ if (import.meta.main) {
             try {
               items = await strategy.fetchItems(url, config);
               if (items.length > 0) {
+                if (debugInfo) {
+                  debugInfo.attempts.push({
+                    url,
+                    strategy: strategy.name,
+                    success: true,
+                    itemCount: items.length,
+                    error: null,
+                  });
+                }
                 console.info(
                   `[fetch-registry] ${url} succeeded with ${strategy.name}`,
                 );
                 break;
+              }
+              if (debugInfo) {
+                debugInfo.attempts.push({
+                  url,
+                  strategy: strategy.name,
+                  success: false,
+                  itemCount: 0,
+                  error: "empty result",
+                });
               }
             } catch (error) {
               const message = error instanceof Error
                 ? error.message
                 : String(error);
               lastError = message;
+              if (debugInfo) {
+                debugInfo.attempts.push({
+                  url,
+                  strategy: strategy.name,
+                  success: false,
+                  itemCount: 0,
+                  error: message,
+                });
+              }
               console.warn(
                 `[fetch-registry] ${strategy.name} failed for ${url}: ${message}`,
               );
@@ -585,6 +624,7 @@ if (import.meta.main) {
           enrichment: "deferred",
           cache_age_ms: ageMs,
           items: responseItems,
+          debug: debugInfo,
         }),
         {
           headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
