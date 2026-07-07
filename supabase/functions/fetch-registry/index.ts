@@ -64,10 +64,20 @@ function normalizeImageUrlKey(url: string | null | undefined): string | null {
   }
 }
 
-const DEFAULT_REGISTRY_URLS = parseRegistryUrls(Deno.env.get("REGISTRY_URL"));
-
-const DEFAULT_MYREGISTRY_URL = Deno.env.get("MYREGISTRY_URL") ??
+// Hardcoded fallbacks (public registry URLs, not sensitive).
+// Env vars override these when set to a non-empty value.
+const HARDCODED_REGISTRY_URL =
+  "https://www.crateandbarrel.com/gift-registry/kenneth-gordon-and-morgan-guidry/r7441286";
+const HARDCODED_MYREGISTRY_URL =
   "https://www.myregistry.com/giftlist/morganandkenny";
+
+const envRegistryUrls = parseRegistryUrls(Deno.env.get("REGISTRY_URL"));
+const DEFAULT_REGISTRY_URLS = envRegistryUrls.length > 0
+  ? envRegistryUrls
+  : parseRegistryUrls(HARDCODED_REGISTRY_URL);
+
+const DEFAULT_MYREGISTRY_URL = Deno.env.get("MYREGISTRY_URL") ||
+  HARDCODED_MYREGISTRY_URL;
 
 const OPTIONAL_REGISTRY_COLUMNS = [
   "item_type",
@@ -446,18 +456,13 @@ if (import.meta.main) {
       }
 
       const urls = await resolveTargetUrls(req);
-      const debugInfo = requestUrl.searchParams.has("debug")
-        ? {
-          urls: urls,
-          attempts: [] as Array<{
-            url: string;
-            strategy: string;
-            success: boolean;
-            itemCount: number;
-            error: string | null;
-          }>,
-        }
-        : null;
+      const scrapeAttempts: Array<{
+        url: string;
+        strategy: string;
+        success: boolean;
+        error: string | null;
+        itemCount: number;
+      }> = [];
 
       const { data: latestRow } = await supabase
         .from("registry_items")
@@ -498,43 +503,37 @@ if (import.meta.main) {
             try {
               items = await strategy.fetchItems(url, config);
               if (items.length > 0) {
-                if (debugInfo) {
-                  debugInfo.attempts.push({
-                    url,
-                    strategy: strategy.name,
-                    success: true,
-                    itemCount: items.length,
-                    error: null,
-                  });
-                }
+                scrapeAttempts.push({
+                  url,
+                  strategy: strategy.name,
+                  success: true,
+                  error: null,
+                  itemCount: items.length,
+                });
                 console.info(
                   `[fetch-registry] ${url} succeeded with ${strategy.name}`,
                 );
                 break;
               }
-              if (debugInfo) {
-                debugInfo.attempts.push({
-                  url,
-                  strategy: strategy.name,
-                  success: false,
-                  itemCount: 0,
-                  error: "empty result",
-                });
-              }
+              scrapeAttempts.push({
+                url,
+                strategy: strategy.name,
+                success: false,
+                error: "empty result",
+                itemCount: 0,
+              });
             } catch (error) {
               const message = error instanceof Error
                 ? error.message
                 : String(error);
               lastError = message;
-              if (debugInfo) {
-                debugInfo.attempts.push({
-                  url,
-                  strategy: strategy.name,
-                  success: false,
-                  itemCount: 0,
-                  error: message,
-                });
-              }
+              scrapeAttempts.push({
+                url,
+                strategy: strategy.name,
+                success: false,
+                error: message,
+                itemCount: 0,
+              });
               console.warn(
                 `[fetch-registry] ${strategy.name} failed for ${url}: ${message}`,
               );
@@ -617,15 +616,26 @@ if (import.meta.main) {
         image_url: getDisplayImageUrl(item),
       }));
 
+      const failedAttempts = scrapeAttempts.filter((a) => !a.success);
+      const includeDebug = requestUrl.searchParams.has("debug") ||
+        failedAttempts.length > 0;
+
+      const responseBody: Record<string, unknown> = {
+        success: true,
+        mode: didSync ? "fast-sync" : "cached",
+        enrichment: "deferred",
+        cache_age_ms: ageMs,
+        items: responseItems,
+      };
+      if (includeDebug && scrapeAttempts.length > 0) {
+        responseBody.debug = {
+          attempts: scrapeAttempts,
+          failed_count: failedAttempts.length,
+        };
+      }
+
       return new Response(
-        JSON.stringify({
-          success: true,
-          mode: didSync ? "fast-sync" : "cached",
-          enrichment: "deferred",
-          cache_age_ms: ageMs,
-          items: responseItems,
-          debug: debugInfo,
-        }),
+        JSON.stringify(responseBody),
         {
           headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
         },
