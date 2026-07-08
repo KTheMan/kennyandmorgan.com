@@ -241,9 +241,22 @@ async function upsertRegistryItems(
       payload,
       unsupportedColumns,
     );
+    // Normalize: ensure all items have the same key set because PostgREST
+    // requires every object in a bulk upsert to share identical keys.
+    const allKeys = new Set<string>();
+    for (const item of upsertPayload) {
+      for (const key of Object.keys(item)) allKeys.add(key);
+    }
+    const normalizedPayload = upsertPayload.map((item) => {
+      const normalized: Record<string, unknown> = {};
+      for (const key of allKeys) {
+        normalized[key] = (item as Record<string, unknown>)[key] ?? null;
+      }
+      return normalized;
+    });
     const { error } = await supabase
       .from("registry_items")
-      .upsert(upsertPayload, { onConflict: "id" });
+      .upsert(normalizedPayload, { onConflict: "id" });
     if (!error) break;
     const missingColumns = getMissingRegistrySchemaCacheColumns(error.message);
     const newUnsupportedColumns = [...missingColumns].filter((column) =>
