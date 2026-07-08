@@ -4,21 +4,22 @@
  * Docs: https://scrape.do/docs/
  *
  * API call shape:
- *   GET https://api.scrape.do?token={KEY}&url={URL}&render=true&timeout=30
+ *   GET https://api.scrape.do?token={KEY}&url={URL}&render=true&timeout=30000
  *
+ * Note: timeout must be in MILLISECONDS, between 5000 and 120000.
  * Free tier: 1000 credits/month. JS rendering costs more credits.
  */
 
 const SCRAPE_DO_BASE = "https://api.scrape.do";
 const DEFAULT_RENDER = true;
-const DEFAULT_TIMEOUT_SECONDS = 30;
+const DEFAULT_TIMEOUT_MS = 30_000; // 30 seconds in milliseconds
 
 export interface ScrapeDoOptions {
   /** Render JavaScript before returning HTML (default: true for most cases) */
   render?: boolean;
   /** Custom headers to send */
   headers?: Record<string, string>;
-  /** Timeout in seconds (default: 30) */
+  /** Timeout in milliseconds (default: 30000, must be 5000-120000) */
   timeout?: number;
   /** Use premium proxy for harder-to-scrape sites */
   premium?: boolean;
@@ -36,7 +37,7 @@ export async function fetchViaScrapeDo(
     token: key,
     url,
     render: String(options.render ?? DEFAULT_RENDER),
-    timeout: String(options.timeout ?? DEFAULT_TIMEOUT_SECONDS),
+    timeout: String(options.timeout ?? DEFAULT_TIMEOUT_MS),
   });
   if (options.premium) params.set("premium", "true");
 

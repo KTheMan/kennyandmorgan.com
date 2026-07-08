@@ -48,7 +48,7 @@ export class ScrapeDoScraper implements RegistryScraper {
     const html = await fetchViaScrapeDo(url, {
       render: !isCB,
       premium: !isCB, // premium only when we need JS rendering
-      timeout: 60,
+      timeout: 60_000,
     });
     // Dispatch to the retailer-specific parser based on hostname
     if (hostMatches(url, "amazon.com")) {
