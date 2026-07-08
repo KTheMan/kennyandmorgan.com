@@ -39,6 +39,20 @@ export class AmazonScraper extends BaseRegistryScraper {
   }
 
   parseHtml(html: string, pageUrl: string): RawItem[] {
+    // TEMPORARY diagnostic - logs HTML structure to help debug Amazon scrape
+    const diag = {
+      html_length: html.length,
+      has_cheerio_items: (html.match(/data-asin=/g) || []).length,
+      has_gr_guest_product_grid: html.includes("gr-guest-product-grid"),
+      add_to_cart_buttons: (html.match(/aria-label="Add to Cart/g) || []).length,
+      registry_items: (html.match(/registry-item/g) || []).length,
+      guest_registry_id: (html.match(/"guestRegistryId":"([^"]+)") || [])[1] || null,
+      csrf_token: (html.match(/"amazonApiCsrfToken":"([^"]+)") || [])[1]?.slice(0, 20) || null,
+      has_apis_caller: html.includes("amazonApiAjaxEndpoint"),
+      page_size_kb: Math.round(html.length / 1024),
+    };
+    console.info(`[AmazonScraper] Diagnostic for ${pageUrl}:`, JSON.stringify(diag));
+
     const $ = cheerio.load(html);
     const rawItems: RawItem[] = [];
 
