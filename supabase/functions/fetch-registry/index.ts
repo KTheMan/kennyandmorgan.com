@@ -7,6 +7,7 @@
 
 import { createSupabaseClient } from "./lib/supabase.ts";
 import type { SupabaseClient } from "./lib/supabase.ts";
+import { getLastAmazonDiag } from "./scrapers/amazon.ts";
 import { createFallbackStrategies } from "./scrapers/registry.ts";
 import type { RegistryItem, ScraperConfig } from "./types.ts";
 import {
@@ -61,6 +62,24 @@ function normalizeImageUrlKey(url: string | null | undefined): string | null {
     return `${host}/${path}`;
   } catch {
     return null;
+  }
+}
+
+function isAmazonRelatedAttempt(
+  strategy: { name: string; key: string },
+  url: string,
+): boolean {
+  if (strategy.name === "Amazon" || strategy.key === "amazon") return true;
+  if (
+    strategy.name !== "scrape.do" && strategy.name !== "ScrapingBee" &&
+    strategy.key !== "scrape.do" && strategy.key !== "scrapingbee"
+  ) {
+    return false;
+  }
+  try {
+    return new URL(url).hostname.toLowerCase().includes("amazon.");
+  } catch {
+    return false;
   }
 }
 
@@ -475,6 +494,7 @@ if (import.meta.main) {
         success: boolean;
         error: string | null;
         itemCount: number;
+        diagnostic?: Record<string, unknown> | null;
       }> = [];
 
       const { data: latestRow } = await supabase
@@ -515,6 +535,9 @@ if (import.meta.main) {
           for (const strategy of strategies) {
             try {
               items = await strategy.fetchItems(url, config);
+              const diagnostic = isAmazonRelatedAttempt(strategy, url)
+                ? getLastAmazonDiag()
+                : null;
               if (items.length > 0) {
                 scrapeAttempts.push({
                   url,
@@ -522,6 +545,7 @@ if (import.meta.main) {
                   success: true,
                   error: null,
                   itemCount: items.length,
+                  diagnostic,
                 });
                 console.info(
                   `[fetch-registry] ${url} succeeded with ${strategy.name}`,
@@ -534,18 +558,23 @@ if (import.meta.main) {
                 success: false,
                 error: "empty result",
                 itemCount: 0,
+                diagnostic,
               });
             } catch (error) {
               const message = error instanceof Error
                 ? error.message
                 : String(error);
               lastError = message;
+              const diagnostic = isAmazonRelatedAttempt(strategy, url)
+                ? getLastAmazonDiag()
+                : null;
               scrapeAttempts.push({
                 url,
                 strategy: strategy.name,
                 success: false,
                 error: message,
                 itemCount: 0,
+                diagnostic,
               });
               console.warn(
                 `[fetch-registry] ${strategy.name} failed for ${url}: ${message}`,
@@ -641,9 +670,11 @@ if (import.meta.main) {
         items: responseItems,
       };
       if (includeDebug && scrapeAttempts.length > 0) {
+        const amazonDiagnostic = getLastAmazonDiag();
         responseBody.debug = {
           attempts: scrapeAttempts,
           failed_count: failedAttempts.length,
+          ...(amazonDiagnostic ? { amazonDiagnostic } : {}),
         };
       }
 

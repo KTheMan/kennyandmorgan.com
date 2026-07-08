@@ -4,6 +4,12 @@ import { fetchTextWithAntiBotHeaders } from "../lib/http.ts";
 import { normalizeHttpUrlCandidate } from "../lib/normalize.ts";
 import { RawItem, RegistryItem, ScraperConfig } from "../types.ts";
 
+let lastAmazonDiag: Record<string, unknown> | null = null;
+
+export function getLastAmazonDiag(): Record<string, unknown> | null {
+  return lastAmazonDiag;
+}
+
 export class AmazonScraper extends BaseRegistryScraper {
   readonly name = "Amazon";
   readonly key = "amazon";
@@ -52,6 +58,7 @@ export class AmazonScraper extends BaseRegistryScraper {
       csrf_token_prefix: csrfMatch ? csrfMatch[1].slice(0, 20) : null,
       has_amazon_api_endpoint: html.includes("amazonApiAjaxEndpoint"),
     };
+    lastAmazonDiag = diag;
     console.info(`[AmazonScraper] Diagnostic for ${pageUrl}:`, JSON.stringify(diag));
 
     const $ = cheerio.load(html);
