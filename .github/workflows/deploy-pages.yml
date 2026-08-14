@@ -83,6 +83,16 @@ jobs:
                   normalized.save(target_path, format='PNG', compress_level=9)
               print(f'Converted {source_path.name} -> {target_path.name}')
           PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: seating-chart-app/package-lock.json
+      - name: Build seating chart app
+        working-directory: seating-chart-app
+        run: |
+          npm install
+          npm run build
       - uses: actions/configure-pages@v5
       - name: Prepare deploy artifact
         run: |
@@ -93,6 +103,7 @@ jobs:
             cp /tmp/km-normalized-images/*.png dist/images/
           fi
           cp -R vendor dist/vendor
+          cp -R seating-chart-app/dist dist/seating-chart
       - name: Generate runtime config
         env:
           SITE_REGISTRY_PAGE_URL: ${{ vars.SITE_REGISTRY_PAGE_URL }}

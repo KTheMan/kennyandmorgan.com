@@ -18,6 +18,7 @@ A static wedding website built with HTML, CSS, and vanilla JavaScript for GitHub
 - admin guest CRUD and CSV import
 - accommodations map
 - direct MyRegistry link
+- admin-only seating chart (`/seating-chart`)
 
 ## Project structure
 
@@ -31,11 +32,25 @@ kennyandmorgan.com/
 ├── site-config.js
 ├── data-client.js
 ├── site.config.example.json
+├── seating-chart-app/    # hard fork of gabriel1ll7/Seating-Planner, built to /seating-chart
 ├── supabase/
 │   ├── schema.sql
+│   ├── functions/seating-chart-api  # worker backing the seating chart fork
 │   └── seed.example.sql
 └── tests/
 ```
+
+## Seating chart
+
+`/seating-chart` is a hard fork of [gabriel1ll7/Seating-Planner](https://github.com/gabriel1ll7/Seating-Planner)
+("Seating.Art"), built from `seating-chart-app/` and published as a static
+subfolder of this site. It doesn't run upstream's Express/PostgreSQL
+server — `supabase/functions/seating-chart-api` replaces that as a
+Supabase Edge Function, and the whole tool is gated behind this site's
+existing admin login instead of upstream's PIN system. A "Sync Accepted
+Guests" button in its sidebar pulls accepted RSVPs, grouped by party,
+from this site's `guests` table via that same worker. See
+`seating-chart-app/README.md` for details.
 
 ## Setup
 
