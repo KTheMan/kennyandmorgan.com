@@ -11,7 +11,8 @@ import {
   isDraggingAtom,
   hoveredTableIdAtom,
   guestsAtom,
-  editModeAtom
+  editModeAtom,
+  baseShapesAtom,
 } from "@/lib/atoms";
 import { Guest, Table } from "../types/seatingChart";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -57,6 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const setHoveredTableId = useSetAtom(hoveredTableIdAtom);
   const isDragging = useAtomValue(isDraggingAtom);
   const setGlobalGuests = useSetAtom(guestsAtom);
+  const setBaseShapes = useSetAtom(baseShapesAtom);
   const editMode = useAtomValue(editModeAtom);
   const [newGuestNames, setNewGuestNames] = useState<Record<string, string>>(
     {},
@@ -98,7 +100,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const groupedGuests = useMemo(() => {
     const groups: Record<
       string,
-      { tableNumber: number | null; tableCapacity?: number; guests: Guest[] }
+      {
+        tableNumber: number | null;
+        tableCapacity?: number;
+        seatingLocked?: boolean;
+        guests: Guest[];
+      }
     > = {
       unassigned: { tableNumber: null, guests: [] },
     };
@@ -108,6 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       groups[table.id] = {
         tableNumber: table.number,
         tableCapacity: table.capacity,
+        seatingLocked: table.seatingLocked === true,
         guests: [],
       };
     });
@@ -120,6 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           groups[guestTableId] = {
             tableNumber: tableMap.get(guestTableId)?.number ?? null,
             tableCapacity: tableMap.get(guestTableId)?.capacity,
+            seatingLocked: tableMap.get(guestTableId)?.seatingLocked === true,
             guests: [],
           };
         }
@@ -163,7 +172,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const sortedGroups: Record<
       string,
-      { tableNumber: number | null; tableCapacity?: number; guests: Guest[] }
+      {
+        tableNumber: number | null;
+        tableCapacity?: number;
+        seatingLocked?: boolean;
+        guests: Guest[];
+      }
     > = {};
     sortedGroupKeys.forEach((key) => {
       sortedGroups[key] = groups[key];
@@ -200,6 +214,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
     const group = groupedGuests[tableId];
     if (!group) return;
+    if (group.seatingLocked) {
+      toast({
+        title: "Seating Locked",
+        description: "Unlock this table's seating to add guests.",
+        variant: "destructive",
+      });
+      return;
+    }
     const capacity =
       tableId === "unassigned" ? Infinity : group.tableCapacity || 0;
     const currentTableGuests = group.guests;
@@ -238,8 +260,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
         toast({ title: "View-Only Mode", description: "Cannot remove guests while in view-only mode.", variant: "destructive" });
         return;
     }
+    const guest = guests.find((g) => g.id === guestIdToRemove);
+    const guestTable = guest?.tableId ? tableMap.get(guest.tableId) : undefined;
+    if (guestTable?.seatingLocked) {
+      toast({
+        title: "Seating Locked",
+        description: `Table ${guestTable.number}'s seating is locked. Unlock it to remove guests.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setGlobalGuests((prevGuests) =>
       prevGuests.filter((guest) => guest.id !== guestIdToRemove),
+    );
+  };
+
+  // Toggles whether a table's seat assignments are frozen (see
+  // Table.seatingLocked) — the sidebar-only counterpart to a table's own
+  // position lock on the canvas.
+  const handleToggleSeatingLock = (tableId: string) => {
+    if (!editMode) return;
+    setBaseShapes((prev) =>
+      prev.map((s) =>
+        s.type === "table" && s.id === tableId
+          ? { ...s, seatingLocked: !s.seatingLocked }
+          : s,
+      ),
     );
   };
 
@@ -444,6 +490,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     isUnassigned
                       ? () => setShowUnassignedInput((prev) => !prev)
                       : undefined
+                  }
+                  isSeatingLocked={groupData.seatingLocked}
+                  onToggleSeatingLock={
+                    isUnassigned
+                      ? undefined
+                      : () => handleToggleSeatingLock(tableId)
                   }
                 />
               );

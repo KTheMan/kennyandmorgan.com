@@ -45,12 +45,23 @@ export interface Table {
   // Degrees, clockwise. Missing/omitted means 0 — every table saved
   // before rotation existed renders unrotated, as before.
   rotation?: number;
-  // When true, this specific table is locked: it can't be dragged,
-  // resized, rotated, or have its capacity/seating layout changed, and
-  // it's skipped by the Delete key — independent of the venue-space lock,
-  // which only governs the venue space shape itself. Missing/omitted
-  // means unlocked, same as every table saved before this existed.
+  // When true, this specific table's position is fixed: it can't be
+  // dragged. That's all it does — resizing, rotating, capacity/seating
+  // layout changes, duplication, and deletion are unaffected, and so is
+  // seat assignment (see seatingLocked below for that). Independent of
+  // the venue-space lock, which only governs the venue space shape
+  // itself. Missing/omitted means unlocked, same as every table saved
+  // before this existed.
   locked?: boolean;
+  // When true, this table's seat assignments are frozen: guests can't be
+  // added, removed, or rearranged into/out of/within its seats, from
+  // either the sidebar guest list or by dragging a guest's seat node on
+  // the canvas. Toggled from the table's row in the sidebar guest list,
+  // not from the canvas. Independent of `locked` above — a table can be
+  // draggable with its seating locked, or fixed in place with its seating
+  // wide open. Missing/omitted means unlocked, same as every table saved
+  // before this existed.
+  seatingLocked?: boolean;
 }
 
 export interface VenueElement {

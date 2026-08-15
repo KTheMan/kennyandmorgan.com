@@ -121,7 +121,6 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   const isVenueLocked = useAtomValue(venueSpaceLockedAtom); // Get venue lock state
 
   const setBaseShapes = useSetAtom(baseShapesAtom); // Get setter for base shapes
-  const { toast } = useToast();
 
   // Ref map for chair groups, keyed by guestId
   const chairRefs = useRef<Record<string, Konva.Group>>({});
@@ -329,16 +328,16 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
         setIsAltPressed(true);
         e.preventDefault(); // Prevent browser menu focus
       } else if (e.key === "Delete" && selectedShapeId) {
-        // Delete the selected shape when Delete key is pressed — unless
-        // it's a table or background image that's individually locked
-        // (see Table.locked / BackgroundImage.locked); that lock exists
-        // specifically to block this.
+        // Delete the selected shape when Delete key is pressed. A
+        // table's position lock (Table.locked) only blocks dragging, so
+        // it doesn't guard deletion here — but a locked background image
+        // (BackgroundImage.locked) still blocks it, same as it blocks
+        // drag/resize/rotate.
         const selectedShape = baseShapes.find((s) => s.id === selectedShapeId);
-        const isLockable = selectedShape?.type === "table" || selectedShape?.type === "backgroundImage";
-        if (isLockable && "locked" in selectedShape && selectedShape.locked) {
+        if (selectedShape?.type === "backgroundImage" && selectedShape.locked) {
           toast({
-            title: selectedShape.type === "table" ? "Table Locked" : "Background Locked",
-            description: `Unlock this ${selectedShape.type === "table" ? "table" : "background image"} before deleting it.`,
+            title: "Background Locked",
+            description: "Unlock the background image before deleting it.",
             variant: "destructive",
           });
           e.preventDefault();
@@ -374,7 +373,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [selectedShapeId, setBaseShapes, setSelectedShapeId, fitContentToView, baseShapes, toast]);
+  }, [selectedShapeId, setBaseShapes, setSelectedShapeId, fitContentToView]);
 
   // Effect to update cursor styles based on interaction state
   useEffect(() => {
