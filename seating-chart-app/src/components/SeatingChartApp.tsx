@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import Konva from "konva";
 import { Sidebar } from "./Sidebar";
 import { Header, type SaveStatus } from "./Header";
 import { useToast } from "@/components/ui/use-toast";
@@ -14,7 +15,7 @@ import {
   eventTitleAtom,
   editModeAtom,
 } from "@/lib/atoms";
-import { Table, VenueElement } from "../types/seatingChart";
+import { Guest, Table, VenueElement } from "../types/seatingChart";
 import { GuestAssignmentModal } from "./GuestAssignmentModal";
 import { RenameElementModal } from "./RenameElementModal";
 import { TableSeatingModal } from "./TableSeatingModal";
@@ -28,6 +29,24 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  useDroppable,
+  type DragStartEvent,
+  type DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { UserCircle } from "lucide-react";
+
+// The one droppable id for "anywhere on the canvas" — landing here means
+// resolving the exact chair from the drop point via Konva's own hit
+// detection, rather than dnd-kit tracking a droppable per chair (there are
+// no DOM nodes for canvas-rendered chairs to attach one to).
+const CANVAS_DROP_ZONE_ID = "canvas-drop-zone";
 
 // Placeholder for useMediaQuery hook
 const useMediaQuery = (query: string) => {
@@ -80,7 +99,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     setEditMode(canEdit);
   }, [canEdit, setEditMode]);
 
-  const { isLoading, isSaving, serverError, updateError } = useVenuePersistence(
+  const { isLoading, isSaving, serverError, updateError, loadIssue } = useVenuePersistence(
     slug,
     credentials,
     canEdit,
@@ -123,6 +142,222 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     [baseShapesValue],
   );
 
+  // --- Drag-and-drop: dragging a guest from the sidebar list either onto
+  // a sidebar table section (existing behavior — lands in that table's
+  // next available seat) or directly onto a specific chair on the canvas
+  // (new). One shared DndContext has to span both regions since a drag
+  // must start and end within the same context — see the JSX below.
+  const [activeDragGuest, setActiveDragGuest] = useState<Guest | null>(null);
+  const [flashErrorTableId, setFlashErrorTableId] = useState<string | null>(
+    null,
+  );
+
+  const pointerSensor = useSensor(PointerSensor, {
+    activationConstraint: { delay: 150, tolerance: 5 },
+  });
+  const sensors = useSensors(pointerSensor);
+
+  // dnd-kit's own pointer-coordinate tracking (which both pointerWithin
+  // and closestCenter depend on to resolve `over`) goes stale once the
+  // pointer moves over the Konva canvas — table/chair dragging on the
+  // canvas has its own pointer handling that appears to interfere with
+  // it. So canvas drops are resolved independently: track the raw pointer
+  // position ourselves (capture-phase, so it's unaffected by anything
+  // downstream calling stopPropagation) and compare it directly against
+  // the canvas container's rect, bypassing dnd-kit's collision system for
+  // this one region. Sidebar-to-sidebar drops are unaffected and still go
+  // through dnd-kit's own `over` normally.
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const lastPointerPosRef = useRef<{ x: number; y: number } | null>(
+    null,
+  );
+  const [isDragActive, setIsDragActive] = useState(false);
+  const [isPointerOverCanvas, setIsPointerOverCanvas] = useState(false);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      lastPointerPosRef.current = { x: event.clientX, y: event.clientY };
+      if (!isDragActive || !canvasContainerRef.current) return;
+      const rect = canvasContainerRef.current.getBoundingClientRect();
+      setIsPointerOverCanvas(
+        event.clientX >= rect.left &&
+          event.clientX <= rect.right &&
+          event.clientY >= rect.top &&
+          event.clientY <= rect.bottom,
+      );
+    };
+    window.addEventListener("pointermove", handlePointerMove, true);
+    return () =>
+      window.removeEventListener("pointermove", handlePointerMove, true);
+  }, [isDragActive]);
+
+  const { setNodeRef: setCanvasDropRef } = useDroppable({
+    id: CANVAS_DROP_ZONE_ID,
+  });
+  const setCanvasRefs = useCallback(
+    (el: HTMLDivElement | null) => {
+      canvasContainerRef.current = el;
+      setCanvasDropRef(el);
+    },
+    [setCanvasDropRef],
+  );
+
+  const findNextAvailableSeat = useCallback(
+    (currentGuests: Guest[], capacity: number): number | null => {
+      if (currentGuests.length >= capacity) return null;
+      const occupied = new Set(
+        currentGuests
+          .map((g) => g.chairIndex)
+          .filter((i): i is number => typeof i === "number"),
+      );
+      for (let i = 0; i < capacity; i++) {
+        if (!occupied.has(i)) return i;
+      }
+      return null;
+    },
+    [],
+  );
+
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      const draggedGuest = guestsValue.find((g) => g.id === event.active.id);
+      setActiveDragGuest(draggedGuest ?? null);
+      setIsDragActive(true);
+      setIsPointerOverCanvas(false);
+    },
+    [guestsValue],
+  );
+
+  // Resolve a canvas drop point (viewport/client coordinates) to the
+  // specific chair under it, via Konva's own hit detection — there's no
+  // per-chair DOM node for dnd-kit to register a droppable on, since
+  // chairs are shapes on a <canvas>, not DOM elements.
+  const resolveChairAtPoint = useCallback(
+    (clientX: number, clientY: number): { tableId: string; chairIndex: number } | null => {
+      const stage = Konva.stages[Konva.stages.length - 1];
+      if (!stage) return null;
+      const stageBox = stage.container().getBoundingClientRect();
+      const pos = { x: clientX - stageBox.left, y: clientY - stageBox.top };
+      let node: Konva.Node | null = stage.getIntersection(pos);
+      while (node && node !== stage) {
+        const chairIndex = node.getAttr("chairIndex");
+        const tableId = node.getAttr("tableId");
+        if (typeof chairIndex === "number" && typeof tableId === "string") {
+          return { tableId, chairIndex };
+        }
+        node = node.getParent();
+      }
+      return null;
+    },
+    [],
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      const draggedGuest = activeDragGuest;
+      const pointerPos = lastPointerPosRef.current;
+      const wasOverCanvas = isPointerOverCanvas;
+      setActiveDragGuest(null);
+      setIsDragActive(false);
+      setIsPointerOverCanvas(false);
+      if (!draggedGuest) return;
+      const guestId = active.id as string;
+
+      // Resolved from our own tracked pointer position, not dnd-kit's
+      // `over` — see the note above isDragActive for why.
+      if (wasOverCanvas && pointerPos) {
+        const target = resolveChairAtPoint(pointerPos.x, pointerPos.y);
+        if (!target) {
+          toast({
+            title: "Drop On A Seat",
+            description:
+              "Drag a guest directly onto an empty chair to assign them.",
+            variant: "destructive",
+          });
+          return;
+        }
+        const occupant = guestsValue.find(
+          (g) =>
+            g.tableId === target.tableId && g.chairIndex === target.chairIndex,
+        );
+        if (occupant && occupant.id !== guestId) {
+          toast({
+            title: "Seat Taken",
+            description: "That chair already has a guest — remove them first.",
+            variant: "destructive",
+          });
+          return;
+        }
+        setGuestsValue((prev) =>
+          prev.map((g) =>
+            g.id === guestId
+              ? { ...g, tableId: target.tableId, chairIndex: target.chairIndex }
+              : g,
+          ),
+        );
+        return;
+      }
+
+      if (!over || active.id === over.id) return;
+      const targetTableId = over.id as string;
+      if (
+        draggedGuest.tableId === targetTableId &&
+        targetTableId !== "unassigned"
+      )
+        return;
+
+      if (targetTableId === "unassigned") {
+        setGuestsValue((prev) =>
+          prev.map((g) =>
+            g.id === guestId ? { ...g, tableId: "", chairIndex: null } : g,
+          ),
+        );
+        return;
+      }
+
+      const targetTable = baseShapesValue.find(
+        (s): s is Table => s.type === "table" && s.id === targetTableId,
+      );
+      if (!targetTable) return;
+      const guestsAtTargetTable = guestsValue.filter(
+        (g) => g.tableId === targetTableId,
+      );
+      const nextSeatIndex = findNextAvailableSeat(
+        guestsAtTargetTable,
+        targetTable.capacity,
+      );
+      if (nextSeatIndex === null) {
+        toast({
+          title: "Table Full",
+          description: `Table ${targetTable.number} has no available seats.`,
+          variant: "destructive",
+          duration: 2000,
+        });
+        setFlashErrorTableId(targetTableId);
+        setTimeout(() => setFlashErrorTableId(null), 1000);
+        return;
+      }
+      setGuestsValue((prev) =>
+        prev.map((g) =>
+          g.id === guestId
+            ? { ...g, tableId: targetTableId, chairIndex: nextSeatIndex }
+            : g,
+        ),
+      );
+    },
+    [
+      activeDragGuest,
+      baseShapesValue,
+      findNextAvailableSeat,
+      guestsValue,
+      isPointerOverCanvas,
+      resolveChairAtPoint,
+      setGuestsValue,
+      toast,
+    ],
+  );
+
   useEffect(() => {
     if (serverError) {
       toast({
@@ -133,6 +368,16 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
       });
     }
   }, [serverError, toast]);
+
+  useEffect(() => {
+    if (loadIssue) {
+      toast({
+        title: "Chart Didn't Load Right",
+        description: loadIssue.message,
+        variant: "destructive",
+      });
+    }
+  }, [loadIssue, toast]);
 
   useEffect(() => {
     if (updateError) {
@@ -359,44 +604,69 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         onToggleMobileSidebar={() => setIsSheetOpen((prev) => !prev)}
         isMobileSidebarOpen={isSheetOpen}
       />
-      <div className="flex flex-1 overflow-hidden">
-        {isDesktop ? (
-          <Sidebar
-            guests={guestsValue}
-            tables={baseShapesValue.filter(
-              (s): s is Table => s.type === "table",
-            )}
-            isAdmin={isAdmin}
-          />
-        ) : (
-          <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-            <SheetContent
-              side="left"
-              className="w-72 sm:w-80 p-0 overflow-y-auto"
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        collisionDetection={closestCenter}
+      >
+        <div className="flex flex-1 overflow-hidden">
+          {isDesktop ? (
+            <Sidebar
+              guests={guestsValue}
+              tables={baseShapesValue.filter(
+                (s): s is Table => s.type === "table",
+              )}
+              isAdmin={isAdmin}
+              flashErrorTableId={flashErrorTableId}
+            />
+          ) : (
+            <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+              <SheetContent
+                side="left"
+                className="w-72 sm:w-80 p-0 overflow-y-auto"
+              >
+                <SheetHeader className="p-5 pb-2 sr-only">
+                  <SheetTitle>Guest List and Tables</SheetTitle>
+                </SheetHeader>
+                <Sidebar
+                  guests={guestsValue}
+                  tables={baseShapesValue.filter(
+                    (s): s is Table => s.type === "table",
+                  )}
+                  isAdmin={isAdmin}
+                  isInSheet={true}
+                  flashErrorTableId={flashErrorTableId}
+                />
+              </SheetContent>
+            </Sheet>
+          )}
+          <div className="flex-1 flex flex-col p-4 md:p-5 border-l border-border/40 bg-background/50">
+            <div
+              ref={setCanvasRefs}
+              className={`flex-1 relative rounded-lg border shadow-md overflow-hidden transition-colors ${
+                isPointerOverCanvas
+                  ? "border-primary ring-2 ring-primary/40"
+                  : "border-border/40"
+              }`}
+              tabIndex={1}
             >
-              <SheetHeader className="p-5 pb-2 sr-only">
-                <SheetTitle>Guest List and Tables</SheetTitle>
-              </SheetHeader>
-              <Sidebar
-                guests={guestsValue}
-                tables={baseShapesValue.filter(
-                  (s): s is Table => s.type === "table",
-                )}
-                isAdmin={isAdmin}
-                isInSheet={true}
-              />
-            </SheetContent>
-          </Sheet>
-        )}
-        <div className="flex-1 flex flex-col p-4 md:p-5 border-l border-border/40 bg-background/50">
-          <div
-            className="flex-1 relative rounded-lg border border-border/40 shadow-md overflow-hidden"
-            tabIndex={1}
-          >
-            <SortedCanvasStageAdapter shapeAtoms={shapeAtoms} />
+              <SortedCanvasStageAdapter shapeAtoms={shapeAtoms} />
+            </div>
           </div>
         </div>
-      </div>
+
+        <DragOverlay>
+          {activeDragGuest ? (
+            <div className="bg-sidebar p-3 rounded-md shadow-xl border border-primary/50 flex items-center opacity-90 cursor-grabbing">
+              <UserCircle size={18} className="mr-2 text-primary shrink-0" />
+              <span className="font-medium text-sidebar-primary truncate">
+                {activeDragGuest.fullName}
+              </span>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
       <GuestAssignmentModal />
       <RenameElementModal />
       <TableSeatingModal />
