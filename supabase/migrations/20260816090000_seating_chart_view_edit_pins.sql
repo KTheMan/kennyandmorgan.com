@@ -36,7 +36,7 @@ create index if not exists seating_chart_pin_attempts_lookup_idx
 drop function if exists public.seating_chart_record_pin_attempt(text, text);
 create or replace function public.seating_chart_record_pin_attempt(
     target_slug text,
-    pin_kind text,
+    requested_pin_kind text,
     client_ip text
 )
 returns void
@@ -55,7 +55,7 @@ begin
     into recent_attempts
     from public.seating_chart_pin_attempts
     where slug = target_slug
-      and pin_kind = seating_chart_record_pin_attempt.pin_kind
+      and pin_kind = requested_pin_kind
       and ip_hash = hashed_ip
       and attempted_at > timezone('utc', now()) - interval '15 minutes';
 
@@ -64,7 +64,7 @@ begin
     end if;
 
     insert into public.seating_chart_pin_attempts (slug, pin_kind, ip_hash)
-    values (target_slug, pin_kind, hashed_ip);
+    values (target_slug, requested_pin_kind, hashed_ip);
 end;
 $$;
 

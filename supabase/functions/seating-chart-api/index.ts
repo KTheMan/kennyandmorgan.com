@@ -377,16 +377,21 @@ async function fetchAcceptedGuestParties(supabaseUrl: string, serviceRoleKey: st
   return Array.from(partiesByGroup.values());
 }
 
+// Every route this function defines, longest (most specific) first so a
+// two-segment route is never mistaken for a one-segment one.
+const KNOWN_ROUTES = ["venue/validate-pin", "venue/set-edit-pin", "venue/set-view-pin", "venue", "venues", "guests"];
+
 async function handleRequest(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  // Supabase serves this function at /functions/v1/seating-chart-api/*;
-  // pull off everything after the function name so this works whether
-  // it's invoked via the platform gateway or a local `functions serve`.
+  // Gateways disagree on whether they strip the /functions/v1/<name>
+  // prefix before forwarding (Supabase's Kong does; a local proxy might
+  // not) — rather than guess, match the path's suffix against every
+  // route we know about instead of assuming a fixed prefix depth.
   const segments = url.pathname.split("/").filter(Boolean);
-  const functionNameIndex = segments.indexOf("seating-chart-api");
-  const route = functionNameIndex === -1
-    ? segments.slice(-1).join("/")
-    : segments.slice(functionNameIndex + 1).join("/");
+  const route = KNOWN_ROUTES.find((candidate) => {
+    const candidateSegments = candidate.split("/");
+    return segments.slice(-candidateSegments.length).join("/") === candidate;
+  }) ?? "";
 
   const { supabaseUrl, serviceRoleKey } = getEnvConfig();
   const sessionToken = req.headers.get("x-km-session-token");
