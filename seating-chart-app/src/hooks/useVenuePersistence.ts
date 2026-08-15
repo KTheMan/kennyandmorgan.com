@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAtom, useSetAtom } from "jotai";
 import { useDebouncedCallback } from "use-debounce";
 
@@ -78,11 +78,13 @@ export const useVenuePersistence = (
 
   const isInitialLoadComplete = useRef(false);
   const loadedSlugRef = useRef<string | null>(null);
+  const [loadIssue, setLoadIssue] = useState<Error | null>(null);
 
   // --- Warm-load from localStorage immediately when the slug changes. ---
   useEffect(() => {
     isInitialLoadComplete.current = false;
     loadedSlugRef.current = null;
+    setLoadIssue(null);
     const cached = cache.get(slug);
     if (cached) {
       setShapes(cached.shapes ?? []);
@@ -102,11 +104,35 @@ export const useVenuePersistence = (
     if (loadedSlugRef.current === slug) return;
     if (serverData.locked === true) return;
 
-    const venueData: VenueData =
-      serverData.venueData && Object.keys(serverData.venueData).length > 0
-        ? serverData.venueData
-        : DEFAULT_VENUE_DATA;
+    const venueData = serverData.venueData;
+    // seating_chart_create_venue always seeds shapes/guests as [] (never
+    // absent), so a real venue's response should never fail this check —
+    // it only trips on an actual fetch/response problem. Treating that as
+    // "must be a brand new venue, start fresh" used to substitute an
+    // empty DEFAULT_VENUE_DATA *and* immediately mark the load complete,
+    // which enables the debounced autosave — silently overwriting the
+    // server's real data (tables, seating assignments, the whole guest
+    // list) with an empty canvas within seconds, with nothing to undo it
+    // (seating_chart_save_venue has no server-side check preventing an
+    // authorized save from blanking existing data). Treat it as a load
+    // error instead: leave everything untouched and never enable
+    // autosave until a response actually looks right.
+    const looksValid =
+      venueData &&
+      typeof venueData === "object" &&
+      Array.isArray(venueData.shapes) &&
+      Array.isArray(venueData.guests);
 
+    if (!looksValid) {
+      setLoadIssue(
+        new Error(
+          "The chart data that came back looks incomplete. Refresh to try again — nothing has been changed or saved.",
+        ),
+      );
+      return;
+    }
+
+    setLoadIssue(null);
     setShapes(venueData.shapes ?? []);
     setGuests(venueData.guests ?? []);
     setEventTitle(venueData.eventTitle ?? DEFAULT_VENUE_DATA.eventTitle);
@@ -155,5 +181,6 @@ export const useVenuePersistence = (
     isSaving,
     serverError,
     updateError,
+    loadIssue,
   };
 };
