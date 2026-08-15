@@ -18,7 +18,7 @@ import {
 import { Minus, Plus, LayoutGrid, Rows3 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
-const MIN_SIDE_SEATS = 1;
+const MIN_SIDE_SEATS = 0;
 const MAX_SIDE_SEATS = 8;
 
 export const TableSeatingModal: React.FC = () => {

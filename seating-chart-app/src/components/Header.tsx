@@ -370,7 +370,7 @@ export const Header: React.FC<HeaderProps> = ({
                         variant="outline"
                         onClick={onAddVenueElement}
                         disabled={!isVenueSpacePresent}
-                        className="border-accent/40 bg-accent/5 hover:bg-accent/15 text-accent-foreground transition-all font-medium shadow-sm"
+                        className="shadow-sm"
                       >
                         <Armchair
                           className="mr-2"

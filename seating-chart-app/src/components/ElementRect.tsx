@@ -13,6 +13,7 @@ import { PrimitiveAtom } from "jotai";
 import { VenueElement } from "../types/seatingChart";
 import { Shape } from "@/lib/atoms";
 import { useTheme } from "@/components/ThemeProvider";
+import { snapToGrid } from "@/lib/gridSnap";
 
 // Direct color values for light mode — matches the wedding site's Ticket
 // Show palette (cream/ink/olive).
@@ -102,11 +103,23 @@ const ElementRectContent: React.FC<{
     e.evt.cancelBubble = true;
   };
 
+  // Invisible-grid snapping — see lib/gridSnap. Local x/y, so it stays a
+  // fixed size regardless of zoom/pan.
+  const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    const node = e.target;
+    node.x(snapToGrid(node.x()));
+    node.y(snapToGrid(node.y()));
+  };
+
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     // Update shape position only if it was intended to be draggable
     const baseDraggable = isVenueSpace ? !isVenueLocked : true;
     if (baseDraggable) {
-      setShape((prev) => ({ ...prev, x: e.target.x(), y: e.target.y() }));
+      setShape((prev) => ({
+        ...prev,
+        x: snapToGrid(e.target.x()),
+        y: snapToGrid(e.target.y()),
+      }));
     }
   };
 
@@ -178,6 +191,7 @@ const ElementRectContent: React.FC<{
         onClick={handleSelect}
         onTap={handleSelect}
         onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
         onTransformEnd={handleTransformEnd}
         listening={!isVenueSpace || isSelected}

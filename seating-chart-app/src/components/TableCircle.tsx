@@ -11,8 +11,11 @@ import {
   venueSpaceLockedAtom,
   editModeAtom,
   tableSeatingModalStateAtom,
-  groupDropPreviewAtom
+  groupDropPreviewAtom,
+  baseShapesAtom,
+  tableCounterAtom,
 } from "@/lib/atoms";
+import { nanoid } from "nanoid";
 import { PrimitiveAtom } from "jotai";
 import { Table } from "../types/seatingChart";
 import { Shape } from "@/lib/atoms";
@@ -25,6 +28,7 @@ import {
   computeRectangleChairPositions,
   computeOpposingSidesChairPositions,
 } from "@/lib/tableSeating";
+import { snapToGrid } from "@/lib/gridSnap";
 
 interface TableCircleProps {
   shapeAtom: PrimitiveAtom<Shape>;
@@ -114,6 +118,8 @@ const TableCircleContent: React.FC<{
   const setIsDragging = useSetAtom(isDraggingAtom);
   const currentVenueLockState = useAtomValue(venueSpaceLockedAtom);
   const editMode = useAtomValue(editModeAtom);
+  const setBaseShapes = useSetAtom(baseShapesAtom);
+  const [tableCounterValue, setTableCounter] = useAtom(tableCounterAtom);
   const shapeRef = useRef<Konva.Group>(null);
   const trRef = useRef<Konva.Transformer>(null);
   const isSelected = shape.id === selectedShapeId;
@@ -127,6 +133,8 @@ const TableCircleContent: React.FC<{
   const [isPlusPressed, setIsPlusPressed] = useState(false);
   const [isTableHovered, setIsTableHovered] = useState(false); // <-- New state for table hover
   const [isSettingsHovered, setIsSettingsHovered] = useState(false);
+  const [isDuplicateHovered, setIsDuplicateHovered] = useState(false);
+  const [isLockHovered, setIsLockHovered] = useState(false);
 
   // Choose colors based on theme
   const COLORS = theme === "dark" ? DARK_COLORS : LIGHT_COLORS;
@@ -139,8 +147,13 @@ const TableCircleContent: React.FC<{
   const bottomSeats = shape.bottomSeats ?? Math.floor(shape.capacity / 2);
   const setTableSeatingModalState = useSetAtom(tableSeatingModalStateAtom);
 
-  // Draggability depends on shape prop, not panning, AND edit mode
-  const isDraggable = shape.draggable !== false && !isPanning && editMode;
+  // A table's own lock, independent of the venue-space lock above — see
+  // the Table.locked doc comment.
+  const isLocked = shape.locked === true;
+
+  // Draggability depends on shape prop, not panning, edit mode, AND this
+  // table's own lock.
+  const isDraggable = shape.draggable !== false && !isPanning && editMode && !isLocked;
 
   // Hooks are now safe
   useEffect(() => {
@@ -255,11 +268,25 @@ const TableCircleContent: React.FC<{
     e.evt.cancelBubble = true;
   };
 
+  // Invisible-grid snapping: pull the node to the nearest grid point as it
+  // moves (local x/y, so this stays a fixed size regardless of zoom/pan —
+  // see lib/gridSnap). No grid is ever drawn; this just keeps dragged
+  // tables landing on tidy, mutually-aligned positions.
+  const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    const node = e.target;
+    node.x(snapToGrid(node.x()));
+    node.y(snapToGrid(node.y()));
+  };
+
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     setIsDragging(false);
     // Update shape position only if it was actually draggable
     if (shape.draggable !== false) {
-      setShape((prev) => ({ ...prev, x: e.target.x(), y: e.target.y() }));
+      setShape((prev) => ({
+        ...prev,
+        x: snapToGrid(e.target.x()),
+        y: snapToGrid(e.target.y()),
+      }));
     }
   };
 
@@ -314,7 +341,7 @@ const TableCircleContent: React.FC<{
   };
 
   const handleCapacityChange = (change: number) => {
-    if (!editMode) {
+    if (!editMode || isLocked) {
       // Optionally show a toast here if desired
       return;
     }
@@ -360,8 +387,42 @@ const TableCircleContent: React.FC<{
   const handleSettingsMouseEnter = () => setIsSettingsHovered(true);
   const handleSettingsMouseLeave = () => setIsSettingsHovered(false);
   const handleOpenSeatingSettings = () => {
-    if (!editMode) return;
+    if (!editMode || isLocked) return;
     setTableSeatingModalState({ isOpen: true, tableId: shape.id });
+  };
+  const handleDuplicateMouseEnter = () => setIsDuplicateHovered(true);
+  const handleDuplicateMouseLeave = () => setIsDuplicateHovered(false);
+  const handleLockMouseEnter = () => setIsLockHovered(true);
+  const handleLockMouseLeave = () => setIsLockHovered(false);
+
+  // Clones this table — new id and table number, offset a bit so it
+  // doesn't sit exactly on top of the original, and snapped to the same
+  // invisible grid dragging uses. Everything about its layout (shape,
+  // capacity, seating style, rotation) carries over; guests don't, since
+  // guests aren't part of the Table itself. The copy always starts
+  // unlocked, even if the original is locked, so it's immediately usable.
+  const handleDuplicateTable = () => {
+    if (!editMode) return;
+    const offset = 40;
+    const newTable: Table = {
+      ...shape,
+      id: `table-${Date.now()}-${nanoid(4)}`,
+      number: tableCounterValue,
+      x: snapToGrid(shape.x + offset),
+      y: snapToGrid(shape.y + offset),
+      locked: false,
+    };
+    setBaseShapes((prev) => [...prev, newTable]);
+    setTableCounter((prev) => prev + 1);
+    setSelectedShapeId(newTable.id);
+  };
+
+  // This table's own lock — independent of, and not affected by, the
+  // venue-space lock. Always togglable in edit mode, even while locked,
+  // since that's the only way back out.
+  const handleToggleLock = () => {
+    if (!editMode) return;
+    setShape((prev) => ({ ...prev, locked: !prev.locked }));
   };
 
   // Updated font sizes for better readability
@@ -370,6 +431,14 @@ const TableCircleContent: React.FC<{
   const BUTTON_RADIUS = 12; // Slightly larger buttons
   // Bring buttons closer together
   const BUTTON_SPACING = 1.25; // Reduced from 2 (default)
+  const CONTROL_ROW_HEIGHT = BUTTON_RADIUS * 2 + PADDING * 2;
+  // Duplicate/lock sit on their own row, below whichever rows are already
+  // showing above them: just capacity (round tables, and opposing-style
+  // rectangles where capacity comes from the settings button instead), or
+  // capacity + settings (rectangles in "all sides" style).
+  const duplicateLockRowY = !isRectangle || isOpposingSides
+    ? CONTROL_ROW_HEIGHT
+    : CONTROL_ROW_HEIGHT * 2;
 
   return (
     <React.Fragment>
@@ -383,6 +452,7 @@ const TableCircleContent: React.FC<{
         onClick={handleSelect}
         onTap={handleSelect}
         onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
         onTransformEnd={handleTransformEnd}
         offsetX={0}
@@ -445,6 +515,20 @@ const TableCircleContent: React.FC<{
             shadowOffset={{ x: 2, y: 2 }}
             perfectDrawEnabled={false}
             listening={true}
+          />
+        )}
+
+        {/* Persistent lock badge — visible whenever this table is locked,
+            not just on hover, so it's obvious at a glance why it won't
+            drag/resize/rotate. */}
+        {isLocked && (
+          <Text
+            text="🔒"
+            fontSize={13}
+            listening={false}
+            perfectDrawEnabled={false}
+            x={(isRectangle ? rectWidth / 2 : shape.radius) - 18}
+            y={-(isRectangle ? rectHeight / 2 : shape.radius) + 4}
           />
         )}
 
@@ -675,10 +759,86 @@ const TableCircleContent: React.FC<{
               />
             </Group>
           )}
+
+          {/* Duplicate button — clones this table. Always available in
+              edit mode, even while locked (copying doesn't change the
+              original). */}
+          <Group
+            x={-BUTTON_RADIUS * BUTTON_SPACING}
+            y={duplicateLockRowY}
+            onClick={handleDuplicateTable}
+            onTap={handleDuplicateTable}
+            onMouseEnter={handleDuplicateMouseEnter}
+            onMouseLeave={handleDuplicateMouseLeave}
+          >
+            <Circle
+              radius={BUTTON_RADIUS}
+              fill={isDuplicateHovered ? COLORS.plusButtonHoverFill : COLORS.tableFill}
+              stroke={isDuplicateHovered ? COLORS.plusButtonHoverStroke : COLORS.tableStroke}
+              strokeWidth={1.5}
+              shadowBlur={isDuplicateHovered ? 5 : 3}
+              shadowOpacity={isDuplicateHovered ? 0.3 : 0.2}
+              shadowOffset={{ x: 1, y: 1 }}
+            />
+            <Text
+              text="⧉"
+              fontSize={14}
+              fill={COLORS.tableTextPrimary}
+              width={BUTTON_RADIUS * 2}
+              height={BUTTON_RADIUS * 2}
+              align="center"
+              verticalAlign="middle"
+              offsetX={BUTTON_RADIUS}
+              offsetY={BUTTON_RADIUS}
+              listening={false}
+            />
+          </Group>
+
+          {/* Lock button — toggles this table's own lock, independent of
+              the venue-space lock. Stays clickable while locked; it's the
+              only way to unlock again. */}
+          <Group
+            x={BUTTON_RADIUS * BUTTON_SPACING}
+            y={duplicateLockRowY}
+            onClick={handleToggleLock}
+            onTap={handleToggleLock}
+            onMouseEnter={handleLockMouseEnter}
+            onMouseLeave={handleLockMouseLeave}
+          >
+            <Circle
+              radius={BUTTON_RADIUS}
+              fill={
+                isLocked
+                  ? (isLockHovered ? COLORS.minusButtonHoverFill : COLORS.minusButtonFill)
+                  : (isLockHovered ? COLORS.plusButtonHoverFill : COLORS.tableFill)
+              }
+              stroke={
+                isLocked
+                  ? (isLockHovered ? COLORS.minusButtonHoverStroke : COLORS.minusButtonStroke)
+                  : (isLockHovered ? COLORS.plusButtonHoverStroke : COLORS.tableStroke)
+              }
+              strokeWidth={1.5}
+              shadowBlur={isLockHovered ? 5 : 3}
+              shadowOpacity={isLockHovered ? 0.3 : 0.2}
+              shadowOffset={{ x: 1, y: 1 }}
+            />
+            <Text
+              text={isLocked ? "🔒" : "🔓"}
+              fontSize={12}
+              fill={COLORS.tableTextPrimary}
+              width={BUTTON_RADIUS * 2}
+              height={BUTTON_RADIUS * 2}
+              align="center"
+              verticalAlign="middle"
+              offsetX={BUTTON_RADIUS}
+              offsetY={BUTTON_RADIUS}
+              listening={false}
+            />
+          </Group>
         </Group>
       </Group>
-      {/* Only show Transformer if selected AND in edit mode */}
-      {isSelected && editMode && (
+      {/* Only show Transformer if selected, in edit mode, and unlocked */}
+      {isSelected && editMode && !isLocked && (
         <Transformer
           ref={trRef}
           boundBoxFunc={
