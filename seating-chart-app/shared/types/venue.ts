@@ -1,11 +1,11 @@
-import type { Table, VenueElement, Guest } from "../../src/types/seatingChart";
+import type { Table, VenueElement, Guest, BackgroundImage } from "../../src/types/seatingChart";
 
 /**
  * Represents the data structure stored in the venue_data JSONB column
  * and potentially in localStorage.
  */
 export interface VenueData {
-  shapes: Array<VenueElement | Table>; // Represents the shapes array
+  shapes: Array<VenueElement | Table | BackgroundImage>; // Represents the shapes array
   guests: Guest[];
   eventTitle: string;
   tableCounter: number;

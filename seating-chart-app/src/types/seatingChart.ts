@@ -66,3 +66,33 @@ export interface VenueElement {
   strokeWidth?: number;
   draggable?: boolean;
 }
+
+// An uploaded reference image (a photo/scan/export of the venue's real
+// floorplan) placed behind everything else on the canvas so tables can be
+// arranged against it. At most one exists at a time — uploading a new one
+// replaces it. See lib/backgroundImageProcessing.ts for how `dataUrl`
+// ends up self-contained and size-capped before it ever reaches here.
+export interface BackgroundImage {
+  type: "backgroundImage";
+  id: string;
+  // A self-contained data: URI (image/webp, image/png, image/jpeg,
+  // image/gif, image/bmp, or image/svg+xml) — never a remote URL, so
+  // rendering it never depends on a separate fetch or storage bucket.
+  dataUrl: string;
+  // Pixel dimensions of the image data `dataUrl` actually decodes to
+  // (post any downscaling) — the shape's on-canvas size before `scale`.
+  naturalWidth: number;
+  naturalHeight: number;
+  x: number; // top-left corner, like VenueElement
+  y: number;
+  // Uniform scale factor applied to naturalWidth/naturalHeight — resizing
+  // this shape always preserves its aspect ratio, unlike VenueElement.
+  scale: number;
+  // Degrees, clockwise, free rotation (no 45° snapping — unlike tables,
+  // a photographed or scanned floorplan is rarely already axis-aligned).
+  rotation?: number;
+  opacity: number; // 0-1
+  // Same meaning as Table.locked: blocks drag/resize/rotate/delete for
+  // this shape specifically. Missing/omitted means unlocked.
+  locked?: boolean;
+}
