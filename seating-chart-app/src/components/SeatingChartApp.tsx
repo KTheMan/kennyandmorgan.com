@@ -163,7 +163,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     }
   }, [canEdit, setBaseShapes, setGuestsValue, setEventTitleValue, setTableCounter, toast]);
 
-  const handleAddTable = () => {
+  const handleAddTable = (shape: "round" | "rectangle" = "round") => {
     if (editMode === false) {
       toast({
         title: "View-Only Mode",
@@ -173,15 +173,30 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
       return;
     }
     const currentTableCounter = tableCounterValue;
-    const newTable: Table = {
-      id: `table-${Date.now()}-${nanoid(4)}`,
-      type: "table",
-      number: currentTableCounter,
-      x: 200 + Math.random() * 200,
-      y: 150 + Math.random() * 150,
-      radius: 60,
-      capacity: 8,
-    };
+    const newTable: Table =
+      shape === "rectangle"
+        ? {
+            id: `table-${Date.now()}-${nanoid(4)}`,
+            type: "table",
+            shape: "rectangle",
+            number: currentTableCounter,
+            x: 200 + Math.random() * 200,
+            y: 150 + Math.random() * 150,
+            width: 200,
+            height: 90,
+            radius: 100, // kept in sync (half of width) for older code paths that assume a radius
+            capacity: 8,
+          }
+        : {
+            id: `table-${Date.now()}-${nanoid(4)}`,
+            type: "table",
+            shape: "round",
+            number: currentTableCounter,
+            x: 200 + Math.random() * 200,
+            y: 150 + Math.random() * 150,
+            radius: 60,
+            capacity: 8,
+          };
     setBaseShapes((prevShapes) => [...prevShapes, newTable]);
     setTableCounter((prev) => prev + 1);
 

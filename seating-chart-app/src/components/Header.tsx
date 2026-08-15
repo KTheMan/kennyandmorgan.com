@@ -17,6 +17,9 @@ import {
   Eye,
   KeyRound,
   Share2,
+  ChevronDown,
+  Circle,
+  RectangleHorizontal,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +33,12 @@ import {
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAtom, useAtomValue } from "jotai";
 import { eventTitleAtom, editModeAtom } from "@/lib/atoms";
 import { useToast } from "@/components/ui/use-toast";
@@ -79,7 +88,7 @@ interface HeaderProps {
   onBackToManager: () => void;
   totalGuests: number;
   onReset: () => void;
-  onAddTable: () => void;
+  onAddTable: (shape?: "round" | "rectangle") => void;
   onAddVenueElement: () => void;
   onAddVenueSpace: () => void;
   isVenueSpacePresent: boolean;
@@ -314,19 +323,33 @@ export const Header: React.FC<HeaderProps> = ({
                         !isVenueSpacePresent ? onShowDisabledInfo : undefined
                       }
                     >
-                      <Button
-                        size="sm"
-                        onClick={onAddTable}
-                        disabled={!isVenueSpacePresent}
-                        className="bg-primary/90 hover:bg-primary text-primary-foreground transition-all shadow-sm font-medium dark:glow-subtle"
-                      >
-                        <Utensils
-                          className="mr-2"
-                          size={16}
-                          strokeWidth={1.5}
-                        />
-                        Add Table
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild disabled={!isVenueSpacePresent}>
+                          <Button
+                            size="sm"
+                            disabled={!isVenueSpacePresent}
+                            className="bg-primary/90 hover:bg-primary text-primary-foreground transition-all shadow-sm font-medium dark:glow-subtle"
+                          >
+                            <Utensils
+                              className="mr-2"
+                              size={16}
+                              strokeWidth={1.5}
+                            />
+                            Add Table
+                            <ChevronDown className="ml-1.5" size={14} strokeWidth={1.5} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="bg-card text-card-foreground border-border">
+                          <DropdownMenuItem onClick={() => onAddTable("round")}>
+                            <Circle className="mr-2" size={14} strokeWidth={1.5} />
+                            Round Table
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onAddTable("rectangle")}>
+                            <RectangleHorizontal className="mr-2" size={14} strokeWidth={1.5} />
+                            Rectangular Table
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </span>
                   </TooltipTrigger>
                   <TooltipContent className="bg-card text-card-foreground border-border">

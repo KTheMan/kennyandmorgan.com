@@ -26,7 +26,12 @@ export interface Table {
   number: number;
   x: number;
   y: number;
-  radius: number;
+  // Missing/omitted means "round" — every table saved before this field
+  // existed is a round table, so this keeps old venue data working as-is.
+  shape?: "round" | "rectangle";
+  radius: number; // round tables only
+  width?: number; // rectangle tables only
+  height?: number; // rectangle tables only
   capacity: number;
   draggable?: boolean;
 }

@@ -165,11 +165,20 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
         maxX = Math.max(maxX, right);
         maxY = Math.max(maxY, bottom);
       } else if (shape.type === "table") {
-        // For tables (circles)
-        const left = shape.x - shape.radius;
-        const top = shape.y - shape.radius;
-        const right = shape.x + shape.radius;
-        const bottom = shape.y + shape.radius;
+        // For tables — rectangular tables use width/height, round tables
+        // (and any older saved table without a width/height) use radius.
+        const halfWidth =
+          shape.shape === "rectangle" && shape.width != null
+            ? shape.width / 2
+            : shape.radius;
+        const halfHeight =
+          shape.shape === "rectangle" && shape.height != null
+            ? shape.height / 2
+            : shape.radius;
+        const left = shape.x - halfWidth;
+        const top = shape.y - halfHeight;
+        const right = shape.x + halfWidth;
+        const bottom = shape.y + halfHeight;
 
         minX = Math.min(minX, left);
         minY = Math.min(minY, top);

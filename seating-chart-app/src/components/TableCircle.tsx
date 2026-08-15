@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useMemo, useState } from "react";
-import { Circle, Text, Group, Transformer } from "react-konva";
+import { Circle, Rect, Text, Group, Transformer } from "react-konva";
 import Konva from "konva";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
@@ -30,6 +30,79 @@ const CHAIR_RADIUS = 8;
 const PADDING = 5;
 const MIN_TABLE_RADIUS = 30;
 const MAX_TABLE_RADIUS = 150;
+const MIN_RECT_WIDTH = 120;
+const MAX_RECT_WIDTH = 400;
+const MIN_RECT_HEIGHT = 60;
+const MAX_RECT_HEIGHT = 220;
+const RECT_CORNER_RADIUS = 8;
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(value, max));
+
+// Seats for a rectangular table are spread along its four edges,
+// proportional to each edge's length (so a long banquet table gets most
+// of its seats on the long sides), evenly spaced within each edge and
+// kept clear of the corners, then pushed outward by chairRadius+padding
+// — mirroring how round tables place seats at radius+chairRadius+padding
+// from center.
+const computeRectangleChairPositions = (
+  width: number,
+  height: number,
+  capacity: number,
+  chairRadius: number,
+  padding: number,
+) => {
+  const halfW = width / 2;
+  const halfH = height / 2;
+  const offset = chairRadius + padding;
+  const cornerMargin = chairRadius * 1.5;
+  const usableHorizontal = Math.max(width - cornerMargin * 2, chairRadius);
+  const usableVertical = Math.max(height - cornerMargin * 2, chairRadius);
+
+  const sides = [
+    { key: "top" as const, length: usableHorizontal },
+    { key: "right" as const, length: usableVertical },
+    { key: "bottom" as const, length: usableHorizontal },
+    { key: "left" as const, length: usableVertical },
+  ];
+  const totalLength = sides.reduce((sum, s) => sum + s.length, 0) || 1;
+
+  // Largest-remainder allocation: proportional seat counts per side that
+  // always sum to exactly `capacity`.
+  const raw = sides.map((s) => (s.length / totalLength) * capacity);
+  const counts = raw.map((n) => Math.floor(n));
+  let remaining = capacity - counts.reduce((a, b) => a + b, 0);
+  const byRemainder = raw
+    .map((n, i) => ({ i, frac: n - counts[i] }))
+    .sort((a, b) => b.frac - a.frac);
+  for (let k = 0; k < remaining && byRemainder.length > 0; k++) {
+    counts[byRemainder[k % byRemainder.length].i] += 1;
+  }
+
+  const positions: { x: number; y: number; angle: number }[] = [];
+  sides.forEach((side, sideIndex) => {
+    const count = counts[sideIndex];
+    for (let i = 0; i < count; i++) {
+      const t = count > 1 ? (i + 0.5) / count - 0.5 : 0; // -0.5..0.5 along the edge
+      const along = t * side.length;
+      switch (side.key) {
+        case "top":
+          positions.push({ x: along, y: -halfH - offset, angle: -Math.PI / 2 });
+          break;
+        case "right":
+          positions.push({ x: halfW + offset, y: along, angle: 0 });
+          break;
+        case "bottom":
+          positions.push({ x: along, y: halfH + offset, angle: Math.PI / 2 });
+          break;
+        case "left":
+          positions.push({ x: -halfW - offset, y: along, angle: Math.PI });
+          break;
+      }
+    }
+  });
+  return positions;
+};
 
 // Colors for light and dark mode — light mirrors the wedding site's Ticket
 // Show palette; dark mirrors the site's own dark/RSVP section.
@@ -107,7 +180,11 @@ const TableCircleContent: React.FC<{
   const [isTableHovered, setIsTableHovered] = useState(false); // <-- New state for table hover
 
   // Choose colors based on theme
-  const COLORS = LIGHT_COLORS;
+  const COLORS = theme === "dark" ? DARK_COLORS : LIGHT_COLORS;
+
+  const isRectangle = shape.shape === "rectangle";
+  const rectWidth = shape.width ?? shape.radius * 2;
+  const rectHeight = shape.height ?? shape.radius * 2;
 
   // Draggability depends on shape prop, not panning, AND edit mode
   const isDraggable = shape.draggable !== false && !isPanning && editMode;
@@ -131,6 +208,15 @@ const TableCircleContent: React.FC<{
 
   // Chair position calculation
   const chairPositions = useMemo(() => {
+    if (isRectangle) {
+      return computeRectangleChairPositions(
+        rectWidth,
+        rectHeight,
+        shape.capacity,
+        CHAIR_RADIUS,
+        PADDING,
+      );
+    }
     const positions = [];
     const angleStep = (2 * Math.PI) / shape.capacity;
     const distance = shape.radius + CHAIR_RADIUS + PADDING;
@@ -143,7 +229,7 @@ const TableCircleContent: React.FC<{
       });
     }
     return positions;
-  }, [shape.capacity, shape.radius]);
+  }, [shape.capacity, shape.radius, isRectangle, rectWidth, rectHeight]);
 
   // Guest lookup map
   const guestMap = useMemo(() => {
@@ -207,12 +293,33 @@ const TableCircleContent: React.FC<{
 
   const handleTransformEnd = (e: Konva.KonvaEventObject<Event>) => {
     // Transformation implies editing
-    if (!editMode) return; 
+    if (!editMode) return;
     const node = shapeRef.current;
     if (!node) return;
-    const scale = (node.scaleX() + node.scaleY()) / 2;
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
     node.scaleX(1);
     node.scaleY(1);
+
+    if (isRectangle) {
+      setShape((prev) => {
+        const prevWidth = prev.width ?? prev.radius * 2;
+        const prevHeight = prev.height ?? prev.radius * 2;
+        const newWidth = clamp(prevWidth * scaleX, MIN_RECT_WIDTH, MAX_RECT_WIDTH);
+        const newHeight = clamp(prevHeight * scaleY, MIN_RECT_HEIGHT, MAX_RECT_HEIGHT);
+        return {
+          ...prev,
+          x: node.x(),
+          y: node.y(),
+          width: newWidth,
+          height: newHeight,
+          radius: newWidth / 2, // kept in sync for older code paths that assume a radius
+        };
+      });
+      return;
+    }
+
+    const scale = (scaleX + scaleY) / 2;
     setShape((prev) => {
       const newRadius = prev.radius * scale;
       const clampedRadius = Math.max(
@@ -307,27 +414,54 @@ const TableCircleContent: React.FC<{
           if (stage) stage.container().style.cursor = "default";
         }}
       >
-        {/* Main Circle - Table */}
-        <Circle
-          radius={shape.radius}
-          fill={COLORS.tableFill}
-          stroke={
-            shape.id === currentlyHoveredTableId
-              ? COLORS.highlightedTableStroke
-              : COLORS.tableStroke
-          }
-          strokeWidth={
-            shape.id === currentlyHoveredTableId
-              ? COLORS.highlightedTableStrokeWidth
-              : 2
-          }
-          shadowBlur={isSelected ? 12 : 6}
-          shadowColor={COLORS.shadowColor}
-          shadowOpacity={isSelected ? 0.4 : 0.2}
-          shadowOffset={{ x: 2, y: 2 }}
-          perfectDrawEnabled={false}
-          listening={true}
-        />
+        {/* Main shape - Table */}
+        {isRectangle ? (
+          <Rect
+            x={-rectWidth / 2}
+            y={-rectHeight / 2}
+            width={rectWidth}
+            height={rectHeight}
+            cornerRadius={RECT_CORNER_RADIUS}
+            fill={COLORS.tableFill}
+            stroke={
+              shape.id === currentlyHoveredTableId
+                ? COLORS.highlightedTableStroke
+                : COLORS.tableStroke
+            }
+            strokeWidth={
+              shape.id === currentlyHoveredTableId
+                ? COLORS.highlightedTableStrokeWidth
+                : 2
+            }
+            shadowBlur={isSelected ? 12 : 6}
+            shadowColor={COLORS.shadowColor}
+            shadowOpacity={isSelected ? 0.4 : 0.2}
+            shadowOffset={{ x: 2, y: 2 }}
+            perfectDrawEnabled={false}
+            listening={true}
+          />
+        ) : (
+          <Circle
+            radius={shape.radius}
+            fill={COLORS.tableFill}
+            stroke={
+              shape.id === currentlyHoveredTableId
+                ? COLORS.highlightedTableStroke
+                : COLORS.tableStroke
+            }
+            strokeWidth={
+              shape.id === currentlyHoveredTableId
+                ? COLORS.highlightedTableStrokeWidth
+                : 2
+            }
+            shadowBlur={isSelected ? 12 : 6}
+            shadowColor={COLORS.shadowColor}
+            shadowOpacity={isSelected ? 0.4 : 0.2}
+            shadowOffset={{ x: 2, y: 2 }}
+            perfectDrawEnabled={false}
+            listening={true}
+          />
+        )}
 
         {/* Table Number - Improved contrast and visibility */}
         <Text
@@ -338,8 +472,8 @@ const TableCircleContent: React.FC<{
           fontStyle="bold"
           align="center"
           verticalAlign="middle"
-          width={shape.radius * 2}
-          offsetX={shape.radius}
+          width={isRectangle ? rectWidth : shape.radius * 2}
+          offsetX={isRectangle ? rectWidth / 2 : shape.radius}
           offsetY={FONT_SIZE_LARGE + PADDING}
           listening={false}
           perfectDrawEnabled={false}
@@ -354,8 +488,8 @@ const TableCircleContent: React.FC<{
           fill={COLORS.tableTextSecondary}
           align="center"
           verticalAlign="middle"
-          width={shape.radius * 2}
-          offsetX={shape.radius}
+          width={isRectangle ? rectWidth : shape.radius * 2}
+          offsetX={isRectangle ? rectWidth / 2 : shape.radius}
           offsetY={0}
           listening={false}
           perfectDrawEnabled={false}
@@ -512,17 +646,36 @@ const TableCircleContent: React.FC<{
       {isSelected && editMode && (
         <Transformer
           ref={trRef}
-          boundBoxFunc={(oldBox, newBox) => {
-            const newRadius = Math.max(newBox.width, newBox.height) / 2;
-            if (newRadius < 10) return oldBox;
-            return { ...oldBox, width: newRadius * 2, height: newRadius * 2 };
-          }}
-          enabledAnchors={[
-            "top-left",
-            "top-right",
-            "bottom-left",
-            "bottom-right",
-          ]}
+          boundBoxFunc={
+            isRectangle
+              ? (oldBox, newBox) => {
+                  if (newBox.width < 10 || newBox.height < 10) return oldBox;
+                  return {
+                    ...newBox,
+                    width: clamp(newBox.width, MIN_RECT_WIDTH, MAX_RECT_WIDTH),
+                    height: clamp(newBox.height, MIN_RECT_HEIGHT, MAX_RECT_HEIGHT),
+                  };
+                }
+              : (oldBox, newBox) => {
+                  const newRadius = Math.max(newBox.width, newBox.height) / 2;
+                  if (newRadius < 10) return oldBox;
+                  return { ...oldBox, width: newRadius * 2, height: newRadius * 2 };
+                }
+          }
+          enabledAnchors={
+            isRectangle
+              ? [
+                  "top-left",
+                  "top-center",
+                  "top-right",
+                  "middle-left",
+                  "middle-right",
+                  "bottom-left",
+                  "bottom-center",
+                  "bottom-right",
+                ]
+              : ["top-left", "top-right", "bottom-left", "bottom-right"]
+          }
           rotateEnabled={false}
           borderStroke={COLORS.tableStroke}
           anchorFill={COLORS.tableFill}
