@@ -17,7 +17,6 @@ import { Guest, Table } from "../types/seatingChart";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
-  UserCircle,
   Users,
   Coffee,
   User2,
@@ -29,16 +28,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import {
-  DndContext,
-  DragOverlay,
-  closestCenter,
-  type DragStartEvent,
-  type DragEndEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
 import { DroppableTableSection } from "./DroppableTableSection";
 import { ScrollIndicator } from "./ScrollIndicator";
 import { fetchAcceptedGuestParties } from "@/lib/api/guestConnector";
@@ -49,6 +38,11 @@ interface SidebarProps {
   tables: Table[];
   isAdmin: boolean;
   isInSheet?: boolean;
+  // Drag-and-drop now spans both the sidebar and the canvas (a guest can
+  // be dropped directly onto a specific chair), so the DndContext/drag
+  // state lives in SeatingChartApp — this is just the one piece Sidebar
+  // still needs to render the "table is full" flash.
+  flashErrorTableId: string | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -56,6 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   tables,
   isAdmin,
   isInSheet,
+  flashErrorTableId,
 }) => {
   const hoveredGuestId = useAtomValue(hoveredGuestIdAtom);
   const setHoveredGuestId = useSetAtom(hoveredGuestIdAtom);
@@ -67,10 +62,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {},
   );
   const [isSyncingGuests, setIsSyncingGuests] = useState(false);
-  const [activeDragData, setActiveDragData] = useState<Guest | null>(null);
-  const [flashErrorTableId, setFlashErrorTableId] = useState<string | null>(
-    null,
-  );
   const { toast } = useToast();
   const [showUnassignedInput, setShowUnassignedInput] = useState(false);
 
@@ -79,15 +70,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [showScrollIndicator, setShowScrollIndicator] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const pointerSensor = useSensor(PointerSensor, {
-    activationConstraint: {
-      delay: 150,
-      tolerance: 5,
-    },
-  });
-
-  const sensors = useSensors(pointerSensor);
 
   const handleGuestMouseEnter = (guestId: string) => {
     if (isDragging) return;
@@ -247,68 +229,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const handleDragStart = (event: DragStartEvent) => {
-    const { active } = event;
-    const draggedGuest = guests.find((g) => g.id === active.id);
-    setActiveDragData(draggedGuest || null);
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveDragData(null);
-    if (over && active.id !== over.id) {
-      const guestId = active.id as string;
-      const targetTableId = over.id as string;
-      const currentGuest = guests.find((g) => g.id === guestId);
-      if (!currentGuest) return;
-      if (
-        currentGuest.tableId === targetTableId &&
-        targetTableId !== "unassigned"
-      )
-        return;
-
-      if (targetTableId === "unassigned") {
-        setGlobalGuests((prev) =>
-          prev.map((g) =>
-            g.id === guestId ? { ...g, tableId: "", chairIndex: null } : g,
-          ),
-        );
-      } else {
-        const targetTable = tables.find((t) => t.id === targetTableId);
-        if (!targetTable) return;
-        const guestsAtTargetTable = guests.filter(
-          (g) => g.tableId === targetTableId,
-        );
-        const nextSeatIndex = findNextAvailableSeat(
-          guestsAtTargetTable,
-          targetTable.capacity,
-        );
-        if (nextSeatIndex !== null) {
-          setGlobalGuests((prev) =>
-            prev.map((g) =>
-              g.id === guestId
-                ? { ...g, tableId: targetTableId, chairIndex: nextSeatIndex }
-                : g,
-            ),
-          );
-        } else {
-          console.warn(
-            `Table ${targetTable.number} (${targetTableId}) is full. Cannot add guest ${guestId}.`,
-          );
-          toast({
-            title: "Table Full",
-            description: `Table ${targetTable.number} has no available seats.`,
-            variant: "destructive",
-            duration: 2000,
-          });
-          setFlashErrorTableId(targetTableId);
-          setTimeout(() => {
-            setFlashErrorTableId(null);
-          }, 1000);
-        }
-      }
-    }
-  };
+  // Drag-and-drop (both onto a sidebar table section, and directly onto a
+  // specific chair on the canvas) is handled by SeatingChartApp now, which
+  // owns the shared DndContext spanning both regions.
 
   const handleRemoveGuest = (guestIdToRemove: string) => {
     if (!editMode) {
@@ -489,62 +412,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
       ) : (
-        <DndContext
-          sensors={sensors}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          collisionDetection={closestCenter}
+        <ScrollArea
+          ref={scrollAreaContainerRef}
+          className="relative flex-1 p-5 z-10"
         >
-          <ScrollArea
-            ref={scrollAreaContainerRef}
-            className="relative flex-1 p-5 z-10"
-          >
-            <div ref={scrollContentWrapperRef} className="space-y-4">
-              {Object.entries(groupedGuests).map(([tableId, groupData]) => {
-                const isUnassigned = groupData.tableNumber === null;
-                return (
-                  <DroppableTableSection
-                    key={tableId}
-                    tableId={tableId}
-                    groupData={groupData}
-                    isUnassigned={isUnassigned}
-                    hoveredGuestId={hoveredGuestId}
-                    newGuestName={newGuestNames[tableId] || ""}
-                    onNewGuestNameChange={(id, value) =>
-                      setNewGuestNames((prev) => ({ ...prev, [id]: value }))
-                    }
-                    onNewGuestSubmit={(e, id) => handleAddGuestKeyDown(e, id)}
-                    onTableMouseEnter={handleTableMouseEnter}
-                    onTableMouseLeave={handleTableMouseLeave}
-                    onGuestMouseEnter={handleGuestMouseEnter}
-                    onGuestMouseLeave={handleGuestMouseLeave}
-                    onGuestRemove={handleRemoveGuest}
-                    isFlashingError={tableId === flashErrorTableId}
-                    isInputVisible={
-                      isUnassigned ? showUnassignedInput : undefined
-                    }
-                    onToggleInput={
-                      isUnassigned
-                        ? () => setShowUnassignedInput((prev) => !prev)
-                        : undefined
-                    }
-                  />
-                );
-              })}
-            </div>
-          </ScrollArea>
-
-          <DragOverlay>
-            {activeDragData ? (
-              <div className="bg-sidebar p-3 rounded-md shadow-xl border border-primary/50 flex items-center opacity-90 cursor-grabbing">
-                <UserCircle size={18} className="mr-2 text-primary shrink-0" />
-                <span className="font-medium text-sidebar-primary truncate">
-                  {activeDragData.fullName}
-                </span>
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+          <div ref={scrollContentWrapperRef} className="space-y-4">
+            {Object.entries(groupedGuests).map(([tableId, groupData]) => {
+              const isUnassigned = groupData.tableNumber === null;
+              return (
+                <DroppableTableSection
+                  key={tableId}
+                  tableId={tableId}
+                  groupData={groupData}
+                  isUnassigned={isUnassigned}
+                  hoveredGuestId={hoveredGuestId}
+                  newGuestName={newGuestNames[tableId] || ""}
+                  onNewGuestNameChange={(id, value) =>
+                    setNewGuestNames((prev) => ({ ...prev, [id]: value }))
+                  }
+                  onNewGuestSubmit={(e, id) => handleAddGuestKeyDown(e, id)}
+                  onTableMouseEnter={handleTableMouseEnter}
+                  onTableMouseLeave={handleTableMouseLeave}
+                  onGuestMouseEnter={handleGuestMouseEnter}
+                  onGuestMouseLeave={handleGuestMouseLeave}
+                  onGuestRemove={handleRemoveGuest}
+                  isFlashingError={tableId === flashErrorTableId}
+                  isInputVisible={
+                    isUnassigned ? showUnassignedInput : undefined
+                  }
+                  onToggleInput={
+                    isUnassigned
+                      ? () => setShowUnassignedInput((prev) => !prev)
+                      : undefined
+                  }
+                />
+              );
+            })}
+          </div>
+        </ScrollArea>
       )}
       <ScrollIndicator isVisible={showScrollIndicator && !isScrolling} />
     </div>

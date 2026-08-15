@@ -246,6 +246,12 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
       ref={combinedRefCallback}
       guestId={guestId} // Keep guestId attribute for direct hover logic if needed
       name={`chair-${tableId}-${chairIndex}`}
+      // Explicit attrs (not just parsed out of `name`, which can't be split
+      // reliably since tableId itself contains hyphens) — read back by the
+      // canvas drop-zone's hit-test in SeatingChartApp to resolve exactly
+      // which chair a dragged guest was dropped on.
+      tableId={tableId}
+      chairIndex={chairIndex}
       // Add radius attribute for positioning calculations
       radius={radius}
     >
