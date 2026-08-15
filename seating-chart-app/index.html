@@ -9,11 +9,28 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Same type family as the main wedding site (styles.css --sans/--serif/--disp) -->
+    <!--
+      Same type family as the main wedding site (styles.css --sans/--serif/--disp).
+      Loaded non-render-blocking: a plain `rel="stylesheet"` link here
+      stalls first paint on this one external request, and if it's slow or
+      outright unreachable (a flaky connection, an ad blocker — many block
+      fonts.googleapis.com by default) the whole app sits stuck instead of
+      just rendering with its fallback font stack. The "media=print, then
+      swap to all onload" trick loads it without blocking; <noscript>
+      covers the no-JS case.
+    -->
     <link
       href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=DM+Serif+Display:ital@0;1&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=DM+Serif+Display:ital@0;1&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
   </head>
 
   <body>

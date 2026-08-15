@@ -14,7 +14,9 @@ import {
   selectedShapeIdAtom,
   eventTitleAtom,
   editModeAtom,
+  groupDropPreviewAtom,
 } from "@/lib/atoms";
+import { findTableUnderPoint, computeGroupSeatPlan, type StagePoint } from "@/lib/groupSeating";
 import { Guest, Table, VenueElement } from "../types/seatingChart";
 import { GuestAssignmentModal } from "./GuestAssignmentModal";
 import { RenameElementModal } from "./RenameElementModal";
@@ -40,13 +42,22 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { UserCircle } from "lucide-react";
+import { UserCircle, UsersRound } from "lucide-react";
 
 // The one droppable id for "anywhere on the canvas" — landing here means
 // resolving the exact chair from the drop point via Konva's own hit
 // detection, rather than dnd-kit tracking a droppable per chair (there are
 // no DOM nodes for canvas-rendered chairs to attach one to).
 const CANVAS_DROP_ZONE_ID = "canvas-drop-zone";
+
+// How far outside a table's own body the pointer can be while still
+// counting as "hovering that table" for a group drop — wide enough to
+// cover the ring of chairs sitting just outside the table edge.
+const GROUP_DROP_HIT_MARGIN = 40;
+
+type DragPayload =
+  | { kind: "guest"; guest: Guest }
+  | { kind: "group"; guests: Guest[]; groupLabel: string };
 
 // Placeholder for useMediaQuery hook
 const useMediaQuery = (query: string) => {
@@ -147,10 +158,12 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
   // next available seat) or directly onto a specific chair on the canvas
   // (new). One shared DndContext has to span both regions since a drag
   // must start and end within the same context — see the JSX below.
-  const [activeDragGuest, setActiveDragGuest] = useState<Guest | null>(null);
+  const [activeDragPayload, setActiveDragPayload] =
+    useState<DragPayload | null>(null);
   const [flashErrorTableId, setFlashErrorTableId] = useState<string | null>(
     null,
   );
+  const setGroupDropPreview = useSetAtom(groupDropPreviewAtom);
 
   const pointerSensor = useSensor(PointerSensor, {
     activationConstraint: { delay: 150, tolerance: 5 },
@@ -173,23 +186,6 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
   );
   const [isDragActive, setIsDragActive] = useState(false);
   const [isPointerOverCanvas, setIsPointerOverCanvas] = useState(false);
-
-  useEffect(() => {
-    const handlePointerMove = (event: PointerEvent) => {
-      lastPointerPosRef.current = { x: event.clientX, y: event.clientY };
-      if (!isDragActive || !canvasContainerRef.current) return;
-      const rect = canvasContainerRef.current.getBoundingClientRect();
-      setIsPointerOverCanvas(
-        event.clientX >= rect.left &&
-          event.clientX <= rect.right &&
-          event.clientY >= rect.top &&
-          event.clientY <= rect.bottom,
-      );
-    };
-    window.addEventListener("pointermove", handlePointerMove, true);
-    return () =>
-      window.removeEventListener("pointermove", handlePointerMove, true);
-  }, [isDragActive]);
 
   const { setNodeRef: setCanvasDropRef } = useDroppable({
     id: CANVAS_DROP_ZONE_ID,
@@ -220,8 +216,26 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
-      const draggedGuest = guestsValue.find((g) => g.id === event.active.id);
-      setActiveDragGuest(draggedGuest ?? null);
+      const data = event.active.data.current as
+        | { kind: "guest"; guest: Guest }
+        | { kind: "group"; guests: Guest[]; groupLabel: string }
+        | undefined;
+      if (data?.kind === "group") {
+        setActiveDragPayload({
+          kind: "group",
+          guests: data.guests,
+          groupLabel: data.groupLabel,
+        });
+      } else if (data?.kind === "guest") {
+        setActiveDragPayload({ kind: "guest", guest: data.guest });
+      } else {
+        // Fallback in case some drag source hasn't been updated to the
+        // { kind, ... } data shape yet.
+        const draggedGuest = guestsValue.find((g) => g.id === event.active.id);
+        setActiveDragPayload(
+          draggedGuest ? { kind: "guest", guest: draggedGuest } : null,
+        );
+      }
       setIsDragActive(true);
       setIsPointerOverCanvas(false);
     },
@@ -252,16 +266,217 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     [],
   );
 
+  // Resolve a canvas drop point (viewport/client coordinates) to a point in
+  // the stage's own logical coordinate space — the same space table.x/y
+  // live in — by inverting the stage's absolute transform (pan + zoom).
+  // Used for group drops, which need to know *where inside the table* the
+  // group landed rather than just which chair, so it can be routed through
+  // computeGroupSeatPlan.
+  const resolveStagePoint = useCallback(
+    (clientX: number, clientY: number): StagePoint | null => {
+      const stage = Konva.stages[Konva.stages.length - 1];
+      if (!stage) return null;
+      const stageBox = stage.container().getBoundingClientRect();
+      const pos = { x: clientX - stageBox.left, y: clientY - stageBox.top };
+      return stage.getAbsoluteTransform().copy().invert().point(pos);
+    },
+    [],
+  );
+
+  // Computes (or clears) the live group-drop preview for a given pointer
+  // position — pulled out of the pointermove effect below so it can run on
+  // every raw pointer move while a group drag is over the canvas, not just
+  // when isPointerOverCanvas flips. No-ops (and clears any stale preview)
+  // for anything that isn't an active group drag.
+  const updateGroupDropPreview = useCallback(
+    (clientX: number, clientY: number) => {
+      if (activeDragPayload?.kind !== "group") return;
+      const stagePoint = resolveStagePoint(clientX, clientY);
+      const tables = baseShapesValue.filter(
+        (s): s is Table => s.type === "table",
+      );
+      const hit = stagePoint
+        ? findTableUnderPoint(tables, stagePoint, GROUP_DROP_HIT_MARGIN)
+        : null;
+      if (!hit) {
+        setGroupDropPreview(null);
+        return;
+      }
+      const occupied = new Set(
+        guestsValue
+          .filter(
+            (g) =>
+              g.tableId === hit.table.id && typeof g.chairIndex === "number",
+          )
+          .map((g) => g.chairIndex as number),
+      );
+      const plan = computeGroupSeatPlan(
+        hit.table,
+        occupied,
+        activeDragPayload.guests.length,
+        hit.localX,
+        hit.localY,
+      );
+      setGroupDropPreview(
+        plan ? { tableId: hit.table.id, chairIndexes: plan } : null,
+      );
+    },
+    [activeDragPayload, baseShapesValue, guestsValue, resolveStagePoint, setGroupDropPreview],
+  );
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      lastPointerPosRef.current = { x: event.clientX, y: event.clientY };
+      if (!isDragActive || !canvasContainerRef.current) return;
+      const rect = canvasContainerRef.current.getBoundingClientRect();
+      const overCanvas =
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom;
+      setIsPointerOverCanvas(overCanvas);
+      if (overCanvas) {
+        updateGroupDropPreview(event.clientX, event.clientY);
+      } else if (activeDragPayload?.kind === "group") {
+        setGroupDropPreview(null);
+      }
+    };
+    window.addEventListener("pointermove", handlePointerMove, true);
+    return () =>
+      window.removeEventListener("pointermove", handlePointerMove, true);
+  }, [isDragActive, activeDragPayload, updateGroupDropPreview, setGroupDropPreview]);
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
-      const draggedGuest = activeDragGuest;
+      const payload = activeDragPayload;
       const pointerPos = lastPointerPosRef.current;
       const wasOverCanvas = isPointerOverCanvas;
-      setActiveDragGuest(null);
+      setActiveDragPayload(null);
       setIsDragActive(false);
       setIsPointerOverCanvas(false);
-      if (!draggedGuest) return;
+      setGroupDropPreview(null);
+      if (!payload) return;
+
+      // --- Whole-party (group) drop ---------------------------------
+      // One-time placement convenience only: every guest gets an ordinary,
+      // independent tableId/chairIndex below, exactly as if seated one at
+      // a time. No new field or relationship links them after this.
+      if (payload.kind === "group") {
+        const groupGuestIds = new Set(payload.guests.map((g) => g.id));
+
+        if (wasOverCanvas && pointerPos) {
+          const stagePoint = resolveStagePoint(pointerPos.x, pointerPos.y);
+          const tables = baseShapesValue.filter(
+            (s): s is Table => s.type === "table",
+          );
+          const hit = stagePoint
+            ? findTableUnderPoint(tables, stagePoint, GROUP_DROP_HIT_MARGIN)
+            : null;
+          if (!hit) {
+            toast({
+              title: "Drop On A Table",
+              description:
+                "Drag the party onto a table to seat them together.",
+              variant: "destructive",
+            });
+            return;
+          }
+          const occupied = new Set(
+            guestsValue
+              .filter(
+                (g) =>
+                  g.tableId === hit.table.id &&
+                  typeof g.chairIndex === "number",
+              )
+              .map((g) => g.chairIndex as number),
+          );
+          const plan = computeGroupSeatPlan(
+            hit.table,
+            occupied,
+            payload.guests.length,
+            hit.localX,
+            hit.localY,
+          );
+          if (!plan) {
+            toast({
+              title: "Not Enough Seats",
+              description: `Table ${hit.table.number} doesn't have ${payload.guests.length} open seats together.`,
+              variant: "destructive",
+              duration: 2500,
+            });
+            setFlashErrorTableId(hit.table.id);
+            setTimeout(() => setFlashErrorTableId(null), 1000);
+            return;
+          }
+          setGuestsValue((prev) =>
+            prev.map((g) => {
+              const idx = payload.guests.findIndex((pg) => pg.id === g.id);
+              return idx === -1
+                ? g
+                : { ...g, tableId: hit.table.id, chairIndex: plan[idx] };
+            }),
+          );
+          return;
+        }
+
+        if (!over) return;
+        const targetTableId = over.id as string;
+
+        if (targetTableId === "unassigned") {
+          setGuestsValue((prev) =>
+            prev.map((g) =>
+              groupGuestIds.has(g.id)
+                ? { ...g, tableId: "", chairIndex: null }
+                : g,
+            ),
+          );
+          return;
+        }
+
+        const targetTable = baseShapesValue.find(
+          (s): s is Table => s.type === "table" && s.id === targetTableId,
+        );
+        if (!targetTable) return;
+
+        // Same greedy sequential fill single-guest sidebar drops use,
+        // generalized to seat all N guests in one pass.
+        const guestsAtTargetTable = guestsValue.filter(
+          (g) => g.tableId === targetTableId,
+        );
+        const occupied = new Set(
+          guestsAtTargetTable
+            .map((g) => g.chairIndex)
+            .filter((i): i is number => typeof i === "number"),
+        );
+        const openSeats: number[] = [];
+        for (let i = 0; i < targetTable.capacity; i++) {
+          if (!occupied.has(i)) openSeats.push(i);
+        }
+        if (openSeats.length < payload.guests.length) {
+          toast({
+            title: "Table Full",
+            description: `Table ${targetTable.number} only has ${openSeats.length} open seat${openSeats.length === 1 ? "" : "s"} — the party of ${payload.guests.length} won't all fit.`,
+            variant: "destructive",
+            duration: 2500,
+          });
+          setFlashErrorTableId(targetTableId);
+          setTimeout(() => setFlashErrorTableId(null), 1000);
+          return;
+        }
+        setGuestsValue((prev) =>
+          prev.map((g) => {
+            const idx = payload.guests.findIndex((pg) => pg.id === g.id);
+            return idx === -1
+              ? g
+              : { ...g, tableId: targetTableId, chairIndex: openSeats[idx] };
+          }),
+        );
+        return;
+      }
+
+      // --- Single-guest drop (existing behavior) ---------------------
+      const draggedGuest = payload.guest;
       const guestId = active.id as string;
 
       // Resolved from our own tracked pointer position, not dnd-kit's
@@ -347,12 +562,14 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
       );
     },
     [
-      activeDragGuest,
+      activeDragPayload,
       baseShapesValue,
       findNextAvailableSeat,
       guestsValue,
       isPointerOverCanvas,
       resolveChairAtPoint,
+      resolveStagePoint,
+      setGroupDropPreview,
       setGuestsValue,
       toast,
     ],
@@ -657,11 +874,18 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         </div>
 
         <DragOverlay>
-          {activeDragGuest ? (
+          {activeDragPayload?.kind === "guest" ? (
             <div className="bg-sidebar p-3 rounded-md shadow-xl border border-primary/50 flex items-center opacity-90 cursor-grabbing">
               <UserCircle size={18} className="mr-2 text-primary shrink-0" />
               <span className="font-medium text-sidebar-primary truncate">
-                {activeDragGuest.fullName}
+                {activeDragPayload.guest.fullName}
+              </span>
+            </div>
+          ) : activeDragPayload?.kind === "group" ? (
+            <div className="bg-sidebar p-3 rounded-md shadow-xl border border-primary/50 flex items-center opacity-90 cursor-grabbing">
+              <UsersRound size={18} className="mr-2 text-primary shrink-0" />
+              <span className="font-medium text-sidebar-primary truncate">
+                {activeDragPayload.groupLabel} · {activeDragPayload.guests.length} guests
               </span>
             </div>
           ) : null}
