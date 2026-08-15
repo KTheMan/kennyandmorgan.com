@@ -50,3 +50,7 @@ backup/
 
 # Deno build artifacts
 deno.lock
+
+# Local Supabase CLI state (created by `supabase start`/`supabase db` commands)
+supabase/.branches/
+supabase/.temp/

@@ -1,0 +1,344 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light Mode — matches the main site's "Ticket Show" design system
+       (styles.css :root): cream background, near-black ink text, olive accent. */
+    --background: 48 50% 96%; /* #FAF8F0 --bg */
+    --foreground: 84 17% 11%; /* #1E2218 --ink */
+
+    --card: 0 0% 100%; /* #FFFFFF --surface */
+    --card-foreground: 84 17% 11%; /* #1E2218 --ink */
+
+    --popover: 0 0% 100%; /* #FFFFFF --surface */
+    --popover-foreground: 84 17% 11%; /* #1E2218 --ink */
+
+    --primary: 84 17% 11%; /* #1E2218 --ink, same as the site's .btn-primary */
+    --primary-foreground: 48 50% 96%; /* #FAF8F0 --bg */
+
+    --secondary: 84 35% 17%; /* #2E3A1C --deep, the site's .btn-primary:hover */
+    --secondary-foreground: 48 50% 96%; /* #FAF8F0 --bg */
+
+    --muted: 45 33% 93%; /* #F3F0E7 --light-gray */
+    --muted-foreground: 93 13% 33%; /* #54604A --inkSoft */
+
+    --accent: 76 66% 36%; /* #7A9A1F --accent (olive/lime) */
+    --accent-foreground: 48 50% 96%; /* #FAF8F0 --bg */
+
+    --destructive: 0 66% 47%; /* #C62828 site's error red */
+    --destructive-foreground: 48 50% 96%; /* #FAF8F0 --bg */
+
+    --border: 53 11% 83%; /* warm sand — ink at low opacity over --bg */
+    --input: 53 11% 83%;
+    --ring: 76 66% 36%; /* #7A9A1F --accent */
+
+    --radius: 0.25rem; /* flatter, closer to the site's ticket/ledger corners */
+
+    /* Sidebar specific variables */
+    --sidebar-background: 45 30% 90%;
+    --sidebar-foreground: 84 17% 11%; /* #1E2218 --ink */
+    --sidebar-primary: 76 66% 36%; /* #7A9A1F --accent */
+    --sidebar-primary-foreground: 48 50% 96%; /* #FAF8F0 --bg */
+    --sidebar-accent: 84 35% 17%; /* #2E3A1C --deep */
+    --sidebar-accent-foreground: 48 50% 96%; /* #FAF8F0 --bg */
+    --sidebar-border: 53 11% 75%;
+    --sidebar-ring: 76 66% 36%; /* #7A9A1F --accent */
+
+    /* Table and Chair specific variables - Light Mode */
+    --table-fill: 45 33% 93%; /* #F3F0E7 --light-gray */
+    --table-stroke: 84 17% 11%; /* #1E2218 --ink */
+    --table-text-primary: 84 17% 11%; /* #1E2218 --ink */
+    --table-text-secondary: 93 13% 33%; /* #54604A --inkSoft */
+
+    --button-minus-fill: 0 40% 94%;
+    --button-minus-stroke: 0 55% 45%;
+    --button-minus-text: 0 55% 28%;
+
+    --button-plus-fill: 76 35% 91%;
+    --button-plus-stroke: 76 55% 35%;
+    --button-plus-text: 84 35% 17%; /* #2E3A1C --deep */
+
+    /* Chair states - light mode */
+    --chair-assigned-fill: 76 66% 36%; /* #7A9A1F --accent */
+    --chair-assigned-stroke: 84 35% 17%; /* #2E3A1C --deep */
+    --chair-unassigned-fill: 45 33% 93%; /* #F3F0E7 --light-gray */
+    --chair-unassigned-stroke: 93 13% 33%; /* #54604A --inkSoft */
+
+    /* Venue outline */
+    --venue-outline-color: 84 17% 11%; /* #1E2218 --ink */
+    --venue-outline-width: 2px;
+  }
+
+  .dark {
+    /* Dark Mode — mirrors the main site's own dark section (styles.css
+       #rsvp / --heroBg, --heroInk, --heroAccent, --heroMuted), so toggling
+       dark mode here reads like the site's RSVP page. */
+    --background: 84 35% 17%; /* #2E3A1C --heroBg */
+    --foreground: 48 50% 96%; /* #FAF8F0 --heroInk */
+
+    --card: 84 30% 22%; /* lighter --heroBg, for surfaces */
+    --card-foreground: 48 50% 96%; /* #FAF8F0 --heroInk */
+
+    --popover: 84 30% 22%;
+    --popover-foreground: 48 50% 96%; /* #FAF8F0 --heroInk */
+
+    --primary: 69 65% 60%; /* #C8DC58 --heroAccent */
+    --primary-foreground: 84 35% 15%; /* dark green text on bright lime */
+
+    --secondary: 75 25% 56%; /* #9CAA72 --heroMuted */
+    --secondary-foreground: 84 35% 12%;
+
+    --muted: 84 30% 22%;
+    --muted-foreground: 75 25% 66%; /* lightened --heroMuted for readability */
+
+    --accent: 69 65% 60%; /* #C8DC58 --heroAccent */
+    --accent-foreground: 84 35% 15%;
+
+    --destructive: 0 55% 55%;
+    --destructive-foreground: 48 50% 96%; /* #FAF8F0 --heroInk */
+
+    --border: 75 39% 28%; /* --heroAccent blended into --heroBg */
+    --input: 75 39% 28%;
+    --ring: 69 65% 60%; /* #C8DC58 --heroAccent */
+
+    /* Sidebar specific variables (dark) */
+    --sidebar-background: 84 30% 20%;
+    --sidebar-foreground: 48 50% 96%; /* #FAF8F0 --heroInk */
+    --sidebar-primary: 69 65% 60%; /* #C8DC58 --heroAccent */
+    --sidebar-primary-foreground: 84 35% 15%;
+    --sidebar-accent: 75 25% 56%; /* #9CAA72 --heroMuted */
+    --sidebar-accent-foreground: 84 35% 12%;
+    --sidebar-border: 75 30% 30%;
+    --sidebar-ring: 69 65% 60%; /* #C8DC58 --heroAccent */
+
+    /* Table and Chair specific variables - Dark Mode */
+    --table-fill: 84 27% 23%;
+    --table-stroke: 69 60% 55%; /* --heroAccent, muted */
+    --table-text-primary: 48 50% 96%; /* #FAF8F0 --heroInk */
+    --table-text-secondary: 75 25% 70%; /* lightened --heroMuted */
+
+    --button-minus-fill: 0 30% 25%;
+    --button-minus-stroke: 0 45% 58%;
+    --button-minus-text: 48 50% 94%;
+
+    --button-plus-fill: 84 25% 24%;
+    --button-plus-stroke: 69 55% 55%;
+    --button-plus-text: 48 50% 94%;
+
+    /* Chair states - dark mode */
+    --chair-assigned-fill: 69 65% 60%; /* #C8DC58 --heroAccent pops on deep green */
+    --chair-assigned-stroke: 84 40% 14%;
+    --chair-unassigned-fill: 84 22% 26%;
+    --chair-unassigned-stroke: 75 30% 58%; /* --heroMuted */
+
+    /* Venue outline */
+    --venue-outline-color: 69 65% 60%; /* #C8DC58 --heroAccent */
+    --venue-outline-width: 2.5px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    transition:
+      background-color 0.5s ease,
+      color 0.5s ease;
+    font-family: "Work Sans", "Montserrat", system-ui, sans-serif;
+    line-height: 1.6;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "DM Serif Display", "Playfair Display", Georgia, serif;
+    font-weight: 400;
+    line-height: 1.4;
+  }
+  p,
+  span,
+  div,
+  button,
+  input,
+  select,
+  textarea {
+    font-family: "Work Sans", "Montserrat", system-ui, sans-serif;
+  }
+
+  /* Improved button styling */
+  button {
+    @apply transition-all duration-300 ease-in-out;
+  }
+
+  /* Elegant focus states */
+  :focus-visible {
+    @apply ring-2 ring-ring/70 outline-none;
+  }
+}
+
+/* Textures and Gradients */
+@layer components {
+  /* Paper texture for light mode - more subtle */
+  .texture-paper-light {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    background-blend-mode: overlay;
+    background-size: 150px;
+    opacity: 0.025;
+  }
+
+  /* Paper texture for dark mode - more subtle */
+  .dark .texture-paper-dark {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    background-blend-mode: overlay;
+    background-size: 150px;
+    opacity: 0.02;
+  }
+
+  /* Refined texture for subtle warmth */
+  .texture-elegant {
+    background-image: linear-gradient(
+      90deg,
+      rgba(180, 140, 110, 0.03) 0%,
+      rgba(170, 130, 100, 0.03) 20%,
+      rgba(180, 140, 110, 0.03) 40%,
+      rgba(170, 130, 100, 0.03) 60%,
+      rgba(180, 140, 110, 0.03) 80%,
+      rgba(170, 130, 100, 0.03) 100%
+    );
+    background-size: 50px 100%;
+  }
+
+  .dark .texture-elegant {
+    background-image: linear-gradient(
+      90deg,
+      rgba(100, 110, 120, 0.05) 0%,
+      rgba(90, 100, 110, 0.05) 20%,
+      rgba(100, 110, 120, 0.05) 40%,
+      rgba(90, 100, 110, 0.05) 60%,
+      rgba(100, 110, 120, 0.05) 80%,
+      rgba(90, 100, 110, 0.05) 100%
+    );
+    background-size: 50px 100%;
+  }
+
+  /* Linen texture - more refined */
+  .texture-linen {
+    background-image:
+      linear-gradient(45deg, rgba(0, 0, 0, 0.02) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(0, 0, 0, 0.02) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgba(0, 0, 0, 0.02) 75%),
+      linear-gradient(-45deg, transparent 75%, rgba(0, 0, 0, 0.02) 75%);
+    background-size: 20px 20px;
+    background-position:
+      0 0,
+      0 10px,
+      10px -10px,
+      -10px 0;
+  }
+
+  /* Subtle gradient */
+  .gradient-warm {
+    background-image: linear-gradient(
+      45deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--accent) / 0.1) 100%
+    );
+  }
+
+  .dark .gradient-warm {
+    background-image: linear-gradient(
+      45deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--accent) / 0.1) 100%
+    );
+  }
+
+  /* Book-like card with softer shadows */
+  .card-book {
+    border-radius: 0.75rem;
+    box-shadow:
+      0 3px 6px rgba(0, 0, 0, 0.03),
+      0 5px 10px rgba(0, 0, 0, 0.05),
+      0 0 0 1px rgba(0, 0, 0, 0.02);
+    transition:
+      transform 0.4s ease,
+      box-shadow 0.4s ease;
+  }
+
+  .card-book:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 5px 10px rgba(0, 0, 0, 0.04),
+      0 10px 20px rgba(0, 0, 0, 0.07),
+      0 0 0 1px rgba(0, 0, 0, 0.02);
+  }
+
+  /* Floating element with subtle shadow */
+  .element-float {
+    transition:
+      transform 0.4s ease,
+      box-shadow 0.4s ease;
+  }
+
+  .element-float:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  }
+
+  .dark .element-float:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+
+  /* Button animations */
+  .btn-elegant {
+    @apply transition-all duration-300 ease-in-out transform;
+  }
+
+  .btn-elegant:hover {
+    @apply translate-y-[-1px] shadow-md;
+  }
+
+  .btn-elegant:active {
+    @apply translate-y-[0px] shadow-sm scale-[0.98];
+  }
+
+  /* Soft glow effect for dark mode */
+  .dark .glow-subtle {
+    box-shadow: 0 0 12px rgba(190, 148, 103, 0.15);
+  }
+
+  .dark .glow-subtle:hover {
+    box-shadow: 0 0 18px rgba(190, 148, 103, 0.25);
+  }
+}
+
+/* Enhanced inputs */
+.input-elegant {
+  @apply bg-background/50 border border-border/60 rounded-lg px-4 py-2
+         shadow-inner focus:ring-2 focus:ring-accent/30 focus:border-accent/40
+         transition-all duration-300;
+}
+
+/* Custom scrollbar for elegance */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-background/50 rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-muted rounded-full hover:bg-muted/80 transition-colors;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  @apply bg-muted/80 hover:bg-muted/60;
+}

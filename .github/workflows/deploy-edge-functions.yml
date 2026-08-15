@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'supabase/functions/**'
+      - '.github/workflows/deploy-edge-functions.yml'
   workflow_dispatch:
 
 jobs:
@@ -39,5 +40,11 @@ jobs:
       - name: Deploy fetch-registry edge function
         run: |
           supabase functions deploy fetch-registry \
+            --project-ref "$SUPABASE_PROJECT_ID" \
+            --no-verify-jwt
+
+      - name: Deploy seating-chart-api edge function
+        run: |
+          supabase functions deploy seating-chart-api \
             --project-ref "$SUPABASE_PROJECT_ID" \
             --no-verify-jwt

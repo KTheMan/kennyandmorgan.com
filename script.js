@@ -471,6 +471,7 @@ function initAdminMenu() {
 
     const adminLinks = [
         { label: 'Admin Console', href: 'admin.html' },
+        { label: 'Seating Chart', href: 'seating-chart/' },
         { label: 'Registry API Docs', href: 'API_README.md', external: true },
         { label: 'Deployment Notes', href: 'DEPLOYMENT.md', external: true }
     ];
