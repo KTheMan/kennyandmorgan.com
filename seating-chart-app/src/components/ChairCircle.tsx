@@ -14,10 +14,12 @@ import {
   hoveredGuestIdAtom,
   isDraggingAtom,
   stageScaleAtom,
-  editModeAtom
+  editModeAtom,
+  baseShapesAtom,
 } from "@/lib/atoms";
-import { Guest } from "../types/seatingChart";
+import { Guest, Table } from "../types/seatingChart";
 import { useTheme } from "@/components/ThemeProvider";
+import { useToast } from "@/components/ui/use-toast";
 
 interface ChairCircleProps {
   tableId: string;
@@ -31,6 +33,10 @@ interface ChairCircleProps {
   // guest in that party would land if dropped right now — purely a live
   // preview, never persisted. Only ever set on empty seats.
   previewOrder?: number | null;
+  // Whether this seat's table has its seating arrangement locked (see
+  // Table.seatingLocked) — blocks both click-to-assign and drag-to-move
+  // for this chair, whether it's occupied or empty.
+  seatingLocked?: boolean;
 }
 
 // Direct color values for light mode — matches the wedding site's Ticket
@@ -80,15 +86,18 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
   guestId,
   registerRef, // Receive the callback function
   previewOrder = null,
+  seatingLocked = false,
 }) => {
   const [, setModalState] = useAtom(modalStateAtom);
-  const [guests] = useAtom(guestsAtom);
+  const [guests, setGuests] = useAtom(guestsAtom);
+  const baseShapes = useAtomValue(baseShapesAtom);
   const currentStageScale = useAtomValue(stageScaleAtom); // Get current stage scale
   const [hoveredGuestId, setHoveredGuestId] = useAtom(hoveredGuestIdAtom); // Read and set
-  const isDragging = useAtomValue(isDraggingAtom); // Read drag state
+  const [isDragging, setIsDragging] = useAtom(isDraggingAtom); // Read/set drag state
   const editMode = useAtomValue(editModeAtom); // Added
   const [isDirectlyHovered, setIsDirectlyHovered] = useState(false);
   const { theme } = useTheme();
+  const { toast } = useToast();
   // Add refs for Konva objects to force updates
   const circleRef = useRef<Konva.Circle>(null);
   const chairGroupNodeRef = useRef<Konva.Group>(null); // Local ref for the main group
@@ -142,7 +151,7 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
   }, [shouldHighlight]);
 
   const handleClick = () => {
-    if (!editMode) return; // Prevent opening modal in view-only mode
+    if (!editMode || seatingLocked) return; // Prevent opening modal in view-only mode or while this table's seating is locked
 
     const uniqueChairId = `${tableId}---${chairIndex}`;
     setModalState({
@@ -167,9 +176,102 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
     if (editMode) {
       const stage = e.target.getStage();
       if (stage) {
-        stage.container().style.cursor = "pointer";
+        stage.container().style.cursor = seatingLocked
+          ? "not-allowed"
+          : guestId
+            ? "grab" // occupied + unlocked: draggable to another seat
+            : "pointer"; // empty: click to assign
       }
     }
+  };
+
+  // Dragging an occupied, unlocked seat moves just this chair (see
+  // draggable on the Group below) — independent of the table's own
+  // position lock, which only governs dragging the table as a whole.
+  // Konva starts the drag on whichever node under the pointer is
+  // draggable, walking up from the event target, so setting it here
+  // takes precedence over the table Group's draggable without any extra
+  // coordination.
+  const handleChairDragStart = (e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true;
+    setIsDragging(true);
+    e.target.moveToTop();
+  };
+
+  // No-op beyond stopping propagation: the table's own onDragMove (grid
+  // snapping) would otherwise fire for this chair too, since Konva drag
+  // events bubble up the node tree by default. This chair doesn't need
+  // grid snapping — its position is reset on drop regardless (see
+  // handleChairDragEnd), free movement in between just looks natural.
+  const handleChairDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true;
+  };
+
+  const handleChairDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true;
+    setIsDragging(false);
+    const node = e.target;
+    const stage = node.getStage();
+    const pointerPos = stage?.getPointerPosition() ?? null;
+
+    // This chair's screen position is derived from the table's layout
+    // (the x/y props), not free-floating — always snap the node back;
+    // an actual move happens through the guests atom below, which
+    // re-renders this chair (and the target chair) at their real spots.
+    node.position({ x, y });
+
+    if (!stage || !pointerPos || !guestId) return;
+
+    // Hit-test excluding this node itself, so dropping back onto your own
+    // seat (or very near it) doesn't misresolve to something else.
+    node.hide();
+    let hit: Konva.Node | null = stage.getIntersection(pointerPos);
+    node.show();
+
+    let targetTableId: string | null = null;
+    let targetChairIndex: number | null = null;
+    while (hit && hit !== stage) {
+      const ci = hit.getAttr("chairIndex");
+      const ti = hit.getAttr("tableId");
+      if (typeof ci === "number" && typeof ti === "string") {
+        targetTableId = ti;
+        targetChairIndex = ci;
+        break;
+      }
+      hit = hit.getParent();
+    }
+
+    if (targetTableId === null || targetChairIndex === null) return; // dropped somewhere that isn't a seat
+    if (targetTableId === tableId && targetChairIndex === chairIndex) return; // dropped back on itself
+
+    const targetTable = baseShapes.find(
+      (s): s is Table => s.type === "table" && s.id === targetTableId,
+    );
+    if (targetTable?.seatingLocked) {
+      toast({
+        title: "Seating Locked",
+        description: `Table ${targetTable.number}'s seating is locked. Unlock it from the sidebar guest list to rearrange guests.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const occupant = guests.find(
+      (g) => g.tableId === targetTableId && g.chairIndex === targetChairIndex,
+    );
+
+    setGuests((prev) =>
+      prev.map((g) => {
+        if (g.id === guestId) {
+          return { ...g, tableId: targetTableId!, chairIndex: targetChairIndex! };
+        }
+        if (occupant && g.id === occupant.id) {
+          // Swap: the displaced guest takes this chair's old seat.
+          return { ...g, tableId, chairIndex };
+        }
+        return g;
+      }),
+    );
   };
 
   const handleMouseLeave = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -271,6 +373,14 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
       chairIndex={chairIndex}
       // Add radius attribute for positioning calculations
       radius={radius}
+      // Only occupied, unlocked seats are draggable — an empty seat's
+      // group stays non-draggable so a click-drag there still falls
+      // through to the table's own draggable (moving the whole table),
+      // exactly as before this feature existed.
+      draggable={editMode && guestId !== null && !seatingLocked}
+      onDragStart={handleChairDragStart}
+      onDragMove={handleChairDragMove}
+      onDragEnd={handleChairDragEnd}
     >
       <Circle
         ref={circleRef}
