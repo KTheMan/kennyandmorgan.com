@@ -167,14 +167,21 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
       } else if (shape.type === "table") {
         // For tables — rectangular tables use width/height, round tables
         // (and any older saved table without a width/height) use radius.
-        const halfWidth =
-          shape.shape === "rectangle" && shape.width != null
-            ? shape.width / 2
-            : shape.radius;
-        const halfHeight =
-          shape.shape === "rectangle" && shape.height != null
-            ? shape.height / 2
-            : shape.radius;
+        // A round table's on-screen footprint is rotation-invariant (a
+        // circle looks the same at any angle); a rotated rectangle's
+        // axis-aligned bounding box grows per the standard rotated-rect
+        // AABB formula, or it'd get clipped by "fit to view".
+        let halfWidth = shape.radius;
+        let halfHeight = shape.radius;
+        if (shape.shape === "rectangle" && shape.width != null && shape.height != null) {
+          const rotationRad = ((shape.rotation ?? 0) * Math.PI) / 180;
+          const cos = Math.abs(Math.cos(rotationRad));
+          const sin = Math.abs(Math.sin(rotationRad));
+          const hw = shape.width / 2;
+          const hh = shape.height / 2;
+          halfWidth = hw * cos + hh * sin;
+          halfHeight = hw * sin + hh * cos;
+        }
         const left = shape.x - halfWidth;
         const top = shape.y - halfHeight;
         const right = shape.x + halfWidth;
