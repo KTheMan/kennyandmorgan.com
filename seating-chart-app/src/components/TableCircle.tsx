@@ -33,7 +33,11 @@ import { snapToGrid } from "@/lib/gridSnap";
 interface TableCircleProps {
   shapeAtom: PrimitiveAtom<Shape>;
   highlightedGuestId?: string | null;
-  registerRef: (guestId: string | null, node: Konva.Group | null) => void;
+  registerRef: (
+    tableId: string,
+    chairIndex: number,
+    node: Konva.Group | null,
+  ) => void;
 }
 
 const MIN_CAPACITY = 6;
@@ -107,7 +111,11 @@ const DARK_COLORS = {
 const TableCircleContent: React.FC<{
   shapeAtom: PrimitiveAtom<Table>;
   highlightedGuestId?: string | null;
-  registerRef: (guestId: string | null, node: Konva.Group | null) => void;
+  registerRef: (
+    tableId: string,
+    chairIndex: number,
+    node: Konva.Group | null,
+  ) => void;
 }> = ({ shapeAtom, highlightedGuestId, registerRef }) => {
   const [shape, setShape] = useAtom(shapeAtom);
   const [selectedShapeId, setSelectedShapeId] = useAtom(selectedShapeIdAtom);
@@ -599,6 +607,7 @@ const TableCircleContent: React.FC<{
               x={pos.x}
               y={pos.y}
               radius={CHAIR_RADIUS}
+              angle={pos.angle}
               guestId={guestId}
               registerRef={registerRef}
               previewOrder={previewOrder >= 0 ? previewOrder + 1 : null}
