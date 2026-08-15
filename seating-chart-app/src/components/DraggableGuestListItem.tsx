@@ -27,7 +27,7 @@ export const DraggableGuestListItem: React.FC<DraggableGuestListItemProps> = ({
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: guest.id,
-      data: { guestData: guest }, // Pass guest data if needed by overlay/handlers
+      data: { kind: "guest" as const, guest },
       disabled: !editMode,
     });
 

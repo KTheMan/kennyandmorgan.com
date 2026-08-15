@@ -27,6 +27,10 @@ interface ChairCircleProps {
   radius: number;
   guestId: string | null; // ID of the guest assigned, if any
   registerRef: (guestId: string | null, node: Konva.Group | null) => void; // Callback to register the Konva node ref
+  // Set while a party is being dragged and this seat is where the Nth
+  // guest in that party would land if dropped right now — purely a live
+  // preview, never persisted. Only ever set on empty seats.
+  previewOrder?: number | null;
 }
 
 // Direct color values for light mode — matches the wedding site's Ticket
@@ -43,6 +47,9 @@ const LIGHT_COLORS = {
   centerDotStroke: "#54604A", // --inkSoft
   tooltipFill: "#1E2218", // --ink
   tooltipText: "#FAF8F0", // --bg
+  previewFill: "rgba(122, 154, 31, 0.22)", // translucent --accent
+  previewStroke: "#7A9A1F", // --accent olive
+  previewNumberText: "#2E3A1C", // --deep
 };
 
 // Direct color values for dark mode — mirrors the site's own dark/RSVP
@@ -59,6 +66,9 @@ const DARK_COLORS = {
   centerDotStroke: "#9CAA72", // --heroMuted
   tooltipFill: "#1E2218", // --ink — tooltip chip stays dark in both themes
   tooltipText: "#FAF8F0", // --bg
+  previewFill: "rgba(200, 220, 88, 0.22)", // translucent --heroAccent
+  previewStroke: "#C8DC58", // --heroAccent
+  previewNumberText: "#1E2218", // --ink
 };
 
 export const ChairCircle: React.FC<ChairCircleProps> = ({
@@ -69,6 +79,7 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
   radius,
   guestId,
   registerRef, // Receive the callback function
+  previewOrder = null,
 }) => {
   const [, setModalState] = useAtom(modalStateAtom);
   const [guests] = useAtom(guestsAtom);
@@ -200,28 +211,34 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
   const tooltipShadowBlur = tooltipBaseShadowBlur * ttScale;
   const tooltipYOffset = (radius + tooltipPointerHeight + 5) * ttScale * 0.85; // Position above the chair, scaled and 15% lower
 
-  // Determine fill and stroke colors based on state
-  const fillColor = guestId
-    ? shouldHighlight
-      ? COLORS.highlightedFill
-      : COLORS.assignedFill
-    : isDirectlyHovered
-      ? COLORS.highlightedFill
-      : COLORS.unassignedFill;
+  // Determine fill and stroke colors based on state. Preview wins over
+  // hover — you can't be "directly hovering" a seat mid-drag anyway,
+  // since the pointer is busy dragging the party pill.
+  const fillColor = previewOrder
+    ? COLORS.previewFill
+    : guestId
+      ? shouldHighlight
+        ? COLORS.highlightedFill
+        : COLORS.assignedFill
+      : isDirectlyHovered
+        ? COLORS.highlightedFill
+        : COLORS.unassignedFill;
 
-  const strokeColor = guestId
-    ? shouldHighlight
-      ? COLORS.highlightedStroke
-      : COLORS.assignedStroke
-    : isDirectlyHovered
-      ? COLORS.highlightedStroke
-      : COLORS.unassignedStroke;
+  const strokeColor = previewOrder
+    ? COLORS.previewStroke
+    : guestId
+      ? shouldHighlight
+        ? COLORS.highlightedStroke
+        : COLORS.assignedStroke
+      : isDirectlyHovered
+        ? COLORS.highlightedStroke
+        : COLORS.unassignedStroke;
 
   // Enhanced animation for highlighted state - increased for better visibility
-  const visualScale = shouldHighlight ? 1.35 : 1;
+  const visualScale = shouldHighlight ? 1.35 : previewOrder ? 1.15 : 1;
   const shadowOpacity = shouldHighlight ? 0.65 : guestId ? 0.35 : 0.2;
   const shadowBlur = shouldHighlight ? 15 : guestId ? 8 : 4;
-  const strokeWidth = guestId ? (shouldHighlight ? 3 : 2.5) : 1.5; // Thicker border for occupied seats
+  const strokeWidth = previewOrder ? 2 : guestId ? (shouldHighlight ? 3 : 2.5) : 1.5; // Thicker border for occupied seats
 
   // Added distinct indicator for assigned chairs
   const showCenterDot = guestId !== null;
@@ -261,6 +278,7 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
         fill={fillColor}
         stroke={strokeColor}
         strokeWidth={strokeWidth}
+        dash={previewOrder ? [3, 3] : undefined}
         scaleX={visualScale}
         scaleY={visualScale}
         shadowBlur={shadowBlur}
@@ -275,7 +293,28 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         perfectDrawEnabled={false}
+        listening={!previewOrder}
       />
+
+      {/* Live preview marker while a party is being dragged toward this
+          seat — a ghost/dashed ring with the guest's place in the group's
+          drop order, cleared the instant the drag ends either way. */}
+      {previewOrder && (
+        <Text
+          text={String(previewOrder)}
+          fontSize={radius * 1.15}
+          fontStyle="bold"
+          fill={COLORS.previewNumberText}
+          width={radius * 2}
+          height={radius * 2}
+          align="center"
+          verticalAlign="middle"
+          offsetX={radius}
+          offsetY={radius}
+          listening={false}
+          perfectDrawEnabled={false}
+        />
+      )}
 
       {/* Enhanced indicator for occupied seats */}
       {showCenterDot && (

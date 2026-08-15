@@ -81,6 +81,16 @@ export const tableSeatingModalStateAtom = atom<{
   tableId: string | null;
 }>({ isOpen: false, tableId: null });
 
+// Live preview while dragging a whole party (group) over the canvas — the
+// chairIndexes it would land in if dropped right now, in guest order.
+// Purely transient UI state, not persisted; cleared as soon as the drag
+// ends or moves off that table. Single-guest drags don't use this — only
+// group drags get the "show where each seat would go" preview.
+export const groupDropPreviewAtom = atom<{
+  tableId: string;
+  chairIndexes: number[];
+} | null>(null);
+
 // --- Derived Atoms ---
 
 // Derived atom that combines all relevant state into a single VenueData object

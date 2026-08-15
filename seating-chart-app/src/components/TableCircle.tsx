@@ -10,7 +10,8 @@ import {
   hoveredTableIdAtom,
   venueSpaceLockedAtom,
   editModeAtom,
-  tableSeatingModalStateAtom
+  tableSeatingModalStateAtom,
+  groupDropPreviewAtom
 } from "@/lib/atoms";
 import { PrimitiveAtom } from "jotai";
 import { Table } from "../types/seatingChart";
@@ -18,6 +19,12 @@ import { Shape } from "@/lib/atoms";
 import { ChairCircle } from "./ChairCircle";
 import { useTheme } from "@/components/ThemeProvider";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  CHAIR_RADIUS,
+  CHAIR_PADDING,
+  computeRectangleChairPositions,
+  computeOpposingSidesChairPositions,
+} from "@/lib/tableSeating";
 
 interface TableCircleProps {
   shapeAtom: PrimitiveAtom<Shape>;
@@ -27,7 +34,6 @@ interface TableCircleProps {
 
 const MIN_CAPACITY = 6;
 const MAX_CAPACITY = 12;
-const CHAIR_RADIUS = 8;
 const PADDING = 5;
 const MIN_TABLE_RADIUS = 30;
 const MAX_TABLE_RADIUS = 150;
@@ -44,104 +50,6 @@ const ROTATION_SNAPS = [0, 45, 90, 135, 180, 225, 270, 315];
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(value, max));
-
-// Seats for a rectangular table are spread along its four edges,
-// proportional to each edge's length (so a long banquet table gets most
-// of its seats on the long sides), evenly spaced within each edge and
-// kept clear of the corners, then pushed outward by chairRadius+padding
-// — mirroring how round tables place seats at radius+chairRadius+padding
-// from center.
-const computeRectangleChairPositions = (
-  width: number,
-  height: number,
-  capacity: number,
-  chairRadius: number,
-  padding: number,
-) => {
-  const halfW = width / 2;
-  const halfH = height / 2;
-  const offset = chairRadius + padding;
-  const cornerMargin = chairRadius * 1.5;
-  const usableHorizontal = Math.max(width - cornerMargin * 2, chairRadius);
-  const usableVertical = Math.max(height - cornerMargin * 2, chairRadius);
-
-  const sides = [
-    { key: "top" as const, length: usableHorizontal },
-    { key: "right" as const, length: usableVertical },
-    { key: "bottom" as const, length: usableHorizontal },
-    { key: "left" as const, length: usableVertical },
-  ];
-  const totalLength = sides.reduce((sum, s) => sum + s.length, 0) || 1;
-
-  // Largest-remainder allocation: proportional seat counts per side that
-  // always sum to exactly `capacity`.
-  const raw = sides.map((s) => (s.length / totalLength) * capacity);
-  const counts = raw.map((n) => Math.floor(n));
-  let remaining = capacity - counts.reduce((a, b) => a + b, 0);
-  const byRemainder = raw
-    .map((n, i) => ({ i, frac: n - counts[i] }))
-    .sort((a, b) => b.frac - a.frac);
-  for (let k = 0; k < remaining && byRemainder.length > 0; k++) {
-    counts[byRemainder[k % byRemainder.length].i] += 1;
-  }
-
-  const positions: { x: number; y: number; angle: number }[] = [];
-  sides.forEach((side, sideIndex) => {
-    const count = counts[sideIndex];
-    for (let i = 0; i < count; i++) {
-      const t = count > 1 ? (i + 0.5) / count - 0.5 : 0; // -0.5..0.5 along the edge
-      const along = t * side.length;
-      switch (side.key) {
-        case "top":
-          positions.push({ x: along, y: -halfH - offset, angle: -Math.PI / 2 });
-          break;
-        case "right":
-          positions.push({ x: halfW + offset, y: along, angle: 0 });
-          break;
-        case "bottom":
-          positions.push({ x: along, y: halfH + offset, angle: Math.PI / 2 });
-          break;
-        case "left":
-          positions.push({ x: -halfW - offset, y: along, angle: Math.PI });
-          break;
-      }
-    }
-  });
-  return positions;
-};
-
-// Seats for a rectangular table in "opposing" seatingStyle sit only on the
-// top and bottom edges — the classic banquet-table look — with each
-// side's count set independently (asymmetric is fine: 5 on top, 3 on the
-// bottom is a valid layout, not just an even split).
-const computeOpposingSidesChairPositions = (
-  width: number,
-  height: number,
-  topSeats: number,
-  bottomSeats: number,
-  chairRadius: number,
-  padding: number,
-) => {
-  const halfW = width / 2;
-  const halfH = height / 2;
-  const offset = chairRadius + padding;
-  const cornerMargin = chairRadius * 1.5;
-  const usableWidth = Math.max(width - cornerMargin * 2, chairRadius);
-
-  const placeAlongEdge = (count: number, y: number, angle: number) => {
-    const positions: { x: number; y: number; angle: number }[] = [];
-    for (let i = 0; i < count; i++) {
-      const t = count > 1 ? (i + 0.5) / count - 0.5 : 0; // -0.5..0.5 along the edge
-      positions.push({ x: t * usableWidth, y, angle });
-    }
-    return positions;
-  };
-
-  return [
-    ...placeAlongEdge(topSeats, -halfH - offset, -Math.PI / 2),
-    ...placeAlongEdge(bottomSeats, halfH + offset, Math.PI / 2),
-  ];
-};
 
 // Colors for light and dark mode — light mirrors the wedding site's Ticket
 // Show palette; dark mirrors the site's own dark/RSVP section.
@@ -201,6 +109,7 @@ const TableCircleContent: React.FC<{
   const [selectedShapeId, setSelectedShapeId] = useAtom(selectedShapeIdAtom);
   const currentlyHoveredTableId = useAtomValue(hoveredTableIdAtom);
   const guests = useAtomValue(guestsAtom);
+  const groupDropPreview = useAtomValue(groupDropPreviewAtom);
   const isPanning = useAtomValue(isPanningAtom);
   const setIsDragging = useSetAtom(isDraggingAtom);
   const currentVenueLockState = useAtomValue(venueSpaceLockedAtom);
@@ -259,7 +168,7 @@ const TableCircleContent: React.FC<{
         topSeats,
         bottomSeats,
         CHAIR_RADIUS,
-        PADDING,
+        CHAIR_PADDING,
       );
     }
     if (isRectangle) {
@@ -268,12 +177,12 @@ const TableCircleContent: React.FC<{
         rectHeight,
         shape.capacity,
         CHAIR_RADIUS,
-        PADDING,
+        CHAIR_PADDING,
       );
     }
     const positions = [];
     const angleStep = (2 * Math.PI) / shape.capacity;
-    const distance = shape.radius + CHAIR_RADIUS + PADDING;
+    const distance = shape.radius + CHAIR_RADIUS + CHAIR_PADDING;
     for (let i = 0; i < shape.capacity; i++) {
       const angle = i * angleStep - Math.PI / 2;
       positions.push({
@@ -574,6 +483,10 @@ const TableCircleContent: React.FC<{
         {/* Chairs */}
         {chairPositions.map((pos, index) => {
           const guestId = guestMap.get(`${shape.id}---${index}`) || null;
+          const previewOrder =
+            groupDropPreview?.tableId === shape.id
+              ? groupDropPreview.chairIndexes.indexOf(index)
+              : -1;
 
           return (
             <ChairCircle
@@ -585,6 +498,7 @@ const TableCircleContent: React.FC<{
               radius={CHAIR_RADIUS}
               guestId={guestId}
               registerRef={registerRef}
+              previewOrder={previewOrder >= 0 ? previewOrder + 1 : null}
             />
           );
         })}

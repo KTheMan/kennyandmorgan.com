@@ -5,18 +5,19 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DraggableGuestListItem } from "./DraggableGuestListItem";
-import { Users, Coffee, PlusCircle, UsersRound } from "lucide-react";
+import { DraggableGroupHeader } from "./DraggableGroupHeader";
+import { Users, Coffee, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type GuestListEntry =
-  | { kind: "header"; key: string; label: string }
+  | { kind: "header"; key: string; groupId: string; label: string; guests: Guest[] }
   | { kind: "guest"; key: string; guest: Guest };
 
-// Clusters contiguous guests sharing a groupId (party) under a small
-// header, e.g. "Jane Doe's Party (4)" — only meaningful for Unassigned,
-// where guests aren't already ordered by physical seat. Assumes the
-// caller has already sorted `guests` so same-party guests are adjacent
-// (see Sidebar's groupedGuests sort).
+// Clusters contiguous guests sharing a groupId (party) under a small,
+// draggable header, e.g. "Jane Doe's Party (4)" — only meaningful for
+// Unassigned, where guests aren't already ordered by physical seat.
+// Assumes the caller has already sorted `guests` so same-party guests are
+// adjacent (see Sidebar's groupedGuests sort).
 function buildGuestListEntries(guests: Guest[]): GuestListEntry[] {
   const entries: GuestListEntry[] = [];
   let i = 0;
@@ -34,7 +35,9 @@ function buildGuestListEntries(guests: Guest[]): GuestListEntry[] {
         entries.push({
           kind: "header",
           key: `party-${guest.groupId}`,
+          groupId: guest.groupId,
           label: `${primary.fullName}'s Party (${run.length})`,
+          guests: run,
         });
       }
       run.forEach((g) => entries.push({ kind: "guest", key: g.id, guest: g }));
@@ -160,13 +163,12 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
       <ul className="space-y-1">
         {listEntries.map((entry) =>
           entry.kind === "header" ? (
-            <li
+            <DraggableGroupHeader
               key={entry.key}
-              className="flex items-center gap-1.5 pt-2 pb-0.5 px-1 text-xs font-medium uppercase tracking-wide text-sidebar-foreground/50"
-            >
-              <UsersRound size={12} strokeWidth={1.5} />
-              {entry.label}
-            </li>
+              groupId={entry.groupId}
+              guests={entry.guests}
+              label={entry.label}
+            />
           ) : (
             <DraggableGuestListItem
               key={entry.key}
