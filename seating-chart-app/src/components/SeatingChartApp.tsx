@@ -17,6 +17,7 @@ import {
 import { Table, VenueElement } from "../types/seatingChart";
 import { GuestAssignmentModal } from "./GuestAssignmentModal";
 import { RenameElementModal } from "./RenameElementModal";
+import { TableSeatingModal } from "./TableSeatingModal";
 import { SortedCanvasStageAdapter } from "./SortedCanvasStageAdapter";
 import { useVenuePersistence, DEFAULT_VENUE_DATA, type VenueCredentials } from "@/hooks/useVenuePersistence";
 import type { VenueAccess } from "@/components/VenueGate";
@@ -398,6 +399,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
       </div>
       <GuestAssignmentModal />
       <RenameElementModal />
+      <TableSeatingModal />
     </div>
   );
 };

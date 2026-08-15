@@ -32,6 +32,14 @@ export interface Table {
   radius: number; // round tables only
   width?: number; // rectangle tables only
   height?: number; // rectangle tables only
+  // Rectangle tables only. Missing/"all" seats guests around all four
+  // edges, proportional to edge length (the default, existing look).
+  // "opposing" seats guests only on the top and bottom edges — the
+  // classic banquet-table look — with topSeats/bottomSeats set
+  // independently rather than always split evenly.
+  seatingStyle?: "all" | "opposing";
+  topSeats?: number; // rectangle tables in "opposing" seatingStyle only
+  bottomSeats?: number; // rectangle tables in "opposing" seatingStyle only
   capacity: number;
   draggable?: boolean;
 }

@@ -74,6 +74,13 @@ export const renameModalStateAtom = atom<{
   currentTitle: string | null;
 }>({ isOpen: false, elementId: null, currentTitle: null });
 
+// Atom for the rectangle-table seating layout modal state (all sides vs.
+// opposing sides only, with independent per-side seat counts)
+export const tableSeatingModalStateAtom = atom<{
+  isOpen: boolean;
+  tableId: string | null;
+}>({ isOpen: false, tableId: null });
+
 // --- Derived Atoms ---
 
 // Derived atom that combines all relevant state into a single VenueData object

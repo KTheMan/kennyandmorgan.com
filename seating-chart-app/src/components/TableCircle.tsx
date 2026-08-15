@@ -9,7 +9,8 @@ import {
   isDraggingAtom,
   hoveredTableIdAtom,
   venueSpaceLockedAtom,
-  editModeAtom
+  editModeAtom,
+  tableSeatingModalStateAtom
 } from "@/lib/atoms";
 import { PrimitiveAtom } from "jotai";
 import { Table } from "../types/seatingChart";
@@ -104,6 +105,39 @@ const computeRectangleChairPositions = (
   return positions;
 };
 
+// Seats for a rectangular table in "opposing" seatingStyle sit only on the
+// top and bottom edges — the classic banquet-table look — with each
+// side's count set independently (asymmetric is fine: 5 on top, 3 on the
+// bottom is a valid layout, not just an even split).
+const computeOpposingSidesChairPositions = (
+  width: number,
+  height: number,
+  topSeats: number,
+  bottomSeats: number,
+  chairRadius: number,
+  padding: number,
+) => {
+  const halfW = width / 2;
+  const halfH = height / 2;
+  const offset = chairRadius + padding;
+  const cornerMargin = chairRadius * 1.5;
+  const usableWidth = Math.max(width - cornerMargin * 2, chairRadius);
+
+  const placeAlongEdge = (count: number, y: number, angle: number) => {
+    const positions: { x: number; y: number; angle: number }[] = [];
+    for (let i = 0; i < count; i++) {
+      const t = count > 1 ? (i + 0.5) / count - 0.5 : 0; // -0.5..0.5 along the edge
+      positions.push({ x: t * usableWidth, y, angle });
+    }
+    return positions;
+  };
+
+  return [
+    ...placeAlongEdge(topSeats, -halfH - offset, -Math.PI / 2),
+    ...placeAlongEdge(bottomSeats, halfH + offset, Math.PI / 2),
+  ];
+};
+
 // Colors for light and dark mode — light mirrors the wedding site's Ticket
 // Show palette; dark mirrors the site's own dark/RSVP section.
 const LIGHT_COLORS = {
@@ -178,6 +212,7 @@ const TableCircleContent: React.FC<{
   const [isMinusPressed, setIsMinusPressed] = useState(false);
   const [isPlusPressed, setIsPlusPressed] = useState(false);
   const [isTableHovered, setIsTableHovered] = useState(false); // <-- New state for table hover
+  const [isSettingsHovered, setIsSettingsHovered] = useState(false);
 
   // Choose colors based on theme
   const COLORS = theme === "dark" ? DARK_COLORS : LIGHT_COLORS;
@@ -185,6 +220,10 @@ const TableCircleContent: React.FC<{
   const isRectangle = shape.shape === "rectangle";
   const rectWidth = shape.width ?? shape.radius * 2;
   const rectHeight = shape.height ?? shape.radius * 2;
+  const isOpposingSides = isRectangle && shape.seatingStyle === "opposing";
+  const topSeats = shape.topSeats ?? Math.ceil(shape.capacity / 2);
+  const bottomSeats = shape.bottomSeats ?? Math.floor(shape.capacity / 2);
+  const setTableSeatingModalState = useSetAtom(tableSeatingModalStateAtom);
 
   // Draggability depends on shape prop, not panning, AND edit mode
   const isDraggable = shape.draggable !== false && !isPanning && editMode;
@@ -208,6 +247,16 @@ const TableCircleContent: React.FC<{
 
   // Chair position calculation
   const chairPositions = useMemo(() => {
+    if (isOpposingSides) {
+      return computeOpposingSidesChairPositions(
+        rectWidth,
+        rectHeight,
+        topSeats,
+        bottomSeats,
+        CHAIR_RADIUS,
+        PADDING,
+      );
+    }
     if (isRectangle) {
       return computeRectangleChairPositions(
         rectWidth,
@@ -229,7 +278,16 @@ const TableCircleContent: React.FC<{
       });
     }
     return positions;
-  }, [shape.capacity, shape.radius, isRectangle, rectWidth, rectHeight]);
+  }, [
+    shape.capacity,
+    shape.radius,
+    isRectangle,
+    isOpposingSides,
+    rectWidth,
+    rectHeight,
+    topSeats,
+    bottomSeats,
+  ]);
 
   // Guest lookup map
   const guestMap = useMemo(() => {
@@ -379,6 +437,12 @@ const TableCircleContent: React.FC<{
   const handleMinusMouseLeave = () => setIsMinusHovered(false);
   const handlePlusMouseEnter = () => setIsPlusHovered(true);
   const handlePlusMouseLeave = () => setIsPlusHovered(false);
+  const handleSettingsMouseEnter = () => setIsSettingsHovered(true);
+  const handleSettingsMouseLeave = () => setIsSettingsHovered(false);
+  const handleOpenSeatingSettings = () => {
+    if (!editMode) return;
+    setTableSeatingModalState({ isOpen: true, tableId: shape.id });
+  };
 
   // Updated font sizes for better readability
   const FONT_SIZE_LARGE = 18; // Increased from 16
@@ -552,6 +616,12 @@ const TableCircleContent: React.FC<{
           y={FONT_SIZE_SMALL + PADDING * 3}
           visible={isTableHovered || isSelected}
         >
+          {/* Minus/Plus total-capacity buttons — hidden for rectangle
+              tables in "opposing" seating style, where the top/bottom
+              counts (set independently via the settings button below)
+              govern capacity instead. */}
+          {!isOpposingSides && (
+            <>
           {/* Minus Button */}
           <Group
             x={-BUTTON_RADIUS * BUTTON_SPACING}
@@ -640,6 +710,45 @@ const TableCircleContent: React.FC<{
               listening={false}
             />
           </Group>
+            </>
+          )}
+
+          {/* Rectangle-table seating layout settings (All Sides /
+              Opposing Sides Only, with asymmetric per-side counts) —
+              sits on its own row below the capacity buttons when they're
+              showing, or takes their place (centered) when they're not. */}
+          {isRectangle && (
+            <Group
+              x={0}
+              y={isOpposingSides ? 0 : BUTTON_RADIUS * 2 + PADDING * 2}
+              onClick={handleOpenSeatingSettings}
+              onTap={handleOpenSeatingSettings}
+              onMouseEnter={handleSettingsMouseEnter}
+              onMouseLeave={handleSettingsMouseLeave}
+            >
+              <Circle
+                radius={BUTTON_RADIUS}
+                fill={isSettingsHovered ? COLORS.plusButtonHoverFill : COLORS.tableFill}
+                stroke={isSettingsHovered ? COLORS.plusButtonHoverStroke : COLORS.tableStroke}
+                strokeWidth={1.5}
+                shadowBlur={isSettingsHovered ? 5 : 3}
+                shadowOpacity={isSettingsHovered ? 0.3 : 0.2}
+                shadowOffset={{ x: 1, y: 1 }}
+              />
+              <Text
+                text="⚙"
+                fontSize={14}
+                fill={COLORS.tableTextPrimary}
+                width={BUTTON_RADIUS * 2}
+                height={BUTTON_RADIUS * 2}
+                align="center"
+                verticalAlign="middle"
+                offsetX={BUTTON_RADIUS}
+                offsetY={BUTTON_RADIUS}
+                listening={false}
+              />
+            </Group>
+          )}
         </Group>
       </Group>
       {/* Only show Transformer if selected AND in edit mode */}
