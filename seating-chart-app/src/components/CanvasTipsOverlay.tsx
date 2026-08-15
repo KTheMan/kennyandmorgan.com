@@ -65,15 +65,15 @@ export const CanvasTipsOverlay: React.FC = () => {
           <div className="flex items-center space-x-2">
             <div
               className="w-3.5 h-3.5 rounded-full flex items-center justify-center border"
-              style={{ backgroundColor: "#8A9A7D", borderColor: "#66755C" }} // Occupied: Moss green, Darker green border
+              style={{ backgroundColor: "#7A9A1F", borderColor: "#2E3A1C" }} // Occupied: --accent olive, --deep border
             >
               <div
                 className="w-1.5 h-1.5 rounded-full"
                 style={{
-                  backgroundColor: "#F0E6D9",
-                  borderColor: "#A67F65",
+                  backgroundColor: "#FFFFFF",
+                  borderColor: "#54604A",
                   borderWidth: "0.5px",
-                }} // Center dot: Light cream, Medium brown border
+                }} // Center dot: --surface, --inkSoft border
               ></div>
             </div>
             <span className="text-xs">Occupied Seat</span>
@@ -81,7 +81,7 @@ export const CanvasTipsOverlay: React.FC = () => {
           <div className="flex items-center space-x-2">
             <div
               className="w-3.5 h-3.5 rounded-full border-2"
-              style={{ backgroundColor: "#E9E2D7", borderColor: "#8A6E4B" }} // Empty: Warm cream, Darker brown border
+              style={{ backgroundColor: "#F3F0E7", borderColor: "#54604A" }} // Empty: --light-gray, --inkSoft border
             ></div>
             <span className="text-xs">Empty Seat</span>
           </div>

@@ -4,134 +4,137 @@
 
 @layer base {
   :root {
-    /* Light Mode - Cozy Elegant Tech Theme */
-    --background: 40 30% 97%; /* #FAF7F2 Warm linen */
-    --foreground: 30 10% 15%; /* #332E2A Rich dark brown for text */
+    /* Light Mode — matches the main site's "Ticket Show" design system
+       (styles.css :root): cream background, near-black ink text, olive accent. */
+    --background: 48 50% 96%; /* #FAF8F0 --bg */
+    --foreground: 84 17% 11%; /* #1E2218 --ink */
 
-    --card: 40 25% 96%; /* #F7F3EB Soft cream */
-    --card-foreground: 30 10% 15%; /* #332E2A Rich dark brown for text */
+    --card: 0 0% 100%; /* #FFFFFF --surface */
+    --card-foreground: 84 17% 11%; /* #1E2218 --ink */
 
-    --popover: 40 25% 96%; /* #F7F3EB Soft cream */
-    --popover-foreground: 30 10% 15%; /* #332E2A Rich dark brown */
+    --popover: 0 0% 100%; /* #FFFFFF --surface */
+    --popover-foreground: 84 17% 11%; /* #1E2218 --ink */
 
-    --primary: 15 28% 57%; /* #B87D6C Muted terracotta */
-    --primary-foreground: 0 0% 100%; /* white */
+    --primary: 84 17% 11%; /* #1E2218 --ink, same as the site's .btn-primary */
+    --primary-foreground: 48 50% 96%; /* #FAF8F0 --bg */
 
-    --secondary: 85 15% 48%; /* #7A876E Moss green */
-    --secondary-foreground: 0 0% 100%; /* white */
+    --secondary: 84 35% 17%; /* #2E3A1C --deep, the site's .btn-primary:hover */
+    --secondary-foreground: 48 50% 96%; /* #FAF8F0 --bg */
 
-    --muted: 35 25% 90%; /* #EAE3D4 Soft warm beige */
-    --muted-foreground: 30 8% 35%; /* #645C54 Muted brown-grey */
+    --muted: 45 33% 93%; /* #F3F0E7 --light-gray */
+    --muted-foreground: 93 13% 33%; /* #54604A --inkSoft */
 
-    --accent: 35 40% 62%; /* #C19A6B Soft gold/ochre */
-    --accent-foreground: 30 15% 15%; /* #2E2821 Very dark brown */
+    --accent: 76 66% 36%; /* #7A9A1F --accent (olive/lime) */
+    --accent-foreground: 48 50% 96%; /* #FAF8F0 --bg */
 
-    --destructive: 342 40% 34%; /* #6A3A4F Deep plum */
-    --destructive-foreground: 0 0% 100%; /* white */
+    --destructive: 0 66% 47%; /* #C62828 site's error red */
+    --destructive-foreground: 48 50% 96%; /* #FAF8F0 --bg */
 
-    --border: 35 25% 83%; /* #DACEBC Warm sand */
-    --input: 35 25% 83%; /* #DACEBC Warm sand */
-    --ring: 15 28% 57%; /* #B87D6C Muted terracotta */
+    --border: 53 11% 83%; /* warm sand — ink at low opacity over --bg */
+    --input: 53 11% 83%;
+    --ring: 76 66% 36%; /* #7A9A1F --accent */
 
-    --radius: 0.75rem; /* Slightly more rounded corners */
+    --radius: 0.25rem; /* flatter, closer to the site's ticket/ledger corners */
 
     /* Sidebar specific variables */
-    --sidebar-background: 35 25% 93%; /* #F0E9DD slightly darker warm sand */
-    --sidebar-foreground: 30 10% 15%; /* #332E2A Rich dark brown */
-    --sidebar-primary: 15 28% 57%; /* #B87D6C Muted terracotta */
-    --sidebar-primary-foreground: 0 0% 100%; /* white */
-    --sidebar-accent: 85 15% 48%; /* #7A876E Moss green */
-    --sidebar-accent-foreground: 0 0% 100%; /* white */
-    --sidebar-border: 35 25% 75%; /* #CABAA3 darker warm sand */
-    --sidebar-ring: 15 28% 57%; /* #B87D6C Muted terracotta */
+    --sidebar-background: 45 30% 90%;
+    --sidebar-foreground: 84 17% 11%; /* #1E2218 --ink */
+    --sidebar-primary: 76 66% 36%; /* #7A9A1F --accent */
+    --sidebar-primary-foreground: 48 50% 96%; /* #FAF8F0 --bg */
+    --sidebar-accent: 84 35% 17%; /* #2E3A1C --deep */
+    --sidebar-accent-foreground: 48 50% 96%; /* #FAF8F0 --bg */
+    --sidebar-border: 53 11% 75%;
+    --sidebar-ring: 76 66% 36%; /* #7A9A1F --accent */
 
     /* Table and Chair specific variables - Light Mode */
-    --table-fill: 35 30% 85%; /* #E1D4C0 Warm beige */
-    --table-stroke: 25 30% 42%; /* #8A6E4B darker brown for better contrast */
-    --table-text-primary: 25 25% 20%; /* #3C3226 Rich dark brown for text */
-    --table-text-secondary: 25 20% 35%; /* #665A4D darker soft brown */
+    --table-fill: 45 33% 93%; /* #F3F0E7 --light-gray */
+    --table-stroke: 84 17% 11%; /* #1E2218 --ink */
+    --table-text-primary: 84 17% 11%; /* #1E2218 --ink */
+    --table-text-secondary: 93 13% 33%; /* #54604A --inkSoft */
 
-    --button-minus-fill: 342 25% 92%; /* #F0E4EA Soft pink */
-    --button-minus-stroke: 342 35% 45%; /* #A15E7A Muted plum */
-    --button-minus-text: 342 40% 30%; /* #5E3345 Deep plum */
+    --button-minus-fill: 0 40% 94%;
+    --button-minus-stroke: 0 55% 45%;
+    --button-minus-text: 0 55% 28%;
 
-    --button-plus-fill: 85 25% 88%; /* #E3EAE0 Soft sage */
-    --button-plus-stroke: 85 20% 50%; /* #7E8F75 Sage green */
-    --button-plus-text: 85 25% 35%; /* #5A684C Deep moss */
+    --button-plus-fill: 76 35% 91%;
+    --button-plus-stroke: 76 55% 35%;
+    --button-plus-text: 84 35% 17%; /* #2E3A1C --deep */
 
     /* Chair states - light mode */
-    --chair-assigned-fill: 85 25% 55%; /* #8A9A7D Moss green */
-    --chair-assigned-stroke: 85 30% 40%; /* #66755C Darker green border */
-    --chair-unassigned-fill: 35 20% 90%; /* #E9E2D7 Warm cream */
-    --chair-unassigned-stroke: 25 30% 42%; /* #8A6E4B darker brown */
+    --chair-assigned-fill: 76 66% 36%; /* #7A9A1F --accent */
+    --chair-assigned-stroke: 84 35% 17%; /* #2E3A1C --deep */
+    --chair-unassigned-fill: 45 33% 93%; /* #F3F0E7 --light-gray */
+    --chair-unassigned-stroke: 93 13% 33%; /* #54604A --inkSoft */
 
     /* Venue outline */
-    --venue-outline-color: 25 30% 42%; /* #8A6E4B darker brown for better visibility */
+    --venue-outline-color: 84 17% 11%; /* #1E2218 --ink */
     --venue-outline-width: 2px;
   }
 
   .dark {
-    /* Dark Mode - Cozy Elegant Tech Theme */
-    --background: 210 10% 15%; /* #232A2E Deep desaturated blue-grey */
-    --foreground: 35 25% 90%; /* #EAE3D4 Soft warm beige */
+    /* Dark Mode — mirrors the main site's own dark section (styles.css
+       #rsvp / --heroBg, --heroInk, --heroAccent, --heroMuted), so toggling
+       dark mode here reads like the site's RSVP page. */
+    --background: 84 35% 17%; /* #2E3A1C --heroBg */
+    --foreground: 48 50% 96%; /* #FAF8F0 --heroInk */
 
-    --card: 210 12% 18%; /* #29323A Deeper blue-grey */
-    --card-foreground: 35 25% 90%; /* #EAE3D4 Soft warm beige */
+    --card: 84 30% 22%; /* lighter --heroBg, for surfaces */
+    --card-foreground: 48 50% 96%; /* #FAF8F0 --heroInk */
 
-    --popover: 210 12% 18%; /* #29323A Deeper blue-grey */
-    --popover-foreground: 35 25% 90%; /* #EAE3D4 Soft warm beige */
+    --popover: 84 30% 22%;
+    --popover-foreground: 48 50% 96%; /* #FAF8F0 --heroInk */
 
-    --primary: 15 28% 57%; /* #B87D6C Muted terracotta - keeping consistency */
-    --primary-foreground: 35 25% 90%; /* #EAE3D4 Soft warm beige */
+    --primary: 69 65% 60%; /* #C8DC58 --heroAccent */
+    --primary-foreground: 84 35% 15%; /* dark green text on bright lime */
 
-    --secondary: 85 15% 48%; /* #7A876E Moss green - keeping consistency */
-    --secondary-foreground: 35 25% 90%; /* #EAE3D4 Soft warm beige */
+    --secondary: 75 25% 56%; /* #9CAA72 --heroMuted */
+    --secondary-foreground: 84 35% 12%;
 
-    --muted: 210 10% 25%; /* #38424A Muted blue-grey */
-    --muted-foreground: 35 15% 75%; /* #C9BDAC lighter cream */
+    --muted: 84 30% 22%;
+    --muted-foreground: 75 25% 66%; /* lightened --heroMuted for readability */
 
-    --accent: 35 30% 55%; /* #BE9467 Softer gold/ochre */
-    --accent-foreground: 35 25% 90%; /* #EAE3D4 Soft warm beige */
+    --accent: 69 65% 60%; /* #C8DC58 --heroAccent */
+    --accent-foreground: 84 35% 15%;
 
-    --destructive: 342 35% 45%; /* #A15E7A Muted plum */
-    --destructive-foreground: 35 25% 90%; /* #EAE3D4 Soft warm beige */
+    --destructive: 0 55% 55%;
+    --destructive-foreground: 48 50% 96%; /* #FAF8F0 --heroInk */
 
-    --border: 210 10% 30%; /* #454F58 Deep blue-grey border */
-    --input: 210 10% 30%; /* #454F58 Deep blue-grey border */
-    --ring: 15 28% 57%; /* #B87D6C Muted terracotta */
+    --border: 75 39% 28%; /* --heroAccent blended into --heroBg */
+    --input: 75 39% 28%;
+    --ring: 69 65% 60%; /* #C8DC58 --heroAccent */
 
     /* Sidebar specific variables (dark) */
-    --sidebar-background: 210 12% 20%; /* #2D3741 slightly lighter navy-brown */
-    --sidebar-foreground: 35 25% 90%; /* #EAE3D4 Soft warm beige */
-    --sidebar-primary: 15 28% 57%; /* #B87D6C Muted terracotta */
-    --sidebar-primary-foreground: 35 25% 90%; /* #EAE3D4 Soft warm beige */
-    --sidebar-accent: 85 15% 48%; /* #7A876E Moss green */
-    --sidebar-accent-foreground: 35 25% 90%; /* #EAE3D4 Soft warm beige */
-    --sidebar-border: 210 10% 35%; /* #535D67 blue-grey */
-    --sidebar-ring: 35 30% 55%; /* #BE9467 Softer gold/ochre */
+    --sidebar-background: 84 30% 20%;
+    --sidebar-foreground: 48 50% 96%; /* #FAF8F0 --heroInk */
+    --sidebar-primary: 69 65% 60%; /* #C8DC58 --heroAccent */
+    --sidebar-primary-foreground: 84 35% 15%;
+    --sidebar-accent: 75 25% 56%; /* #9CAA72 --heroMuted */
+    --sidebar-accent-foreground: 84 35% 12%;
+    --sidebar-border: 75 30% 30%;
+    --sidebar-ring: 69 65% 60%; /* #C8DC58 --heroAccent */
 
     /* Table and Chair specific variables - Dark Mode */
-    --table-fill: 210 20% 35%; /* #4C5864 Lighter blue-grey instead of almost black */
-    --table-stroke: 35 30% 55%; /* #BE9467 Softer gold/ochre for better contrast */
-    --table-text-primary: 35 25% 90%; /* #EAE3D4 Soft warm beige */
-    --table-text-secondary: 35 20% 80%; /* #D5C9B7 slightly darker beige */
+    --table-fill: 84 27% 23%;
+    --table-stroke: 69 60% 55%; /* --heroAccent, muted */
+    --table-text-primary: 48 50% 96%; /* #FAF8F0 --heroInk */
+    --table-text-secondary: 75 25% 70%; /* lightened --heroMuted */
 
-    --button-minus-fill: 342 20% 35%; /* #6F4757 Deep plum background */
-    --button-minus-stroke: 342 25% 60%; /* #BB7C96 Lighter plum */
-    --button-minus-text: 35 25% 90%; /* #EAE3D4 Soft warm beige */
+    --button-minus-fill: 0 30% 25%;
+    --button-minus-stroke: 0 45% 58%;
+    --button-minus-text: 48 50% 94%;
 
-    --button-plus-fill: 85 20% 30%; /* #4D5647 Deep moss */
-    --button-plus-stroke: 85 15% 55%; /* #8A9880 Lighter sage */
-    --button-plus-text: 35 25% 90%; /* #EAE3D4 Soft warm beige */
+    --button-plus-fill: 84 25% 24%;
+    --button-plus-stroke: 69 55% 55%;
+    --button-plus-text: 48 50% 94%;
 
     /* Chair states - dark mode */
-    --chair-assigned-fill: 85 25% 55%; /* #8A9A7D Moss green - keeping consistency */
-    --chair-assigned-stroke: 85 25% 65%; /* #A3B097 Lighter green border */
-    --chair-unassigned-fill: 210 15% 30%; /* #434D56 Darker blue-grey */
-    --chair-unassigned-stroke: 35 30% 55%; /* #BE9467 Softer gold/ochre */
+    --chair-assigned-fill: 69 65% 60%; /* #C8DC58 --heroAccent pops on deep green */
+    --chair-assigned-stroke: 84 40% 14%;
+    --chair-unassigned-fill: 84 22% 26%;
+    --chair-unassigned-stroke: 75 30% 58%; /* --heroMuted */
 
     /* Venue outline */
-    --venue-outline-color: 35 30% 65%; /* #CBA77D Warm gold for better visibility */
+    --venue-outline-color: 69 65% 60%; /* #C8DC58 --heroAccent */
     --venue-outline-width: 2.5px;
   }
 }
@@ -145,7 +148,7 @@
     transition:
       background-color 0.5s ease,
       color 0.5s ease;
-    font-family: "Nunito Sans", "Source Sans Pro", system-ui, sans-serif;
+    font-family: "Work Sans", "Montserrat", system-ui, sans-serif;
     line-height: 1.6;
   }
   h1,
@@ -154,8 +157,8 @@
   h4,
   h5,
   h6 {
-    font-family: "Outfit", "Libre Baskerville", Georgia, serif;
-    font-weight: 600;
+    font-family: "DM Serif Display", "Playfair Display", Georgia, serif;
+    font-weight: 400;
     line-height: 1.4;
   }
   p,
@@ -165,7 +168,7 @@
   input,
   select,
   textarea {
-    font-family: "Nunito Sans", "Source Sans Pro", system-ui, sans-serif;
+    font-family: "Work Sans", "Montserrat", system-ui, sans-serif;
   }
 
   /* Improved button styling */

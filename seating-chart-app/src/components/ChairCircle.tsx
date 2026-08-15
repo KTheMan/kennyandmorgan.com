@@ -29,34 +29,36 @@ interface ChairCircleProps {
   registerRef: (guestId: string | null, node: Konva.Group | null) => void; // Callback to register the Konva node ref
 }
 
-// Direct color values for light mode
+// Direct color values for light mode — matches the wedding site's Ticket
+// Show palette (cream/ink/olive).
 const LIGHT_COLORS = {
-  assignedFill: "#8A9A7D", // Moss green
-  assignedStroke: "#66755C", // Darker green border
-  highlightedFill: "#A8B89B", // Lighter moss green for highlighting
-  highlightedStroke: "#4E5944", // Darker green for highlighting
-  unassignedFill: "#E9E2D7", // Warm cream
-  unassignedStroke: "#8A6E4B", // Darker brown
-  shadowColor: "#362F2A", // Deep brown shadow
-  centerDotFill: "#F0E6D9", // Light cream center
-  centerDotStroke: "#A67F65", // Medium brown
-  tooltipFill: "#5A4A42", // Deep warm brown
-  tooltipText: "#F0E6D9", // Soft cream
+  assignedFill: "#7A9A1F", // --accent olive
+  assignedStroke: "#2E3A1C", // --deep
+  highlightedFill: "#C8DC58", // --heroAccent lime, pop highlight
+  highlightedStroke: "#7A9A1F", // --accent olive
+  unassignedFill: "#F3F0E7", // --light-gray
+  unassignedStroke: "#54604A", // --inkSoft
+  shadowColor: "#1E2218", // --ink
+  centerDotFill: "#FFFFFF", // --surface
+  centerDotStroke: "#54604A", // --inkSoft
+  tooltipFill: "#1E2218", // --ink
+  tooltipText: "#FAF8F0", // --bg
 };
 
-// Direct color values for dark mode
+// Direct color values for dark mode — mirrors the site's own dark/RSVP
+// section (deep green + lime).
 const DARK_COLORS = {
-  assignedFill: "#8A9A7D", // Moss green - keeping consistency
-  assignedStroke: "#A3B097", // Lighter green border
-  highlightedFill: "#B0C0A3", // Brighter moss green for highlighting
-  highlightedStroke: "#CCD9BF", // Lighter border for better visibility in dark mode
-  unassignedFill: "#434D56", // Darker blue-grey
-  unassignedStroke: "#BE9467", // Softer gold/ochre
-  shadowColor: "#262018", // Even deeper brown shadow
-  centerDotFill: "#EAE3D4", // Light cream center
-  centerDotStroke: "#BE9467", // Gold/ochre for definition
-  tooltipFill: "#3D3631", // Deep dark brown
-  tooltipText: "#EAE3D4", // Soft cream
+  assignedFill: "#C8DC58", // --heroAccent, pops on deep green
+  assignedStroke: "#1E2218", // --ink
+  highlightedFill: "#E4F08A", // lightened --heroAccent
+  highlightedStroke: "#FAF8F0", // --heroInk
+  unassignedFill: "#3F4F2C", // lightened --heroBg
+  unassignedStroke: "#9CAA72", // --heroMuted
+  shadowColor: "#12160D", // near-black deep green
+  centerDotFill: "#2E3A1C", // --heroBg
+  centerDotStroke: "#9CAA72", // --heroMuted
+  tooltipFill: "#1E2218", // --ink — tooltip chip stays dark in both themes
+  tooltipText: "#FAF8F0", // --bg
 };
 
 export const ChairCircle: React.FC<ChairCircleProps> = ({
@@ -81,7 +83,7 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
   const chairGroupNodeRef = useRef<Konva.Group>(null); // Local ref for the main group
 
   // Choose colors based on theme
-  const COLORS = LIGHT_COLORS;
+  const COLORS = theme === "dark" ? DARK_COLORS : LIGHT_COLORS;
 
   const guestNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -311,7 +313,7 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
           />
           <Text
             text={guestName}
-            fontFamily="'Source Sans Pro', sans-serif"
+            fontFamily="'Work Sans', sans-serif"
             fontSize={tooltipFontSize}
             padding={tooltipPadding}
             fill={COLORS.tooltipText}

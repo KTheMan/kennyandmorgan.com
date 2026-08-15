@@ -31,51 +31,52 @@ const PADDING = 5;
 const MIN_TABLE_RADIUS = 30;
 const MAX_TABLE_RADIUS = 150;
 
-// Colors for light and dark mode
+// Colors for light and dark mode — light mirrors the wedding site's Ticket
+// Show palette; dark mirrors the site's own dark/RSVP section.
 const LIGHT_COLORS = {
-  tableFill: "#E1D4C0", // Warm beige
-  tableStroke: "#8A6E4B", // Darker brown for contrast
-  highlightedTableStroke: "#FFBF00", // Brighter Gold/Amber for highlight
+  tableFill: "#F3F0E7", // --light-gray
+  tableStroke: "#1E2218", // --ink
+  highlightedTableStroke: "#C8DC58", // --heroAccent lime, pop highlight
   highlightedTableStrokeWidth: 4, // Thicker border for highlight (was 3)
-  tableTextPrimary: "#3C3226", // Rich dark brown for text
-  tableTextSecondary: "#665A4D", // Darker soft brown
-  minusButtonFill: "#F0E4EA", // Soft pink
-  minusButtonHoverFill: "#F8D7E6", // Lighter pink for hover
-  minusButtonStroke: "#A15E7A", // Muted plum
-  minusButtonHoverStroke: "#C2779A", // Brighter plum for hover
-  minusButtonText: "#5E3345", // Deep plum
-  plusButtonFill: "#E3EAE0", // Soft sage
-  plusButtonHoverFill: "#D6E9CB", // Lighter sage for hover
-  plusButtonStroke: "#7E8F75", // Sage green
-  plusButtonHoverStroke: "#98AB8C", // Brighter sage for hover
-  plusButtonText: "#5A684C", // Deep moss
-  shadowColor: "rgba(121, 85, 72, 0.7)", // Brown shadow with transparency
-  countBadgeFill: "rgba(145, 170, 157, 0.8)", // Sage green with transparency
-  countBadgeStroke: "#66755C", // Darker green
-  countBadgeText: "#FFFFFF", // White text
+  tableTextPrimary: "#1E2218", // --ink
+  tableTextSecondary: "#54604A", // --inkSoft
+  minusButtonFill: "#FBEAEA", // light tint of site's error red
+  minusButtonHoverFill: "#F6D6D6",
+  minusButtonStroke: "#C62828", // site's error red
+  minusButtonHoverStroke: "#A81E1E",
+  minusButtonText: "#7A1414",
+  plusButtonFill: "#EEF3DC", // light tint of --accent
+  plusButtonHoverFill: "#E3ECC7",
+  plusButtonStroke: "#7A9A1F", // --accent olive
+  plusButtonHoverStroke: "#5F7818",
+  plusButtonText: "#2E3A1C", // --deep
+  shadowColor: "rgba(30, 34, 24, 0.5)", // --ink shadow with transparency
+  countBadgeFill: "rgba(122, 154, 31, 0.8)", // --accent with transparency
+  countBadgeStroke: "#2E3A1C", // --deep
+  countBadgeText: "#FFFFFF",
 };
 
 const DARK_COLORS = {
-  tableFill: "#4C5864", // Lighter blue-grey
-  tableStroke: "#BE9467", // Softer gold/ochre
-  highlightedTableStroke: "#FFD700", // Kept previous dark mode gold, but might be overridden by LIGHT_COLORS logic
+  tableFill: "#3A4A28", // lightened --heroBg
+  tableStroke: "#C8DC58", // --heroAccent
+  highlightedTableStroke: "#E4F08A", // lightened --heroAccent
   highlightedTableStrokeWidth: 4, // Thicker border for highlight (was 3)
-  tableTextPrimary: "#EAE3D4", // Soft warm beige
-  tableTextSecondary: "#D5C9B7", // Slightly darker beige
-  minusButtonFill: "#6F4757", // Deep plum background
-  minusButtonHoverFill: "#8B5B6D", // Lighter plum for hover
-  minusButtonStroke: "#BB7C96", // Lighter plum
-  minusButtonHoverStroke: "#D594AF", // Brighter plum for hover
-  minusButtonText: "#EAE3D4", // Soft warm beige
-  plusButtonFill: "#4D5647", // Deep moss
-  plusButtonHoverFill: "#5F6B58", // Lighter moss for hover
-  plusButtonStroke: "#8A9880", // Lighter sage
-  plusButtonHoverStroke: "#A6B49B", // Brighter sage for hover
-  plusButtonText: "#EAE3D4", // Soft warm beige
-  shadowColor: "rgba(121, 85, 72, 0.7)", // Brown shadow with transparency
-  countBadgeFill: "rgba(145, 170, 157, 0.7)", // Sage green with transparency
-  countBadgeStroke: "#A3B097", // Lighter green
-  countBadgeText: "#EAE3D4", // Soft warm beige
+  tableTextPrimary: "#FAF8F0", // --heroInk
+  tableTextSecondary: "#9CAA72", // --heroMuted
+  minusButtonFill: "#4A2A2A", // dark tint of error red
+  minusButtonHoverFill: "#5C3535",
+  minusButtonStroke: "#E07A7A",
+  minusButtonHoverStroke: "#EB9A9A",
+  minusButtonText: "#FAF8F0",
+  plusButtonFill: "#3A4A28", // lightened --heroBg
+  plusButtonHoverFill: "#465A30",
+  plusButtonStroke: "#C8DC58", // --heroAccent
+  plusButtonHoverStroke: "#D8E888",
+  plusButtonText: "#FAF8F0",
+  shadowColor: "rgba(18, 22, 13, 0.7)", // near-black deep green shadow
+  countBadgeFill: "rgba(200, 220, 88, 0.75)", // --heroAccent with transparency
+  countBadgeStroke: "#1E2218", // --ink
+  countBadgeText: "#2E3A1C", // --deep, dark text on lime badge
 };
 
 // Inner component assumes shapeAtom is for a Table
@@ -332,7 +333,7 @@ const TableCircleContent: React.FC<{
         <Text
           text={`Table ${shape.number}`}
           fontSize={FONT_SIZE_LARGE}
-          fontFamily="'Libre Baskerville', serif"
+          fontFamily="'DM Serif Display', 'Playfair Display', serif"
           fill={COLORS.tableTextPrimary}
           fontStyle="bold"
           align="center"
@@ -348,7 +349,7 @@ const TableCircleContent: React.FC<{
         <Text
           text={`${shape.capacity} Guests`}
           fontSize={FONT_SIZE_SMALL}
-          fontFamily="'Source Sans Pro', sans-serif"
+          fontFamily="'Work Sans', sans-serif"
           fontStyle="bold"
           fill={COLORS.tableTextSecondary}
           align="center"
@@ -395,7 +396,7 @@ const TableCircleContent: React.FC<{
           <Text 
             text={`${occupiedSeatCount}/${shape.capacity}`}
             fontSize={10}
-            fontFamily="'Source Sans Pro', sans-serif"
+            fontFamily="'Work Sans', sans-serif"
             fontStyle="bold"
             fill={COLORS.countBadgeText}
             align="center"

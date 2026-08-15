@@ -14,26 +14,28 @@ import { VenueElement } from "../types/seatingChart";
 import { Shape } from "@/lib/atoms";
 import { useTheme } from "@/components/ThemeProvider";
 
-// Direct color values for light mode
+// Direct color values for light mode — matches the wedding site's Ticket
+// Show palette (cream/ink/olive).
 const LIGHT_COLORS = {
-  venueSpaceFill: "rgba(242, 234, 218, 0.1)", // very light beige, translucent
-  venueSpaceStroke: "#8A6E4B", // dark brown for venue outline
-  elementFill: "rgba(200, 167, 155, 0.2)", // muted terracotta, translucent
-  elementStroke: "#C8A79B", // muted terracotta
-  elementText: "#3C3226", // rich dark brown
-  selectedStroke: "#8A6E4B", // dark brown for consistency with tables
-  selectedShadow: "#795548", // brown shadow
+  venueSpaceFill: "rgba(30, 34, 24, 0.04)", // --ink, very translucent
+  venueSpaceStroke: "#1E2218", // --ink, for venue outline
+  elementFill: "rgba(122, 154, 31, 0.12)", // --accent, translucent
+  elementStroke: "#54604A", // --inkSoft
+  elementText: "#1E2218", // --ink
+  selectedStroke: "#7A9A1F", // --accent olive
+  selectedShadow: "#2E3A1C", // --deep
 };
 
-// Direct color values for dark mode
+// Direct color values for dark mode — mirrors the site's own dark/RSVP
+// section (deep green + lime).
 const DARK_COLORS = {
-  venueSpaceFill: "rgba(76, 88, 100, 0.1)", // blue-grey, translucent
-  venueSpaceStroke: "#BE9467", // gold/ochre for venue outline
-  elementFill: "rgba(100, 110, 120, 0.2)", // blue-grey, translucent
-  elementStroke: "#A3B097", // lighter sage
-  elementText: "#EAE3D4", // soft warm beige
-  selectedStroke: "#BE9467", // gold/ochre for consistency with tables
-  selectedShadow: "#795548", // brown shadow
+  venueSpaceFill: "rgba(250, 248, 240, 0.06)", // --heroInk, very translucent
+  venueSpaceStroke: "#C8DC58", // --heroAccent, for venue outline
+  elementFill: "rgba(156, 170, 114, 0.18)", // --heroMuted, translucent
+  elementStroke: "#9CAA72", // --heroMuted
+  elementText: "#FAF8F0", // --heroInk
+  selectedStroke: "#C8DC58", // --heroAccent
+  selectedShadow: "#1E2218", // --ink
 };
 
 interface ElementRectProps {
@@ -198,7 +200,7 @@ const ElementRectContent: React.FC<{
           <Text
             text={shape.title}
             fontSize={14}
-            fontFamily="'Libre Baskerville', serif"
+            fontFamily="'DM Serif Display', 'Playfair Display', serif"
             fontStyle="bold" // Added bold for better visibility
             fill={COLORS.elementText}
             align="center"

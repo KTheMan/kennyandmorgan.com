@@ -585,7 +585,7 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </>
           ) : editMode ? (
-            <div className="flex items-center bg-[#f0f7e0] text-[#3a5a0a] border border-[#b8d97a] rounded-md px-3 py-1.5 text-sm font-medium shadow-sm">
+            <div className="flex items-center bg-[#EEF3DC] text-[#2E3A1C] border border-[#BFCB8A] rounded-md px-3 py-1.5 text-sm font-medium shadow-sm">
               <KeyRound size={16} className="mr-1.5" />
               <span className="hidden sm:inline">Editing</span>
             </div>
