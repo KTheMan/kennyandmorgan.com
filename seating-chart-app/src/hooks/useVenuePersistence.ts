@@ -9,45 +9,49 @@ import {
   eventTitleAtom,
   tableCounterAtom,
 } from "@/lib/atoms";
-import { useVenueQuery, useUpdateVenueMutation } from "./useVenueApi";
+import { useVenueQuery, useSaveVenueMutation } from "./useVenueApi";
 import type { VenueData } from "@shared/types/venue";
-
-// Unlike upstream Seating.Art, there's exactly one venue (the wedding),
-// no shareable slugs, no PIN-gated edit mode, and no anonymous access —
-// AdminGate has already verified an admin session before this hook ever
-// runs. This is just: load once, then debounce-save on every change.
-
-const VENUE_CACHE_KEY = "km-seating-chart-venue-cache";
 
 export const DEFAULT_VENUE_DATA: VenueData = {
   shapes: [],
   guests: [],
-  eventTitle: "Kenny & Morgan's Wedding",
+  eventTitle: "New Event",
   tableCounter: 1,
 };
 
-// A localStorage warm-load cache so the canvas isn't blank while the
-// first server fetch is in flight. The server response is always treated
-// as the source of truth once it arrives.
+// A localStorage warm-load cache (per slug) so the canvas isn't blank
+// while the first fetch is in flight. The server response is always
+// treated as the source of truth once it arrives.
+const cacheKey = (slug: string) => `km-seating-chart-venue-cache-${slug}`;
+
 const cache = {
-  get(): VenueData | null {
+  get(slug: string): VenueData | null {
     try {
-      const item = localStorage.getItem(VENUE_CACHE_KEY);
+      const item = localStorage.getItem(cacheKey(slug));
       return item ? (JSON.parse(item) as VenueData) : null;
     } catch {
       return null;
     }
   },
-  set(data: VenueData): void {
+  set(slug: string, data: VenueData): void {
     try {
-      localStorage.setItem(VENUE_CACHE_KEY, JSON.stringify(data));
+      localStorage.setItem(cacheKey(slug), JSON.stringify(data));
     } catch {
       // Ignore quota errors — this cache is a convenience, not a source of truth.
     }
   },
 };
 
-export const useVenuePersistence = (token: string | null) => {
+export interface VenueCredentials {
+  token?: string | null;
+  pin?: string | null;
+}
+
+export const useVenuePersistence = (
+  slug: string,
+  credentials: VenueCredentials,
+  canEdit: boolean,
+) => {
   const [currentVenueData] = useAtom(venueDataAtom);
   const setShapes = useSetAtom(baseShapesAtom);
   const setGuests = useSetAtom(guestsAtom);
@@ -59,49 +63,53 @@ export const useVenuePersistence = (token: string | null) => {
     isLoading: isLoadingFromServer,
     error: serverError,
     isSuccess: isServerLoadSuccess,
-  } = useVenueQuery(token);
+  } = useVenueQuery(slug);
 
   const {
-    mutate: updateVenueMutate,
+    mutate: saveVenueMutate,
     status: updateStatus,
     error: updateError,
-  } = useUpdateVenueMutation();
+  } = useSaveVenueMutation();
 
   const isInitialLoadComplete = useRef(false);
-  const hasWarmedFromCache = useRef(false);
+  const loadedSlugRef = useRef<string | null>(null);
 
-  // --- Warm-load from localStorage immediately on mount. ---
+  // --- Warm-load from localStorage immediately when the slug changes. ---
   useEffect(() => {
-    if (hasWarmedFromCache.current) {
-      return;
-    }
-    hasWarmedFromCache.current = true;
-    const cached = cache.get();
+    isInitialLoadComplete.current = false;
+    loadedSlugRef.current = null;
+    const cached = cache.get(slug);
     if (cached) {
       setShapes(cached.shapes ?? []);
       setGuests(cached.guests ?? []);
       setEventTitle(cached.eventTitle ?? DEFAULT_VENUE_DATA.eventTitle);
       setTableCounter(cached.tableCounter ?? 1);
     }
-  }, [setShapes, setGuests, setEventTitle, setTableCounter]);
+  }, [slug, setShapes, setGuests, setEventTitle, setTableCounter]);
 
   // --- Once the server responds, it becomes the source of truth. ---
   useEffect(() => {
-    if (!isServerLoadSuccess || !serverData || isInitialLoadComplete.current) {
+    if (
+      !isServerLoadSuccess ||
+      !serverData ||
+      loadedSlugRef.current === slug
+    ) {
       return;
     }
     const venueData: VenueData =
-      serverData.venue_data && Object.keys(serverData.venue_data).length > 0
-        ? serverData.venue_data
+      serverData.venueData && Object.keys(serverData.venueData).length > 0
+        ? serverData.venueData
         : DEFAULT_VENUE_DATA;
 
     setShapes(venueData.shapes ?? []);
     setGuests(venueData.guests ?? []);
     setEventTitle(venueData.eventTitle ?? DEFAULT_VENUE_DATA.eventTitle);
     setTableCounter(venueData.tableCounter ?? 1);
-    cache.set(venueData);
+    cache.set(slug, venueData);
     isInitialLoadComplete.current = true;
+    loadedSlugRef.current = slug;
   }, [
+    slug,
     serverData,
     isServerLoadSuccess,
     setShapes,
@@ -110,32 +118,26 @@ export const useVenuePersistence = (token: string | null) => {
     setTableCounter,
   ]);
 
-  // --- Debounced save-back to the worker on every change. ---
+  // --- Debounced save-back to the worker on every change. Skipped
+  // entirely for viewers (no admin token, no validated pin) so a
+  // read-only visitor never fires failed save requests. ---
   const debouncedServerUpdate = useDebouncedCallback(
-    (dataToUpdate: VenueData, activeToken: string) => {
-      updateVenueMutate({ token: activeToken, venueData: dataToUpdate });
+    (activeSlug: string, dataToUpdate: VenueData) => {
+      saveVenueMutate({ slug: activeSlug, venueData: dataToUpdate, credentials });
     },
     2000,
   );
 
   useEffect(() => {
-    if (!isInitialLoadComplete.current || !token) {
+    if (!isInitialLoadComplete.current || loadedSlugRef.current !== slug || !canEdit) {
       return;
     }
-    cache.set(currentVenueData);
-    debouncedServerUpdate(currentVenueData, token);
-  }, [currentVenueData, token, debouncedServerUpdate]);
-
-  // --- Clear the canvas and start over (same venue, wiped state). ---
-  const handleClearVenue = () => {
-    setShapes(DEFAULT_VENUE_DATA.shapes);
-    setGuests(DEFAULT_VENUE_DATA.guests);
-    setEventTitle(DEFAULT_VENUE_DATA.eventTitle);
-    setTableCounter(DEFAULT_VENUE_DATA.tableCounter);
-  };
+    cache.set(slug, currentVenueData);
+    debouncedServerUpdate(slug, currentVenueData);
+  }, [currentVenueData, slug, canEdit, debouncedServerUpdate]);
 
   const isLoading =
-    !isInitialLoadComplete.current && isLoadingFromServer && !cache.get();
+    !isInitialLoadComplete.current && isLoadingFromServer && !cache.get(slug);
   const isSaving = updateStatus === "pending";
 
   return {
@@ -143,6 +145,5 @@ export const useVenuePersistence = (token: string | null) => {
     isSaving,
     serverError,
     updateError,
-    handleClearVenue,
   };
 };

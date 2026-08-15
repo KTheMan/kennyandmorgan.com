@@ -3,7 +3,6 @@ import {
   Sun,
   RotateCcw,
   Users,
-  Square,
   BookOpen,
   Lock,
   Unlock,
@@ -15,8 +14,11 @@ import {
   X,
   ShieldCheck,
   ArrowLeft,
+  Eye,
+  KeyRound,
+  Share2,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/ThemeProvider";
 import {
@@ -29,6 +31,9 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { useAtom, useAtomValue } from "jotai";
 import { eventTitleAtom, editModeAtom } from "@/lib/atoms";
+import { useToast } from "@/components/ui/use-toast";
+import { setPin as setVenuePin } from "@/lib/api/venues";
+import { tryVerifyAdminSession } from "@/lib/adminAuth";
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
@@ -63,6 +68,11 @@ export function ThemeToggle() {
 export type SaveStatus = "saved" | "saving" | "unsaved";
 
 interface HeaderProps {
+  slug: string;
+  isAdmin: boolean;
+  hasPin: boolean;
+  onUnlockWithPin: (pin: string) => Promise<boolean>;
+  onBackToManager: () => void;
   totalGuests: number;
   onReset: () => void;
   onAddTable: () => void;
@@ -78,6 +88,11 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
+  slug,
+  isAdmin,
+  hasPin,
+  onUnlockWithPin,
+  onBackToManager,
   totalGuests,
   onReset,
   onAddTable,
@@ -93,11 +108,83 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [eventTitle, setEventTitle] = useAtom(eventTitleAtom);
   const editMode = useAtomValue(editModeAtom);
+  const { toast } = useToast();
+
+  const [pinEntry, setPinEntry] = useState("");
+  const [isPinSubmitting, setIsPinSubmitting] = useState(false);
+  const [isRegeneratingPin, setIsRegeneratingPin] = useState(false);
 
   // Update document title when eventTitle changes
   useEffect(() => {
     document.title = `${eventTitle} - Seating Chart`;
   }, [eventTitle]);
+
+  const handlePinUnlock = async () => {
+    if (pinEntry.length !== 4) {
+      toast({
+        title: "Invalid PIN Format",
+        description: "PIN must be 4 digits.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsPinSubmitting(true);
+    try {
+      const ok = await onUnlockWithPin(pinEntry);
+      if (ok) {
+        toast({ title: "Editing Unlocked", description: "You can now edit the canvas." });
+        setPinEntry("");
+      } else {
+        toast({
+          title: "Incorrect PIN",
+          description: "Double-check the PIN and try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error: unknown) {
+      toast({
+        title: "PIN Unlock Error",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    }
+    setIsPinSubmitting(false);
+  };
+
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast({ title: "Link Copied", description: "Anyone with this link can view the chart." });
+    } catch {
+      toast({
+        title: "Couldn't Copy Link",
+        description: window.location.href,
+      });
+    }
+  };
+
+  const handleRegeneratePin = async () => {
+    setIsRegeneratingPin(true);
+    try {
+      const adminSession = await tryVerifyAdminSession();
+      if (!adminSession) {
+        throw new Error("Admin session required.");
+      }
+      const newPin = await setVenuePin(slug, adminSession.token);
+      toast({
+        title: "New PIN Generated",
+        description: `Share PIN: ${newPin} — the previous PIN no longer works.`,
+      });
+    } catch (error: unknown) {
+      toast({
+        title: "Couldn't Regenerate PIN",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setIsRegeneratingPin(false);
+    }
+  };
 
   return (
     <header className="relative bg-gradient-to-r from-card to-card/95 border-b border-border/40 shadow-sm px-4 sm:px-7 py-4 overflow-hidden">
@@ -328,37 +415,114 @@ export const Header: React.FC<HeaderProps> = ({
             </Tooltip>
           </TooltipProvider>
 
-          {/* Admin session indicator + link back to the main site (this
-              app has no login of its own — see AdminGate). */}
+          {/* Access indicator: admin (full access + share tools), editor
+              (unlocked this venue's PIN), or viewer (read-only, with a
+              PIN unlock form if this venue has one). This app has no
+              login of its own — see AdminGate / VenueGate. */}
+          {isAdmin ? (
+            <>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a
+                      href="../admin.html"
+                      className="flex items-center bg-muted/30 text-muted-foreground border border-muted rounded-md px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted/50 transition-colors"
+                    >
+                      <ShieldCheck size={16} className="mr-1.5 text-primary/80" />
+                      <span className="hidden sm:inline">Admin</span>
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-card text-card-foreground border-border">
+                    <p>Signed in via the wedding site's admin console.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="sm" onClick={handleShare} className="shadow-sm">
+                      <Share2 size={14} className="mr-1.5" /> Share
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-card text-card-foreground border-border">
+                    <p>Copy this chart's link — viewing never needs a password.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              {hasPin && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRegeneratePin}
+                        disabled={isRegeneratingPin}
+                        className="shadow-sm"
+                      >
+                        <KeyRound size={14} className="mr-1.5" />
+                        {isRegeneratingPin ? "…" : "New PIN"}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="bg-card text-card-foreground border-border">
+                      <p>Generate a new edit PIN for this chart (invalidates the old one).</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </>
+          ) : editMode ? (
+            <div className="flex items-center bg-[#f0f7e0] text-[#3a5a0a] border border-[#b8d97a] rounded-md px-3 py-1.5 text-sm font-medium shadow-sm">
+              <KeyRound size={16} className="mr-1.5" />
+              <span className="hidden sm:inline">Editing</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center bg-muted/30 text-muted-foreground border border-muted rounded-md px-3 py-1.5 text-sm font-medium shadow-sm">
+                <Eye size={16} className="mr-1.5" />
+                <span className="hidden sm:inline">View Only</span>
+              </div>
+              {hasPin && (
+                <>
+                  <Input
+                    type="password"
+                    maxLength={4}
+                    placeholder="PIN"
+                    value={pinEntry}
+                    onChange={(e) => setPinEntry(e.target.value.replace(/\D/g, ""))}
+                    className="h-10 w-20 bg-card/60 border-border/30 focus:border-primary/50 focus:bg-card/80 text-center font-mono tracking-widest"
+                    aria-label="Enter this chart's 4-digit PIN to edit"
+                    disabled={isPinSubmitting}
+                  />
+                  <Button
+                    variant="outline"
+                    size="default"
+                    onClick={handlePinUnlock}
+                    disabled={isPinSubmitting || pinEntry.length !== 4}
+                    className="h-10 shadow-sm border-primary/50 text-primary hover:bg-primary/5 hover:text-primary"
+                  >
+                    <Unlock size={16} className="mr-1.5" />
+                    {isPinSubmitting ? "…" : "Unlock"}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <a
-                  href="../admin.html"
-                  className="flex items-center bg-muted/30 text-muted-foreground border border-muted rounded-md px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted/50 transition-colors"
-                >
-                  <ShieldCheck size={16} className="mr-1.5 text-primary/80" />
-                  <span className="hidden sm:inline">Admin</span>
-                </a>
-              </TooltipTrigger>
-              <TooltipContent className="bg-card text-card-foreground border-border">
-                <p>Signed in via the wedding site's admin console.</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <a
-                  href="../index.html"
-                  className="flex items-center justify-center h-10 w-10 rounded-md border border-accent/30 bg-accent/5 hover:bg-accent/15 shadow-sm transition-colors"
-                  aria-label="Back to wedding site"
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={isAdmin ? onBackToManager : () => { window.location.href = "../index.html"; }}
+                  className="h-10 w-10 border-accent/30 bg-accent/5 hover:bg-accent/15 shadow-sm"
+                  aria-label={isAdmin ? "Back to Seating Charts" : "Back to wedding site"}
                 >
                   <ArrowLeft size={18} strokeWidth={1.5} />
-                </a>
+                </Button>
               </TooltipTrigger>
               <TooltipContent className="bg-card text-card-foreground border-border">
-                <p>Back to the wedding site</p>
+                <p>{isAdmin ? "Back to Seating Charts" : "Back to the wedding site"}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

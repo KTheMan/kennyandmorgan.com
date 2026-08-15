@@ -2,43 +2,56 @@
 //
 // Backend "worker" for our hard fork of gabriel1ll7/Seating-Planner
 // ("Seating.Art"). We don't run their Express + PostgreSQL stack — this
-// Deno edge function replaces it with three small routes backed by our
-// existing Supabase project, so the forked frontend can be published as
-// static assets alongside the rest of the wedding site.
+// Deno edge function replaces it with routes backed by our existing
+// Supabase project, so the forked frontend can be published as static
+// assets alongside the rest of the wedding site.
 //
-// Every route requires an admin session token (the same one issued by
-// public.login_access / stored as km_access_token on the main site) sent
-// via the `x-km-session-token` header. Authorization is delegated to the
-// existing public.require_session(session_token, 'admin') RPC — this
-// function never re-implements session hashing/expiry logic.
+// Multiple venues, each with a shareable slug and its own PIN:
+//   - Admin (site's existing admin session, sent as x-km-session-token):
+//     full access to every venue — list, create, edit, regenerate a PIN.
+//   - Anyone with a venue's link: can always VIEW it, no auth at all.
+//   - Anyone with the link + that venue's PIN: can EDIT it.
+//
+// All the actual auth/hashing/rate-limiting logic lives in Postgres RPCs
+// (see supabase/migrations/20260815090000_seating_chart_multivenue_pin.sql)
+// so this function never re-implements session or PIN comparison itself.
+// Those RPCs are NOT granted to anon/authenticated — only this function's
+// service-role client can call them, which is what keeps PIN attempts
+// funneled through the rate limiter instead of reachable directly via
+// PostgREST.
 //
 // Routes:
-//   GET  /seating-chart-api/venue   -> { success, venueData, updatedAt }
-//   PUT  /seating-chart-api/venue   -> body { venueData }, upsert
-//   GET  /seating-chart-api/guests  -> the connector: accepted guests
-//                                       grouped by party/group, ready to
-//                                       import into the seating chart.
+//   GET  /seating-chart-api/venues              -> admin: list venues
+//   POST /seating-chart-api/venues               -> admin: create venue
+//   GET  /seating-chart-api/venue?slug=X          -> public: fetch venue
+//   PUT  /seating-chart-api/venue?slug=X          -> admin token OR pin: save
+//   POST /seating-chart-api/venue/validate-pin?slug=X -> public: check a PIN
+//   POST /seating-chart-api/venue/set-pin?slug=X  -> admin: (re)set a PIN
+//   GET  /seating-chart-api/guests                -> admin: the connector
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-km-session-token",
-  "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
 };
 
 const JSON_HEADERS = { ...CORS_HEADERS, "Content-Type": "application/json" };
 
-// Single fixed venue — this is a private, single-event tool, not the
-// original app's multi-tenant/shareable-slug model.
-const VENUE_SLUG = Deno.env.get("SEATING_CHART_VENUE_SLUG") ||
-  "kenny-and-morgan";
+const MAX_SLUG_RETRIES = 5;
 
-const DEFAULT_VENUE_DATA = {
-  shapes: [],
-  guests: [],
-  eventTitle: "Kenny & Morgan's Wedding",
-  tableCounter: 1,
-};
+const ANIMALS = [
+  "dog", "cat", "horse", "rabbit", "mouse", "fox", "wolf", "bear", "deer",
+  "lion", "tiger", "zebra", "giraffe", "elephant", "monkey", "panda",
+  "koala", "kangaroo", "eagle", "hawk", "owl", "robin", "sparrow", "duck",
+  "goose", "swan", "penguin", "turtle", "otter", "raccoon", "squirrel",
+];
+const FURNITURE = [
+  "chair", "table", "desk", "sofa", "couch", "ottoman", "stool", "bench",
+  "dresser", "nightstand", "wardrobe", "bookcase", "shelf", "cabinet",
+  "console", "vanity", "lamp", "chandelier", "rug", "recliner", "rocker",
+  "hammock", "chaise", "barstool", "counter", "island", "trunk", "chest",
+];
 
 class HttpError extends Error {
   status: number;
@@ -48,21 +61,8 @@ class HttpError extends Error {
   }
 }
 
-interface GuestRow {
-  id: number;
-  full_name: string;
-  group_id: string;
-  is_primary: boolean;
-  is_child: boolean;
-  meal_choice: string | null;
-  dietary_notes: string | null;
-}
-
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: JSON_HEADERS,
-  });
+  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
 function getEnvConfig(): { supabaseUrl: string; serviceRoleKey: string } {
@@ -82,111 +82,214 @@ function serviceHeaders(serviceRoleKey: string): Record<string, string> {
   };
 }
 
-// Delegates auth to the site's existing require_session RPC rather than
-// re-implementing token hashing/expiry/level checks here.
+function clientIp(req: Request): string {
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    return forwardedFor.split(",")[0].trim();
+  }
+  return req.headers.get("x-real-ip") || "unknown";
+}
+
+function generateSlug(): string {
+  const animal = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
+  const item = FURNITURE[Math.floor(Math.random() * FURNITURE.length)];
+  const number = Math.floor(100 + Math.random() * 900);
+  return `${animal}-${item}-${number}`;
+}
+
+async function callRpc(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  fn: string,
+  args: Record<string, unknown>,
+): Promise<{ ok: boolean; status: number; body: unknown; text: string }> {
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: serviceHeaders(serviceRoleKey),
+    body: JSON.stringify(args),
+  });
+  const text = await response.text();
+  let body: unknown = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    // non-JSON body; leave as null, `text` still has the raw response
+  }
+  return { ok: response.ok, status: response.status, body, text };
+}
+
+function rpcErrorMessage(result: { body: unknown; text: string }): string {
+  const body = result.body as Record<string, unknown> | null;
+  return (body?.message as string | undefined) || result.text || "Request failed.";
+}
+
+async function tryVerifyAdmin(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  sessionToken: string | null,
+): Promise<boolean> {
+  if (!sessionToken) return false;
+  const result = await callRpc(supabaseUrl, serviceRoleKey, "require_session", {
+    session_token: sessionToken,
+    required_level: "admin",
+  });
+  return result.ok;
+}
+
 async function requireAdminSession(
   supabaseUrl: string,
   serviceRoleKey: string,
   sessionToken: string | null,
 ): Promise<void> {
-  if (!sessionToken) {
-    throw new HttpError(401, "Missing session token.");
-  }
-
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/rpc/require_session`,
-    {
-      method: "POST",
-      headers: serviceHeaders(serviceRoleKey),
-      body: JSON.stringify({
-        session_token: sessionToken,
-        required_level: "admin",
-      }),
-    },
-  );
-
-  if (!response.ok) {
+  const ok = await tryVerifyAdmin(supabaseUrl, serviceRoleKey, sessionToken);
+  if (!ok) {
     throw new HttpError(401, "Admin session required.");
   }
 }
 
-async function fetchVenue(
+async function listVenues(
   supabaseUrl: string,
   serviceRoleKey: string,
-): Promise<{ venueData: unknown; updatedAt: string | null }> {
-  const params = new URLSearchParams({
-    slug: `eq.${VENUE_SLUG}`,
-    select: "venue_data,updated_at",
-    limit: "1",
+  sessionToken: string | null,
+) {
+  await requireAdminSession(supabaseUrl, serviceRoleKey, sessionToken);
+  const result = await callRpc(supabaseUrl, serviceRoleKey, "seating_chart_list_venues", {
+    session_token: sessionToken,
   });
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/seating_chart_venues?${params.toString()}`,
-    { headers: serviceHeaders(serviceRoleKey) },
+  if (!result.ok) {
+    throw new HttpError(result.status, rpcErrorMessage(result));
+  }
+  return jsonResponse({ success: true, venues: result.body });
+}
+
+async function createVenue(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  sessionToken: string | null,
+  eventTitle: string | undefined,
+) {
+  await requireAdminSession(supabaseUrl, serviceRoleKey, sessionToken);
+
+  let lastResult: Awaited<ReturnType<typeof callRpc>> | null = null;
+  for (let attempt = 0; attempt < MAX_SLUG_RETRIES; attempt += 1) {
+    const slug = generateSlug();
+    const result = await callRpc(supabaseUrl, serviceRoleKey, "seating_chart_create_venue", {
+      session_token: sessionToken,
+      slug,
+      event_title: eventTitle || "New Event",
+    });
+    if (result.ok) {
+      return jsonResponse({ success: true, ...(result.body as Record<string, unknown>) });
+    }
+    lastResult = result;
+    const isCollision = result.text.includes("23505") ||
+      result.text.toLowerCase().includes("duplicate key");
+    if (!isCollision) {
+      throw new HttpError(result.status, rpcErrorMessage(result));
+    }
+  }
+  throw new HttpError(
+    500,
+    `Could not generate a unique slug after ${MAX_SLUG_RETRIES} attempts: ${
+      lastResult ? rpcErrorMessage(lastResult) : "unknown error"
+    }`,
   );
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new HttpError(502, `Failed to load venue: ${text}`);
+}
+
+async function getVenue(supabaseUrl: string, serviceRoleKey: string, slug: string) {
+  const result = await callRpc(supabaseUrl, serviceRoleKey, "seating_chart_get_venue", {
+    target_slug: slug,
+  });
+  if (!result.ok) {
+    throw new HttpError(result.status, rpcErrorMessage(result));
   }
-  const rows = await response.json() as Array<
-    { venue_data: unknown; updated_at: string }
-  >;
-  if (rows.length === 0) {
-    return { venueData: DEFAULT_VENUE_DATA, updatedAt: null };
+  if (!result.body) {
+    throw new HttpError(404, "Chart not found.");
   }
-  return { venueData: rows[0].venue_data, updatedAt: rows[0].updated_at };
+  return jsonResponse({ success: true, ...(result.body as Record<string, unknown>) });
 }
 
 async function saveVenue(
   supabaseUrl: string,
   serviceRoleKey: string,
+  slug: string,
+  sessionToken: string | null,
   venueData: unknown,
-): Promise<{ updatedAt: string | null }> {
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/seating_chart_venues?on_conflict=slug`,
-    {
-      method: "POST",
-      headers: {
-        ...serviceHeaders(serviceRoleKey),
-        Prefer: "resolution=merge-duplicates,return=representation",
-      },
-      body: JSON.stringify([{ slug: VENUE_SLUG, venue_data: venueData }]),
-    },
-  );
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new HttpError(502, `Failed to save venue: ${text}`);
+  pin: string | undefined,
+  ip: string,
+) {
+  const result = await callRpc(supabaseUrl, serviceRoleKey, "seating_chart_save_venue", {
+    session_token: sessionToken,
+    target_slug: slug,
+    new_venue_data: venueData,
+    candidate_pin: pin || null,
+    client_ip: ip,
+  });
+  if (!result.ok) {
+    throw new HttpError(result.status, rpcErrorMessage(result));
   }
-  const rows = await response.json() as Array<{ updated_at: string }>;
-  return { updatedAt: rows[0]?.updated_at ?? null };
+  return jsonResponse({ success: true, ...(result.body as Record<string, unknown>) });
+}
+
+async function validatePin(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  slug: string,
+  pin: string,
+  ip: string,
+) {
+  const result = await callRpc(supabaseUrl, serviceRoleKey, "seating_chart_validate_pin", {
+    target_slug: slug,
+    candidate_pin: pin,
+    client_ip: ip,
+  });
+  if (!result.ok) {
+    throw new HttpError(result.status, rpcErrorMessage(result));
+  }
+  return jsonResponse(result.body);
+}
+
+async function setPin(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  slug: string,
+  sessionToken: string | null,
+  pin: string | undefined,
+) {
+  await requireAdminSession(supabaseUrl, serviceRoleKey, sessionToken);
+  const result = await callRpc(supabaseUrl, serviceRoleKey, "seating_chart_set_pin", {
+    session_token: sessionToken,
+    target_slug: slug,
+    new_pin: pin || null,
+  });
+  if (!result.ok) {
+    throw new HttpError(result.status, rpcErrorMessage(result));
+  }
+  return jsonResponse({ success: true, ...(result.body as Record<string, unknown>) });
+}
+
+interface GuestRow {
+  id: number;
+  full_name: string;
+  group_id: string;
+  is_primary: boolean;
+  is_child: boolean;
+  meal_choice: string | null;
+  dietary_notes: string | null;
 }
 
 // The connector: accepted guests, grouped by party/group_id, shaped for
-// import into the seating chart's guest list.
-async function fetchAcceptedGuestParties(
-  supabaseUrl: string,
-  serviceRoleKey: string,
-): Promise<
-  Array<{
-    groupId: string;
-    guests: Array<{
-      weddingGuestId: string;
-      fullName: string;
-      isPrimary: boolean;
-      isChild: boolean;
-      mealChoice: string | null;
-      dietaryNotes: string | null;
-    }>;
-  }>
-> {
+// import into a seating chart's guest list. Admin-only — link recipients
+// editing via PIN never trigger a pull of the real RSVP list.
+async function fetchAcceptedGuestParties(supabaseUrl: string, serviceRoleKey: string) {
   const params = new URLSearchParams({
     rsvp_status: "eq.accepted",
     select: "id,full_name,group_id,is_primary,is_child,meal_choice,dietary_notes",
     order: "group_id.asc,is_primary.desc,full_name.asc",
   });
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/guests?${params.toString()}`,
-    { headers: serviceHeaders(serviceRoleKey) },
-  );
+  const response = await fetch(`${supabaseUrl}/rest/v1/guests?${params.toString()}`, {
+    headers: serviceHeaders(serviceRoleKey),
+  });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new HttpError(502, `Failed to load accepted guests: ${text}`);
@@ -231,46 +334,56 @@ async function handleRequest(req: Request): Promise<Response> {
   const segments = url.pathname.split("/").filter(Boolean);
   const functionNameIndex = segments.indexOf("seating-chart-api");
   const route = functionNameIndex === -1
-    ? segments.at(-1) ?? ""
+    ? segments.slice(-1).join("/")
     : segments.slice(functionNameIndex + 1).join("/");
 
   const { supabaseUrl, serviceRoleKey } = getEnvConfig();
   const sessionToken = req.headers.get("x-km-session-token");
-  await requireAdminSession(supabaseUrl, serviceRoleKey, sessionToken);
+  const slug = url.searchParams.get("slug") || "";
+  const ip = clientIp(req);
+
+  if (route === "venues" && req.method === "GET") {
+    return listVenues(supabaseUrl, serviceRoleKey, sessionToken);
+  }
+
+  if (route === "venues" && req.method === "POST") {
+    const body = await req.json().catch(() => ({})) as { eventTitle?: string };
+    return createVenue(supabaseUrl, serviceRoleKey, sessionToken, body.eventTitle);
+  }
 
   if (route === "venue" && req.method === "GET") {
-    const { venueData, updatedAt } = await fetchVenue(
-      supabaseUrl,
-      serviceRoleKey,
-    );
-    return jsonResponse({ success: true, venueData, updatedAt });
+    if (!slug) throw new HttpError(400, "slug is required.");
+    return getVenue(supabaseUrl, serviceRoleKey, slug);
   }
 
   if (route === "venue" && req.method === "PUT") {
+    if (!slug) throw new HttpError(400, "slug is required.");
     const body = await req.json().catch(() => null) as
-      | { venueData?: unknown }
+      | { venueData?: unknown; pin?: string }
       | null;
     if (!body || typeof body.venueData === "undefined") {
       throw new HttpError(400, "venueData is required.");
     }
-    const { updatedAt } = await saveVenue(
-      supabaseUrl,
-      serviceRoleKey,
-      body.venueData,
-    );
-    return jsonResponse({ success: true, updatedAt });
+    return saveVenue(supabaseUrl, serviceRoleKey, slug, sessionToken, body.venueData, body.pin, ip);
+  }
+
+  if (route === "venue/validate-pin" && req.method === "POST") {
+    if (!slug) throw new HttpError(400, "slug is required.");
+    const body = await req.json().catch(() => ({})) as { pin?: string };
+    if (!body.pin) throw new HttpError(400, "pin is required.");
+    return validatePin(supabaseUrl, serviceRoleKey, slug, body.pin, ip);
+  }
+
+  if (route === "venue/set-pin" && req.method === "POST") {
+    if (!slug) throw new HttpError(400, "slug is required.");
+    const body = await req.json().catch(() => ({})) as { pin?: string };
+    return setPin(supabaseUrl, serviceRoleKey, slug, sessionToken, body.pin);
   }
 
   if (route === "guests" && req.method === "GET") {
-    const parties = await fetchAcceptedGuestParties(
-      supabaseUrl,
-      serviceRoleKey,
-    );
-    return jsonResponse({
-      success: true,
-      parties,
-      generatedAt: new Date().toISOString(),
-    });
+    await requireAdminSession(supabaseUrl, serviceRoleKey, sessionToken);
+    const parties = await fetchAcceptedGuestParties(supabaseUrl, serviceRoleKey);
+    return jsonResponse({ success: true, parties, generatedAt: new Date().toISOString() });
   }
 
   throw new HttpError(404, "Not found.");
@@ -286,10 +399,7 @@ if (import.meta.main) {
       return await handleRequest(req);
     } catch (err) {
       if (err instanceof HttpError) {
-        return jsonResponse(
-          { success: false, error: err.message },
-          err.status,
-        );
+        return jsonResponse({ success: false, error: err.message }, err.status);
       }
       const message = err instanceof Error ? err.message : "Unknown error";
       console.error("[seating-chart-api]", message);

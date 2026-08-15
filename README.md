@@ -46,11 +46,17 @@ kennyandmorgan.com/
 ("Seating.Art"), built from `seating-chart-app/` and published as a static
 subfolder of this site. It doesn't run upstream's Express/PostgreSQL
 server — `supabase/functions/seating-chart-api` replaces that as a
-Supabase Edge Function, and the whole tool is gated behind this site's
-existing admin login instead of upstream's PIN system. A "Sync Accepted
-Guests" button in its sidebar pulls accepted RSVPs, grouped by party,
-from this site's `guests` table via that same worker. See
-`seating-chart-app/README.md` for details.
+Supabase Edge Function.
+
+Charts are shareable by link (`/seating-chart/?v=<slug>`) and
+PIN-protected the same way upstream's are, just backed by our own
+Supabase project instead of a separate server: anyone with the link can
+view a chart, anyone with the link + its PIN can edit it, and the site
+admin (existing login, reused since this app is served same-origin) has
+full access to every chart plus a venue manager to create/list them. A
+"Sync Accepted Guests" button in the sidebar (admin-only) pulls accepted
+RSVPs, grouped by party, from this site's `guests` table via that same
+worker. See `seating-chart-app/README.md` for details.
 
 ## Setup
 

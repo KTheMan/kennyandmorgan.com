@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Sidebar } from "./Sidebar";
 import { Header, type SaveStatus } from "./Header";
 import { useToast } from "@/components/ui/use-toast";
-import { CanvasStage } from "./CanvasStage";
 import { useAtom, useSetAtom, useAtomValue } from "jotai";
 import {
   baseShapesAtom,
@@ -19,7 +18,8 @@ import { Table, VenueElement } from "../types/seatingChart";
 import { GuestAssignmentModal } from "./GuestAssignmentModal";
 import { RenameElementModal } from "./RenameElementModal";
 import { SortedCanvasStageAdapter } from "./SortedCanvasStageAdapter";
-import { useVenuePersistence } from "@/hooks/useVenuePersistence";
+import { useVenuePersistence, DEFAULT_VENUE_DATA, type VenueCredentials } from "@/hooks/useVenuePersistence";
+import type { VenueAccess } from "@/components/VenueGate";
 import { nanoid } from "nanoid";
 import {
   Sheet,
@@ -44,13 +44,40 @@ const useMediaQuery = (query: string) => {
 };
 
 interface SeatingChartAppProps {
-  token: string;
+  slug: string;
+  access: VenueAccess;
+  hasPin: boolean;
+  onUnlockWithPin: (pin: string) => Promise<boolean>;
+  onBackToManager: () => void;
 }
 
-export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({ token }) => {
+export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
+  slug,
+  access,
+  hasPin,
+  onUnlockWithPin,
+  onBackToManager,
+}) => {
   const { toast } = useToast();
-  const { isLoading, isSaving, serverError, updateError, handleClearVenue } =
-    useVenuePersistence(token);
+  const isAdmin = access.kind === "admin";
+  const canEdit = access.kind !== "viewer";
+
+  const credentials: VenueCredentials = useMemo(() => {
+    if (access.kind === "admin") return { token: access.token };
+    if (access.kind === "editor") return { pin: access.pin };
+    return {};
+  }, [access]);
+
+  const setEditMode = useSetAtom(editModeAtom);
+  useEffect(() => {
+    setEditMode(canEdit);
+  }, [canEdit, setEditMode]);
+
+  const { isLoading, isSaving, serverError, updateError } = useVenuePersistence(
+    slug,
+    credentials,
+    canEdit,
+  );
   const editMode = useAtomValue(editModeAtom);
 
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -69,6 +96,8 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({ token }) => {
   }, [isSaving, updateError]);
 
   const setBaseShapes = useSetAtom(baseShapesAtom);
+  const setGuestsValue = useSetAtom(guestsAtom);
+  const setEventTitleValue = useSetAtom(eventTitleAtom);
   const [tableCounterValue, setTableCounter] = useAtom(tableCounterAtom);
   const [totalGuests] = useAtom(totalGuestsAtom);
   const [guestsValue] = useAtom(guestsAtom);
@@ -90,9 +119,9 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({ token }) => {
   useEffect(() => {
     if (serverError) {
       toast({
-        title: "Error Loading Venue",
+        title: "Error Loading Chart",
         description:
-          serverError.message || "Could not load venue data from server.",
+          serverError.message || "Could not load chart data from server.",
         variant: "destructive",
       });
     }
@@ -101,28 +130,32 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({ token }) => {
   useEffect(() => {
     if (updateError) {
       toast({
-        title: "Error Saving Venue",
+        title: "Error Saving Chart",
         description:
           (updateError as Error).message ||
-          "Could not save venue data to server.",
+          "Could not save chart data to server.",
         variant: "destructive",
       });
     }
   }, [updateError, toast]);
 
   const handleReset = useCallback(() => {
+    if (!canEdit) return;
     if (
       window.confirm(
         "Are you sure you want to clear the canvas? Tables, venue elements, and seating assignments will be removed.",
       )
     ) {
-      handleClearVenue();
+      setBaseShapes(DEFAULT_VENUE_DATA.shapes);
+      setGuestsValue(DEFAULT_VENUE_DATA.guests);
+      setEventTitleValue(DEFAULT_VENUE_DATA.eventTitle);
+      setTableCounter(DEFAULT_VENUE_DATA.tableCounter);
       toast({
         title: "Canvas Cleared",
         description: "Started a fresh seating chart.",
       });
     }
-  }, [handleClearVenue, toast]);
+  }, [canEdit, setBaseShapes, setGuestsValue, setEventTitleValue, setTableCounter, toast]);
 
   const handleAddTable = () => {
     if (editMode === false) {
@@ -275,7 +308,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({ token }) => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p>Loading Venue...</p>
+        <p>Loading Chart...</p>
       </div>
     );
   }
@@ -283,6 +316,11 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({ token }) => {
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       <Header
+        slug={slug}
+        isAdmin={isAdmin}
+        hasPin={hasPin}
+        onUnlockWithPin={onUnlockWithPin}
+        onBackToManager={onBackToManager}
         totalGuests={totalGuests}
         onReset={handleReset}
         onAddTable={handleAddTable}
@@ -303,7 +341,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({ token }) => {
             tables={baseShapesValue.filter(
               (s): s is Table => s.type === "table",
             )}
-            token={token}
+            isAdmin={isAdmin}
           />
         ) : (
           <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
@@ -319,7 +357,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({ token }) => {
                 tables={baseShapesValue.filter(
                   (s): s is Table => s.type === "table",
                 )}
-                token={token}
+                isAdmin={isAdmin}
                 isInSheet={true}
               />
             </SheetContent>

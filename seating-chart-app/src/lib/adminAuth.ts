@@ -63,3 +63,17 @@ export async function verifyAdminSession(): Promise<AdminSession> {
 
   return { token, accessLevel: data.accessLevel };
 }
+
+/**
+ * Same as verifyAdminSession, but resolves to null instead of throwing.
+ * Used for the "soft" check on shareable chart links, where a visitor is
+ * usually not the admin at all and that's a perfectly normal outcome —
+ * not an error.
+ */
+export async function tryVerifyAdminSession(): Promise<AdminSession | null> {
+  try {
+    return await verifyAdminSession();
+  } catch {
+    return null;
+  }
+}

@@ -5,50 +5,51 @@ import {
   type UseQueryOptions,
   type UseMutationOptions,
 } from "@tanstack/react-query";
-import { getVenue, updateVenue, type VenueResponse } from "@/lib/api/venues";
+import { getVenue, saveVenue, type VenuePayload } from "@/lib/api/venues";
 import type { VenueData } from "@shared/types/venue";
 
-type UpdateVenueVariables = {
-  token: string;
+type SaveVenueVariables = {
+  slug: string;
   venueData: VenueData;
+  credentials: { token?: string | null; pin?: string | null };
 };
 
 // --- Query Hook ---
 
 /**
- * Fetches the single fixed venue for the wedding. Enabled once an admin
- * session token is available.
+ * Fetches a venue by slug. Viewing is always public — no credentials
+ * needed — so this is enabled whenever a slug is present.
  */
 export const useVenueQuery = (
-  token: string | null,
+  slug: string | null,
   options?: Omit<
-    UseQueryOptions<VenueResponse, Error, VenueResponse, readonly [string, string | null]>,
+    UseQueryOptions<VenuePayload, Error, VenuePayload, readonly [string, string | null]>,
     "queryKey" | "queryFn" | "enabled"
   >,
 ) => {
   return useQuery({
-    queryKey: ["seating-chart-venue", token] as const,
+    queryKey: ["seating-chart-venue", slug] as const,
     queryFn: () => {
-      if (!token) {
-        return Promise.reject(new Error("Admin session required."));
+      if (!slug) {
+        return Promise.reject(new Error("A chart slug is required."));
       }
-      return getVenue(token);
+      return getVenue(slug);
     },
-    enabled: !!token,
+    enabled: !!slug,
     ...options,
   });
 };
 
 // --- Mutation Hook ---
 
-export const useUpdateVenueMutation = (
-  options?: UseMutationOptions<VenueResponse, Error, UpdateVenueVariables>,
+export const useSaveVenueMutation = (
+  options?: UseMutationOptions<{ updatedAt: string | null }, Error, SaveVenueVariables>,
 ) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ token, venueData }) =>
-      updateVenue(token, { venue_data: venueData }),
+    mutationFn: ({ slug, venueData, credentials }) =>
+      saveVenue(slug, venueData, credentials),
     onSuccess: (...args) => {
       queryClient.invalidateQueries({ queryKey: ["seating-chart-venue"] });
       options?.onSuccess?.(...args);

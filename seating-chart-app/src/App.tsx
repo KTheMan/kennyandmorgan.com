@@ -4,7 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "react-error-boundary";
 import { AdminGate } from "@/components/AdminGate";
-import { SeatingChartApp } from "@/components/SeatingChartApp";
+import { VenueManager } from "@/components/VenueManager";
+import { VenueGate } from "@/components/VenueGate";
+import { useSlugParam } from "@/hooks/useSlugParam";
 import { ThemeProvider } from "./components/ThemeProvider";
 
 const queryClient = new QueryClient();
@@ -31,26 +33,34 @@ function ErrorFallback({ error }: { error: Error }) {
   );
 }
 
-// No router: this fork has exactly one page (the wedding's seating
-// chart). AdminGate stands in for the multi-tenant slug/PIN system
-// upstream uses — sign-in happens on the main site's admin console, not
-// here.
-const App = () => (
-  <ErrorBoundary FallbackComponent={ErrorFallback}>
-    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
-      <div className="flex flex-col h-screen">
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <AdminGate>
-              {(token) => <SeatingChartApp token={token} />}
-            </AdminGate>
-          </TooltipProvider>
-        </QueryClientProvider>
-      </div>
-    </ThemeProvider>
-  </ErrorBoundary>
-);
+// Two entry points, chosen by whether ?v=<slug> is present:
+//   - No slug: the admin-only venue manager (list/create charts).
+//   - A slug: that chart, via VenueGate — which decides for itself
+//     whether the visitor can view-only or edit (admin / correct PIN).
+const App = () => {
+  const { slug, navigateToSlug } = useSlugParam();
+
+  return (
+    <ErrorBoundary FallbackComponent={ErrorFallback}>
+      <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+        <div className="flex flex-col h-screen">
+          <QueryClientProvider client={queryClient}>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              {slug ? (
+                <VenueGate slug={slug} onBackToManager={() => navigateToSlug(null)} />
+              ) : (
+                <AdminGate>
+                  {(token) => <VenueManager token={token} onOpenVenue={navigateToSlug} />}
+                </AdminGate>
+              )}
+            </TooltipProvider>
+          </QueryClientProvider>
+        </div>
+      </ThemeProvider>
+    </ErrorBoundary>
+  );
+};
 
 export default App;

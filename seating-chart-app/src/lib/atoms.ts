@@ -51,11 +51,12 @@ export const tableCounterAtom = atom<number>(1);
 // Atom to store the event title
 export const eventTitleAtom = atom<string>("Kenny & Morgan's Wedding");
 
-// Editing is always on: this fork is admin-only (gated by AdminGate before
-// the app ever mounts), so there's no PIN-protected view-only mode like
-// upstream Seating.Art. The atom is kept because several components read
-// it as a guard rather than because it can ever go false here.
-export const editModeAtom = atom<boolean>(true);
+// Whether the current visitor can edit this venue: true for the site
+// admin, and for anyone who's unlocked this venue's PIN. Set once by
+// SeatingChartApp from VenueGate's access resolution; components read it
+// as a guard (disable inputs, block add/remove actions) rather than
+// setting it themselves.
+export const editModeAtom = atom<boolean>(false);
 
 // --- Transient Atoms (Not persisted) ---
 

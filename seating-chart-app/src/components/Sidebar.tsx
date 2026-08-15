@@ -42,18 +42,19 @@ import {
 import { DroppableTableSection } from "./DroppableTableSection";
 import { ScrollIndicator } from "./ScrollIndicator";
 import { fetchAcceptedGuestParties } from "@/lib/api/guestConnector";
+import { tryVerifyAdminSession } from "@/lib/adminAuth";
 
 interface SidebarProps {
   guests: Guest[];
   tables: Table[];
-  token: string;
+  isAdmin: boolean;
   isInSheet?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   guests,
   tables,
-  token,
+  isAdmin,
   isInSheet,
 }) => {
   const hoveredGuestId = useAtomValue(hoveredGuestIdAtom);
@@ -312,10 +313,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // wedding site and drops any not already on the canvas into
   // "Unassigned". Guests already imported (matched by weddingGuestId) are
   // left untouched so re-syncing never disturbs seating you've already done.
+  // Admin-only — re-verified here rather than trusting a passed-down
+  // token, since this is the one action that reaches into the real
+  // guest/RSVP list rather than just this chart's own data.
   const handleSyncAcceptedGuests = async () => {
     setIsSyncingGuests(true);
     try {
-      const parties = await fetchAcceptedGuestParties(token);
+      const adminSession = await tryVerifyAdminSession();
+      if (!adminSession) {
+        toast({
+          title: "Admin Sign-In Required",
+          description: "Sync is only available to the site admin.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const parties = await fetchAcceptedGuestParties(adminSession.token);
       const existingIds = new Set(
         guests.map((g) => g.weddingGuestId).filter(Boolean),
       );
@@ -431,21 +444,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {tables.length} Table{tables.length === 1 ? "" : "s"}
           </Badge>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleSyncAcceptedGuests}
-          disabled={isSyncingGuests}
-          className="mt-3 w-full justify-center border-sidebar-border/40 bg-sidebar-accent/5 hover:bg-sidebar-accent/15 text-sidebar-foreground font-medium shadow-sm"
-        >
-          <RefreshCw
-            size={14}
-            className={`mr-2 ${isSyncingGuests ? "animate-spin" : ""}`}
-            strokeWidth={1.5}
-          />
-          {isSyncingGuests ? "Syncing…" : "Sync Accepted Guests"}
-        </Button>
+        {isAdmin && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleSyncAcceptedGuests}
+            disabled={isSyncingGuests}
+            className="mt-3 w-full justify-center border-sidebar-border/40 bg-sidebar-accent/5 hover:bg-sidebar-accent/15 text-sidebar-foreground font-medium shadow-sm"
+          >
+            <RefreshCw
+              size={14}
+              className={`mr-2 ${isSyncingGuests ? "animate-spin" : ""}`}
+              strokeWidth={1.5}
+            />
+            {isSyncingGuests ? "Syncing…" : "Sync Accepted Guests"}
+          </Button>
+        )}
       </div>
 
       {Object.keys(groupedGuests).length === 0 ? (
