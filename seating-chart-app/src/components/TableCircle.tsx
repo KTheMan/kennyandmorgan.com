@@ -163,6 +163,25 @@ const TableCircleContent: React.FC<{
     }
   }, [isSelected]);
 
+  // Konva stacks tables-layer children in render order (i.e. the order
+  // they appear in baseShapesAtom), so an overlapping table added later
+  // would otherwise paint over an earlier table's hover controls — the
+  // opposite of what "hover controls on top" should mean. Bringing this
+  // table's whole group (shape, chairs, and its controls) to the front
+  // of that stacking order whenever it's hovered or selected guarantees
+  // its controls are always the top-most thing in the layer, regardless
+  // of where it sits in the underlying shape list. The transformer node
+  // is a separate sibling in the layer (not nested under the group), so
+  // it needs the same treatment to keep its resize handles above other
+  // tables too.
+  useEffect(() => {
+    if (!isTableHovered && !isSelected) return;
+    const layer = shapeRef.current?.getLayer();
+    shapeRef.current?.moveToTop();
+    if (isSelected) trRef.current?.moveToTop();
+    layer?.batchDraw();
+  }, [isTableHovered, isSelected]);
+
   // Effect to ensure the table color is correctly set initially and after any theme changes
   useEffect(() => {
     // Force redraw to ensure theme colors are properly applied
@@ -428,17 +447,62 @@ const TableCircleContent: React.FC<{
   // Updated font sizes for better readability
   const FONT_SIZE_LARGE = 18; // Increased from 16
   const FONT_SIZE_SMALL = 14; // Increased from 12
-  const BUTTON_RADIUS = 12; // Slightly larger buttons
-  // Bring buttons closer together
-  const BUTTON_SPACING = 1.25; // Reduced from 2 (default)
-  const CONTROL_ROW_HEIGHT = BUTTON_RADIUS * 2 + PADDING * 2;
-  // Duplicate/lock sit on their own row, below whichever rows are already
-  // showing above them: just capacity (round tables, and opposing-style
-  // rectangles where capacity comes from the settings button instead), or
-  // capacity + settings (rectangles in "all sides" style).
-  const duplicateLockRowY = !isRectangle || isOpposingSides
-    ? CONTROL_ROW_HEIGHT
-    : CONTROL_ROW_HEIGHT * 2;
+
+  // Hover controls (capacity, settings, duplicate, lock) render as a
+  // single row hugging the table's own bottom-inside edge, rather than
+  // stacked below the table number/capacity text. Two reasons:
+  //   1. Bounds: the old multi-row stack was tall enough to spill past
+  //      the shape's edge on anything but the largest tables (badly so
+  //      on round tables and shorter rectangles), landing controls on
+  //      bare canvas or over a neighboring table.
+  //   2. Legibility: a row that's always inset from the edge reads as
+  //      "part of this table" regardless of table size, instead of a
+  //      floating cluster whose relationship to the table is unclear.
+  // Button radius/gap shrink together (never below a tappable minimum)
+  // so the row always fits inside the table's own width, at any size.
+  const CONTROL_EDGE_INSET = 8;
+  const CONTROL_BUTTON_RADIUS_MAX = 12;
+  const CONTROL_BUTTON_RADIUS_MIN = 7;
+  const CONTROL_BUTTON_GAP_MAX = 4;
+
+  const controlButtonCount =
+    (isOpposingSides ? 0 : 2) + (isRectangle ? 1 : 0) + 2; // duplicate + lock always show
+  const tableSpan = isRectangle ? rectWidth : shape.radius * 2;
+  const availableControlWidth = Math.max(
+    tableSpan - CONTROL_EDGE_INSET * 2,
+    CONTROL_BUTTON_RADIUS_MIN * 2,
+  );
+  const idealControlWidth =
+    controlButtonCount * (CONTROL_BUTTON_RADIUS_MAX * 2) +
+    (controlButtonCount - 1) * CONTROL_BUTTON_GAP_MAX;
+  const controlScale = Math.min(1, availableControlWidth / idealControlWidth);
+  const BUTTON_RADIUS = clamp(
+    CONTROL_BUTTON_RADIUS_MAX * controlScale,
+    CONTROL_BUTTON_RADIUS_MIN,
+    CONTROL_BUTTON_RADIUS_MAX,
+  );
+  const controlButtonGap = Math.max(2, CONTROL_BUTTON_GAP_MAX * controlScale);
+  const controlIconFontSize = Math.round(BUTTON_RADIUS * 1.15);
+  const controlRowWidth =
+    controlButtonCount * (BUTTON_RADIUS * 2) +
+    (controlButtonCount - 1) * controlButtonGap;
+  const controlRowStartX = -controlRowWidth / 2 + BUTTON_RADIUS;
+  const controlStep = BUTTON_RADIUS * 2 + controlButtonGap;
+  const controlsRowY =
+    (isRectangle ? rectHeight / 2 : shape.radius) - BUTTON_RADIUS - CONTROL_EDGE_INSET;
+
+  // Slot index -> x position, assigned in render order but only advancing
+  // for buttons that actually show, so the row stays centered and
+  // gap-free whichever subset applies to this table.
+  const nextSlotX = (() => {
+    let slot = 0;
+    return () => controlRowStartX + controlStep * slot++;
+  })();
+  const minusX = !isOpposingSides ? nextSlotX() : 0;
+  const plusX = !isOpposingSides ? nextSlotX() : 0;
+  const settingsX = isRectangle ? nextSlotX() : 0;
+  const duplicateX = nextSlotX();
+  const lockX = nextSlotX();
 
   return (
     <React.Fragment>
@@ -620,117 +684,114 @@ const TableCircleContent: React.FC<{
         */}
         {/* Seat Occupancy Badge - END COMMENTING OUT */}
 
-        {/* Buttons container for centering the controls */}
-        <Group
-          x={0}
-          y={FONT_SIZE_SMALL + PADDING * 3}
-          visible={isTableHovered || isSelected}
-        >
+        {/* Hover/selection controls — a single row inset from the
+            table's own bottom edge (see BUTTON_RADIUS/controlsRowY math
+            above), so it always sits inside the shape instead of
+            spilling past it. */}
+        <Group x={0} y={0} visible={isTableHovered || isSelected}>
           {/* Minus/Plus total-capacity buttons — hidden for rectangle
               tables in "opposing" seating style, where the top/bottom
               counts (set independently via the settings button below)
               govern capacity instead. */}
           {!isOpposingSides && (
             <>
-          {/* Minus Button */}
-          <Group
-            x={-BUTTON_RADIUS * BUTTON_SPACING}
-            y={0}
-            onClick={() => handleCapacityChange(-1)}
-            onTap={() => handleCapacityChange(-1)}
-            opacity={shape.capacity > MIN_CAPACITY ? 1 : 0.5}
-            onMouseEnter={handleMinusMouseEnter}
-            onMouseLeave={handleMinusMouseLeave}
-            scaleX={isMinusPressed ? 0.9 : 1}
-            scaleY={isMinusPressed ? 0.9 : 1}
-          >
-            <Circle
-              radius={BUTTON_RADIUS}
-              fill={
-                isMinusHovered
-                  ? COLORS.minusButtonHoverFill
-                  : COLORS.minusButtonFill
-              }
-              stroke={
-                isMinusHovered
-                  ? COLORS.minusButtonHoverStroke
-                  : COLORS.minusButtonStroke
-              }
-              strokeWidth={1.5} // Restored original strokeWidth
-              shadowBlur={isMinusHovered ? 5 : 3}
-              shadowOpacity={isMinusHovered ? 0.3 : 0.2}
-              shadowOffset={{ x: 1, y: 1 }}
-            />
-            <Text
-              text="-"
-              fontSize={16} // Restored original fontSize
-              fontStyle="bold"
-              fill={COLORS.minusButtonText} // Restored original fill logic
-              width={BUTTON_RADIUS * 2}
-              height={BUTTON_RADIUS * 2} // Restored original height
-              align="center"
-              verticalAlign="middle"
-              offsetX={BUTTON_RADIUS}
-              offsetY={BUTTON_RADIUS}
-              listening={false}
-            />
-          </Group>
+              {/* Minus Button */}
+              <Group
+                x={minusX}
+                y={controlsRowY}
+                onClick={() => handleCapacityChange(-1)}
+                onTap={() => handleCapacityChange(-1)}
+                opacity={shape.capacity > MIN_CAPACITY ? 1 : 0.5}
+                onMouseEnter={handleMinusMouseEnter}
+                onMouseLeave={handleMinusMouseLeave}
+                scaleX={isMinusPressed ? 0.9 : 1}
+                scaleY={isMinusPressed ? 0.9 : 1}
+              >
+                <Circle
+                  radius={BUTTON_RADIUS}
+                  fill={
+                    isMinusHovered
+                      ? COLORS.minusButtonHoverFill
+                      : COLORS.minusButtonFill
+                  }
+                  stroke={
+                    isMinusHovered
+                      ? COLORS.minusButtonHoverStroke
+                      : COLORS.minusButtonStroke
+                  }
+                  strokeWidth={1.5}
+                  shadowBlur={isMinusHovered ? 5 : 3}
+                  shadowOpacity={isMinusHovered ? 0.3 : 0.2}
+                  shadowOffset={{ x: 1, y: 1 }}
+                />
+                <Text
+                  text="-"
+                  fontSize={controlIconFontSize}
+                  fontStyle="bold"
+                  fill={COLORS.minusButtonText}
+                  width={BUTTON_RADIUS * 2}
+                  height={BUTTON_RADIUS * 2}
+                  align="center"
+                  verticalAlign="middle"
+                  offsetX={BUTTON_RADIUS}
+                  offsetY={BUTTON_RADIUS}
+                  listening={false}
+                />
+              </Group>
 
-          {/* Plus Button */}
-          <Group
-            x={BUTTON_RADIUS * BUTTON_SPACING}
-            y={0}
-            // Only allow capacity change if in edit mode
-            onClick={editMode ? () => handleCapacityChange(1) : undefined}
-            onTap={editMode ? () => handleCapacityChange(1) : undefined}
-            opacity={shape.capacity < MAX_CAPACITY ? 1 : 0.5}
-            onMouseEnter={handlePlusMouseEnter}
-            onMouseLeave={handlePlusMouseLeave}
-            scaleX={isPlusPressed ? 0.9 : 1}
-            scaleY={isPlusPressed ? 0.9 : 1}
-          >
-            <Circle
-              radius={BUTTON_RADIUS}
-              fill={
-                isPlusHovered
-                  ? COLORS.plusButtonHoverFill
-                  : COLORS.plusButtonFill
-              }
-              stroke={
-                isPlusHovered
-                  ? COLORS.plusButtonHoverStroke
-                  : COLORS.plusButtonStroke
-              }
-              strokeWidth={1.5} // Restored original strokeWidth
-              shadowBlur={isPlusHovered ? 5 : 3}
-              shadowOpacity={isPlusHovered ? 0.3 : 0.2}
-              shadowOffset={{ x: 1, y: 1 }}
-            />
-            <Text
-              text="+"
-              fontSize={16} // Restored original fontSize
-              fontStyle="bold"
-              fill={COLORS.plusButtonText} // Restored original fill logic
-              width={BUTTON_RADIUS * 2}
-              height={BUTTON_RADIUS * 2} // Restored original height
-              align="center"
-              verticalAlign="middle"
-              offsetX={BUTTON_RADIUS}
-              offsetY={BUTTON_RADIUS}
-              listening={false}
-            />
-          </Group>
+              {/* Plus Button */}
+              <Group
+                x={plusX}
+                y={controlsRowY}
+                // Only allow capacity change if in edit mode
+                onClick={editMode ? () => handleCapacityChange(1) : undefined}
+                onTap={editMode ? () => handleCapacityChange(1) : undefined}
+                opacity={shape.capacity < MAX_CAPACITY ? 1 : 0.5}
+                onMouseEnter={handlePlusMouseEnter}
+                onMouseLeave={handlePlusMouseLeave}
+                scaleX={isPlusPressed ? 0.9 : 1}
+                scaleY={isPlusPressed ? 0.9 : 1}
+              >
+                <Circle
+                  radius={BUTTON_RADIUS}
+                  fill={
+                    isPlusHovered
+                      ? COLORS.plusButtonHoverFill
+                      : COLORS.plusButtonFill
+                  }
+                  stroke={
+                    isPlusHovered
+                      ? COLORS.plusButtonHoverStroke
+                      : COLORS.plusButtonStroke
+                  }
+                  strokeWidth={1.5}
+                  shadowBlur={isPlusHovered ? 5 : 3}
+                  shadowOpacity={isPlusHovered ? 0.3 : 0.2}
+                  shadowOffset={{ x: 1, y: 1 }}
+                />
+                <Text
+                  text="+"
+                  fontSize={controlIconFontSize}
+                  fontStyle="bold"
+                  fill={COLORS.plusButtonText}
+                  width={BUTTON_RADIUS * 2}
+                  height={BUTTON_RADIUS * 2}
+                  align="center"
+                  verticalAlign="middle"
+                  offsetX={BUTTON_RADIUS}
+                  offsetY={BUTTON_RADIUS}
+                  listening={false}
+                />
+              </Group>
             </>
           )}
 
           {/* Rectangle-table seating layout settings (All Sides /
-              Opposing Sides Only, with asymmetric per-side counts) —
-              sits on its own row below the capacity buttons when they're
-              showing, or takes their place (centered) when they're not. */}
+              Opposing Sides Only, with asymmetric per-side counts). */}
           {isRectangle && (
             <Group
-              x={0}
-              y={isOpposingSides ? 0 : BUTTON_RADIUS * 2 + PADDING * 2}
+              x={settingsX}
+              y={controlsRowY}
               onClick={handleOpenSeatingSettings}
               onTap={handleOpenSeatingSettings}
               onMouseEnter={handleSettingsMouseEnter}
@@ -747,7 +808,7 @@ const TableCircleContent: React.FC<{
               />
               <Text
                 text="⚙"
-                fontSize={14}
+                fontSize={controlIconFontSize}
                 fill={COLORS.tableTextPrimary}
                 width={BUTTON_RADIUS * 2}
                 height={BUTTON_RADIUS * 2}
@@ -764,8 +825,8 @@ const TableCircleContent: React.FC<{
               edit mode, even while locked (copying doesn't change the
               original). */}
           <Group
-            x={-BUTTON_RADIUS * BUTTON_SPACING}
-            y={duplicateLockRowY}
+            x={duplicateX}
+            y={controlsRowY}
             onClick={handleDuplicateTable}
             onTap={handleDuplicateTable}
             onMouseEnter={handleDuplicateMouseEnter}
@@ -782,7 +843,7 @@ const TableCircleContent: React.FC<{
             />
             <Text
               text="⧉"
-              fontSize={14}
+              fontSize={controlIconFontSize}
               fill={COLORS.tableTextPrimary}
               width={BUTTON_RADIUS * 2}
               height={BUTTON_RADIUS * 2}
@@ -798,8 +859,8 @@ const TableCircleContent: React.FC<{
               the venue-space lock. Stays clickable while locked; it's the
               only way to unlock again. */}
           <Group
-            x={BUTTON_RADIUS * BUTTON_SPACING}
-            y={duplicateLockRowY}
+            x={lockX}
+            y={controlsRowY}
             onClick={handleToggleLock}
             onTap={handleToggleLock}
             onMouseEnter={handleLockMouseEnter}
@@ -824,7 +885,7 @@ const TableCircleContent: React.FC<{
             />
             <Text
               text={isLocked ? "🔒" : "🔓"}
-              fontSize={12}
+              fontSize={Math.round(controlIconFontSize * 0.85)}
               fill={COLORS.tableTextPrimary}
               width={BUTTON_RADIUS * 2}
               height={BUTTON_RADIUS * 2}
