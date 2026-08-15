@@ -46,16 +46,22 @@ const useMediaQuery = (query: string) => {
 interface SeatingChartAppProps {
   slug: string;
   access: VenueAccess;
-  hasPin: boolean;
+  hasEditPin: boolean;
+  hasViewPin: boolean;
+  viewPinRequired: boolean;
   onUnlockWithPin: (pin: string) => Promise<boolean>;
+  onViewPinChanged: () => void;
   onBackToManager: () => void;
 }
 
 export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
   slug,
   access,
-  hasPin,
+  hasEditPin,
+  hasViewPin,
+  viewPinRequired,
   onUnlockWithPin,
+  onViewPinChanged,
   onBackToManager,
 }) => {
   const { toast } = useToast();
@@ -64,8 +70,8 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
 
   const credentials: VenueCredentials = useMemo(() => {
     if (access.kind === "admin") return { token: access.token };
-    if (access.kind === "editor") return { pin: access.pin };
-    return {};
+    if (access.kind === "editor") return { editPin: access.editPin, viewPin: access.viewPin };
+    return { viewPin: access.viewPin };
   }, [access]);
 
   const setEditMode = useSetAtom(editModeAtom);
@@ -318,8 +324,11 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
       <Header
         slug={slug}
         isAdmin={isAdmin}
-        hasPin={hasPin}
+        hasEditPin={hasEditPin}
+        hasViewPin={hasViewPin}
+        viewPinRequired={viewPinRequired}
         onUnlockWithPin={onUnlockWithPin}
+        onViewPinChanged={onViewPinChanged}
         onBackToManager={onBackToManager}
         totalGuests={totalGuests}
         onReset={handleReset}

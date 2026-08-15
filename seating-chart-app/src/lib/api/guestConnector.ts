@@ -9,6 +9,7 @@ export interface AcceptedGuest {
   weddingGuestId: string;
   fullName: string;
   isPrimary: boolean;
+  isPlusOne: boolean;
   isChild: boolean;
   mealChoice: string | null;
   dietaryNotes: string | null;

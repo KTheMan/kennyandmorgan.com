@@ -19,31 +19,26 @@ export const GuestAssignmentModal = () => {
   const [modalState, setModalState] = useAtom(modalStateAtom);
   const [guests, setGuests] = useAtom(guestsAtom);
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [fullName, setFullName] = useState("");
 
   // Effect to load guest data when modal opens with an existing guestId
   useEffect(() => {
     if (modalState.isOpen && modalState.guestId) {
       const existingGuest = guests.find((g) => g.id === modalState.guestId);
       if (existingGuest) {
-        setFirstName(existingGuest.firstName);
-        setLastName(existingGuest.lastName);
+        setFullName(existingGuest.fullName);
       } else {
         // Guest ID existed but guest not found? Clear fields.
         console.warn(`Guest with ID ${modalState.guestId} not found.`);
-        setFirstName("");
-        setLastName("");
+        setFullName("");
       }
     } else if (modalState.isOpen) {
       // Modal opened for an empty chair
-      setFirstName("");
-      setLastName("");
+      setFullName("");
     }
     // Reset fields when modal closes
     if (!modalState.isOpen) {
-      setFirstName("");
-      setLastName("");
+      setFullName("");
     }
   }, [modalState.isOpen, modalState.guestId, guests]);
 
@@ -71,11 +66,10 @@ export const GuestAssignmentModal = () => {
       return;
     }
 
-    const trimmedFirstName = firstName.trim();
-    const trimmedLastName = lastName.trim();
+    const trimmedFullName = fullName.trim();
 
-    // If both fields are empty, treat as removal
-    if (!trimmedFirstName && !trimmedLastName) {
+    // If the field is empty, treat as removal
+    if (!trimmedFullName) {
       handleRemove();
       return;
     }
@@ -86,12 +80,13 @@ export const GuestAssignmentModal = () => {
       );
 
       if (existingGuestIndex > -1) {
-        // Update existing guest
+        // Update existing guest — preserve fields this dialog doesn't
+        // edit (weddingGuestId, groupId, meal/dietary info, etc.) so
+        // renaming a synced guest doesn't detach them from their party.
         const updatedGuests = [...prevGuests];
         updatedGuests[existingGuestIndex] = {
           ...updatedGuests[existingGuestIndex],
-          firstName: trimmedFirstName,
-          lastName: trimmedLastName,
+          fullName: trimmedFullName,
           tableId, // Ensure tableId and chairIndex are updated if guest moved (though not supported yet)
           chairIndex,
         };
@@ -100,8 +95,7 @@ export const GuestAssignmentModal = () => {
         // Add new guest
         const newGuest: Guest = {
           id: `guest-${Date.now()}`,
-          firstName: trimmedFirstName,
-          lastName: trimmedLastName,
+          fullName: trimmedFullName,
           tableId,
           chairIndex,
         };
@@ -164,34 +158,19 @@ export const GuestAssignmentModal = () => {
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label
-                htmlFor="firstName"
+                htmlFor="fullName"
                 className="text-right text-card-foreground font-medium"
               >
-                First Name
+                Full Name
               </Label>
               <Input
-                id="firstName"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
+                id="fullName"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
                 className="col-span-3 bg-card border-border focus:border-primary focus:ring-primary"
-                placeholder="e.g. Jane"
+                placeholder="e.g. Jane Doe"
                 onKeyDown={handleKeyDown}
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label
-                htmlFor="lastName"
-                className="text-right text-card-foreground font-medium"
-              >
-                Last Name
-              </Label>
-              <Input
-                id="lastName"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="col-span-3 bg-card border-border focus:border-primary focus:ring-primary"
-                placeholder="e.g. Doe"
-                onKeyDown={handleKeyDown}
+                autoFocus
               />
             </div>
           </div>

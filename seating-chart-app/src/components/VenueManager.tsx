@@ -3,7 +3,7 @@ import { listVenues, createVenue, type VenueSummary } from "@/lib/api/venues";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { Plus, ExternalLink, KeyRound } from "lucide-react";
+import { Plus, ExternalLink, KeyRound, Eye } from "lucide-react";
 
 // The admin-only landing page (no ?v= in the URL): lists every chart and
 // lets the admin start a new one. Reaching this page at all already
@@ -101,9 +101,14 @@ export function VenueManager({
                   <p className="font-medium">{venue.eventTitle}</p>
                   <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     /{venue.slug} &middot; updated {new Date(venue.updatedAt).toLocaleString()}
-                    {venue.hasPin && (
-                      <span className="inline-flex items-center gap-0.5" title="PIN-protected">
+                    {venue.hasEditPin && (
+                      <span className="inline-flex items-center gap-0.5" title="Edit PIN set">
                         <KeyRound size={12} />
+                      </span>
+                    )}
+                    {venue.viewPinRequired && (
+                      <span className="inline-flex items-center gap-0.5" title="View PIN required">
+                        <Eye size={12} />
                       </span>
                     )}
                   </p>

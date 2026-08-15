@@ -6,14 +6,18 @@
 // Supabase project, so the forked frontend can be published as static
 // assets alongside the rest of the wedding site.
 //
-// Multiple venues, each with a shareable slug and its own PIN:
+// Multiple venues, each with a shareable slug and two independent PINs:
 //   - Admin (site's existing admin session, sent as x-km-session-token):
-//     full access to every venue — list, create, edit, regenerate a PIN.
-//   - Anyone with a venue's link: can always VIEW it, no auth at all.
-//   - Anyone with the link + that venue's PIN: can EDIT it.
+//     full access to every venue — list, create, edit, regenerate either
+//     PIN, toggle whether viewing needs one at all.
+//   - Edit PIN: always on. Anyone with the link + this PIN can edit —
+//     editing always implies viewing too.
+//   - View PIN: off by default (anyone with the link can view). The
+//     admin can toggle it on per-venue to also require a PIN just to see
+//     the chart — useful if a venue's guest list is sensitive.
 //
 // All the actual auth/hashing/rate-limiting logic lives in Postgres RPCs
-// (see supabase/migrations/20260815090000_seating_chart_multivenue_pin.sql)
+// (see supabase/migrations/20260816090000_seating_chart_view_edit_pins.sql)
 // so this function never re-implements session or PIN comparison itself.
 // Those RPCs are NOT granted to anon/authenticated — only this function's
 // service-role client can call them, which is what keeps PIN attempts
@@ -21,13 +25,16 @@
 // PostgREST.
 //
 // Routes:
-//   GET  /seating-chart-api/venues              -> admin: list venues
-//   POST /seating-chart-api/venues               -> admin: create venue
-//   GET  /seating-chart-api/venue?slug=X          -> public: fetch venue
-//   PUT  /seating-chart-api/venue?slug=X          -> admin token OR pin: save
-//   POST /seating-chart-api/venue/validate-pin?slug=X -> public: check a PIN
-//   POST /seating-chart-api/venue/set-pin?slug=X  -> admin: (re)set a PIN
-//   GET  /seating-chart-api/guests                -> admin: the connector
+//   GET  /seating-chart-api/venues                    -> admin: list venues
+//   POST /seating-chart-api/venues                     -> admin: create venue
+//   GET  /seating-chart-api/venue?slug=X[&viewPin=&editPin=]
+//        -> public: fetch venue, or a locked payload if a view PIN is
+//           required and neither admin/editPin/viewPin satisfies it
+//   PUT  /seating-chart-api/venue?slug=X                -> admin token OR editPin: save
+//   POST /seating-chart-api/venue/validate-pin?slug=X   -> public: check a view or edit PIN
+//   POST /seating-chart-api/venue/set-edit-pin?slug=X   -> admin: (re)set the edit PIN
+//   POST /seating-chart-api/venue/set-view-pin?slug=X   -> admin: toggle + (re)set the view PIN
+//   GET  /seating-chart-api/guests                      -> admin: the connector
 
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -196,9 +203,21 @@ async function createVenue(
   );
 }
 
-async function getVenue(supabaseUrl: string, serviceRoleKey: string, slug: string) {
+async function getVenue(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  slug: string,
+  sessionToken: string | null,
+  viewPin: string | null,
+  editPin: string | null,
+  ip: string,
+) {
   const result = await callRpc(supabaseUrl, serviceRoleKey, "seating_chart_get_venue", {
     target_slug: slug,
+    session_token: sessionToken,
+    view_pin: viewPin,
+    edit_pin: editPin,
+    client_ip: ip,
   });
   if (!result.ok) {
     throw new HttpError(result.status, rpcErrorMessage(result));
@@ -206,6 +225,9 @@ async function getVenue(supabaseUrl: string, serviceRoleKey: string, slug: strin
   if (!result.body) {
     throw new HttpError(404, "Chart not found.");
   }
+  // result.body is either { locked: true, viewPinRequired, hasEditPin,
+  // hasViewPin } or { locked: false, venueData, updatedAt, ... } — pass
+  // through either way, the frontend branches on `locked`.
   return jsonResponse({ success: true, ...(result.body as Record<string, unknown>) });
 }
 
@@ -215,14 +237,14 @@ async function saveVenue(
   slug: string,
   sessionToken: string | null,
   venueData: unknown,
-  pin: string | undefined,
+  editPin: string | undefined,
   ip: string,
 ) {
   const result = await callRpc(supabaseUrl, serviceRoleKey, "seating_chart_save_venue", {
     session_token: sessionToken,
     target_slug: slug,
     new_venue_data: venueData,
-    candidate_pin: pin || null,
+    candidate_edit_pin: editPin || null,
     client_ip: ip,
   });
   if (!result.ok) {
@@ -235,11 +257,13 @@ async function validatePin(
   supabaseUrl: string,
   serviceRoleKey: string,
   slug: string,
+  kind: "view" | "edit",
   pin: string,
   ip: string,
 ) {
   const result = await callRpc(supabaseUrl, serviceRoleKey, "seating_chart_validate_pin", {
     target_slug: slug,
+    pin_kind: kind,
     candidate_pin: pin,
     client_ip: ip,
   });
@@ -249,7 +273,7 @@ async function validatePin(
   return jsonResponse(result.body);
 }
 
-async function setPin(
+async function setEditPin(
   supabaseUrl: string,
   serviceRoleKey: string,
   slug: string,
@@ -257,9 +281,30 @@ async function setPin(
   pin: string | undefined,
 ) {
   await requireAdminSession(supabaseUrl, serviceRoleKey, sessionToken);
-  const result = await callRpc(supabaseUrl, serviceRoleKey, "seating_chart_set_pin", {
+  const result = await callRpc(supabaseUrl, serviceRoleKey, "seating_chart_set_edit_pin", {
     session_token: sessionToken,
     target_slug: slug,
+    new_pin: pin || null,
+  });
+  if (!result.ok) {
+    throw new HttpError(result.status, rpcErrorMessage(result));
+  }
+  return jsonResponse({ success: true, ...(result.body as Record<string, unknown>) });
+}
+
+async function setViewPin(
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  slug: string,
+  sessionToken: string | null,
+  enabled: boolean,
+  pin: string | undefined,
+) {
+  await requireAdminSession(supabaseUrl, serviceRoleKey, sessionToken);
+  const result = await callRpc(supabaseUrl, serviceRoleKey, "seating_chart_set_view_pin", {
+    session_token: sessionToken,
+    target_slug: slug,
+    enabled,
     new_pin: pin || null,
   });
   if (!result.ok) {
@@ -273,18 +318,22 @@ interface GuestRow {
   full_name: string;
   group_id: string;
   is_primary: boolean;
+  is_plus_one: boolean;
   is_child: boolean;
   meal_choice: string | null;
   dietary_notes: string | null;
 }
 
 // The connector: accepted guests, grouped by party/group_id, shaped for
-// import into a seating chart's guest list. Admin-only — link recipients
-// editing via PIN never trigger a pull of the real RSVP list.
+// import into a seating chart's guest list — the same grouping public.guests
+// already uses (search_guest_groups, list_admin_guests), so a synced guest
+// carries its party rather than arriving as a flat, ungrouped name list.
+// Admin-only — link recipients editing via PIN never trigger a pull of the
+// real RSVP list.
 async function fetchAcceptedGuestParties(supabaseUrl: string, serviceRoleKey: string) {
   const params = new URLSearchParams({
     rsvp_status: "eq.accepted",
-    select: "id,full_name,group_id,is_primary,is_child,meal_choice,dietary_notes",
+    select: "id,full_name,group_id,is_primary,is_plus_one,is_child,meal_choice,dietary_notes",
     order: "group_id.asc,is_primary.desc,full_name.asc",
   });
   const response = await fetch(`${supabaseUrl}/rest/v1/guests?${params.toString()}`, {
@@ -302,6 +351,7 @@ async function fetchAcceptedGuestParties(supabaseUrl: string, serviceRoleKey: st
       weddingGuestId: string;
       fullName: string;
       isPrimary: boolean;
+      isPlusOne: boolean;
       isChild: boolean;
       mealChoice: string | null;
       dietaryNotes: string | null;
@@ -317,6 +367,7 @@ async function fetchAcceptedGuestParties(supabaseUrl: string, serviceRoleKey: st
       weddingGuestId: String(row.id),
       fullName: row.full_name,
       isPrimary: Boolean(row.is_primary),
+      isPlusOne: Boolean(row.is_plus_one),
       isChild: Boolean(row.is_child),
       mealChoice: row.meal_choice,
       dietaryNotes: row.dietary_notes,
@@ -353,31 +404,45 @@ async function handleRequest(req: Request): Promise<Response> {
 
   if (route === "venue" && req.method === "GET") {
     if (!slug) throw new HttpError(400, "slug is required.");
-    return getVenue(supabaseUrl, serviceRoleKey, slug);
+    const viewPin = url.searchParams.get("viewPin");
+    const editPin = url.searchParams.get("editPin");
+    return getVenue(supabaseUrl, serviceRoleKey, slug, sessionToken, viewPin, editPin, ip);
   }
 
   if (route === "venue" && req.method === "PUT") {
     if (!slug) throw new HttpError(400, "slug is required.");
     const body = await req.json().catch(() => null) as
-      | { venueData?: unknown; pin?: string }
+      | { venueData?: unknown; editPin?: string }
       | null;
     if (!body || typeof body.venueData === "undefined") {
       throw new HttpError(400, "venueData is required.");
     }
-    return saveVenue(supabaseUrl, serviceRoleKey, slug, sessionToken, body.venueData, body.pin, ip);
+    return saveVenue(supabaseUrl, serviceRoleKey, slug, sessionToken, body.venueData, body.editPin, ip);
   }
 
   if (route === "venue/validate-pin" && req.method === "POST") {
     if (!slug) throw new HttpError(400, "slug is required.");
-    const body = await req.json().catch(() => ({})) as { pin?: string };
+    const body = await req.json().catch(() => ({})) as { pin?: string; kind?: string };
     if (!body.pin) throw new HttpError(400, "pin is required.");
-    return validatePin(supabaseUrl, serviceRoleKey, slug, body.pin, ip);
+    if (body.kind !== "view" && body.kind !== "edit") {
+      throw new HttpError(400, "kind must be 'view' or 'edit'.");
+    }
+    return validatePin(supabaseUrl, serviceRoleKey, slug, body.kind, body.pin, ip);
   }
 
-  if (route === "venue/set-pin" && req.method === "POST") {
+  if (route === "venue/set-edit-pin" && req.method === "POST") {
     if (!slug) throw new HttpError(400, "slug is required.");
     const body = await req.json().catch(() => ({})) as { pin?: string };
-    return setPin(supabaseUrl, serviceRoleKey, slug, sessionToken, body.pin);
+    return setEditPin(supabaseUrl, serviceRoleKey, slug, sessionToken, body.pin);
+  }
+
+  if (route === "venue/set-view-pin" && req.method === "POST") {
+    if (!slug) throw new HttpError(400, "slug is required.");
+    const body = await req.json().catch(() => ({})) as { enabled?: boolean; pin?: string };
+    if (typeof body.enabled !== "boolean") {
+      throw new HttpError(400, "enabled (boolean) is required.");
+    }
+    return setViewPin(supabaseUrl, serviceRoleKey, slug, sessionToken, body.enabled, body.pin);
   }
 
   if (route === "guests" && req.method === "GET") {

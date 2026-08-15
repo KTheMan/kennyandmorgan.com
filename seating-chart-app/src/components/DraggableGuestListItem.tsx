@@ -77,11 +77,14 @@ export const DraggableGuestListItem: React.FC<DraggableGuestListItemProps> = ({
         strokeWidth={1.5}
       />
       <span
-        className={`font-medium flex-grow min-w-0 ml-2 ${
+        className={`font-medium flex-grow min-w-0 truncate ml-2 ${
           isHighlighted ? "text-sidebar-primary" : "text-sidebar-foreground"
         }`}
       >
-        {guest.firstName} {guest.lastName}
+        {guest.fullName}
+        {guest.isChild && (
+          <span className="ml-1.5 text-xs font-normal text-sidebar-foreground/50">(child)</span>
+        )}
       </span>
       {guest.tableId && typeof guest.chairIndex === "number" && (
         <span className="ml-auto text-xs bg-sidebar-accent/20 px-2 py-0.5 rounded-full text-sidebar-foreground/70">

@@ -48,15 +48,18 @@ subfolder of this site. It doesn't run upstream's Express/PostgreSQL
 server — `supabase/functions/seating-chart-api` replaces that as a
 Supabase Edge Function.
 
-Charts are shareable by link (`/seating-chart/?v=<slug>`) and
-PIN-protected the same way upstream's are, just backed by our own
-Supabase project instead of a separate server: anyone with the link can
-view a chart, anyone with the link + its PIN can edit it, and the site
-admin (existing login, reused since this app is served same-origin) has
-full access to every chart plus a venue manager to create/list them. A
-"Sync Accepted Guests" button in the sidebar (admin-only) pulls accepted
-RSVPs, grouped by party, from this site's `guests` table via that same
-worker. See `seating-chart-app/README.md` for details.
+Charts are shareable by link (`/seating-chart/?v=<slug>`), backed by our
+own Supabase project instead of a separate server, with two independent
+PINs per chart: an edit PIN (always on) and an optional view PIN an
+admin can toggle on per-chart to also lock down viewing. The site admin
+(existing login, reused since this app is served same-origin) has full
+access to every chart regardless of either PIN, plus a venue manager to
+create/list them. Guests use the same shape as this site's `guests`
+table (full name, party/group, meal, dietary notes) rather than a flat
+name list, and the sidebar clusters guests by party. A "Sync Accepted
+Guests" button (admin-only) pulls accepted RSVPs, grouped by party, from
+this site's `guests` table via that same worker. See
+`seating-chart-app/README.md` for details.
 
 ## Setup
 

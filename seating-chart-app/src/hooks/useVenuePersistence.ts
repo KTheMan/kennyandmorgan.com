@@ -43,8 +43,13 @@ const cache = {
 };
 
 export interface VenueCredentials {
+  // All three are passed through to every fetch/save call regardless of
+  // which one is actually "the" credential for this visitor — harmless
+  // if irrelevant, and it's what lets a re-fetch skip the view-PIN gate
+  // a visitor already got past once (see VenueGate).
   token?: string | null;
-  pin?: string | null;
+  viewPin?: string | null;
+  editPin?: string | null;
 }
 
 export const useVenuePersistence = (
@@ -63,7 +68,7 @@ export const useVenuePersistence = (
     isLoading: isLoadingFromServer,
     error: serverError,
     isSuccess: isServerLoadSuccess,
-  } = useVenueQuery(slug);
+  } = useVenueQuery(slug, credentials);
 
   const {
     mutate: saveVenueMutate,
@@ -88,14 +93,15 @@ export const useVenuePersistence = (
   }, [slug, setShapes, setGuests, setEventTitle, setTableCounter]);
 
   // --- Once the server responds, it becomes the source of truth. ---
+  // (VenueGate never renders this hook's owner, SeatingChartApp, unless
+  // the venue is already unlocked, but the fetch here is a fresh
+  // request — serverData.locked can't actually be true in practice as
+  // long as `credentials` still matches what got us past the gate.)
   useEffect(() => {
-    if (
-      !isServerLoadSuccess ||
-      !serverData ||
-      loadedSlugRef.current === slug
-    ) {
-      return;
-    }
+    if (!isServerLoadSuccess || !serverData) return;
+    if (loadedSlugRef.current === slug) return;
+    if (serverData.locked === true) return;
+
     const venueData: VenueData =
       serverData.venueData && Object.keys(serverData.venueData).length > 0
         ? serverData.venueData
@@ -119,11 +125,15 @@ export const useVenuePersistence = (
   ]);
 
   // --- Debounced save-back to the worker on every change. Skipped
-  // entirely for viewers (no admin token, no validated pin) so a
+  // entirely for viewers (no admin token, no validated edit PIN) so a
   // read-only visitor never fires failed save requests. ---
   const debouncedServerUpdate = useDebouncedCallback(
     (activeSlug: string, dataToUpdate: VenueData) => {
-      saveVenueMutate({ slug: activeSlug, venueData: dataToUpdate, credentials });
+      saveVenueMutate({
+        slug: activeSlug,
+        venueData: dataToUpdate,
+        credentials: { token: credentials.token, editPin: credentials.editPin },
+      });
     },
     2000,
   );

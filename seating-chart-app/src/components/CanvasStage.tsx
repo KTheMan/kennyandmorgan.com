@@ -130,10 +130,8 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   const guestNameMap = useMemo(() => {
     const map = new Map<string, string>();
     guests.forEach((guest) => {
-      if (guest.id && guest.firstName && guest.lastName) {
-        map.set(guest.id, `${guest.firstName} ${guest.lastName}`);
-      } else if (guest.id && guest.firstName) {
-        map.set(guest.id, guest.firstName);
+      if (guest.id && guest.fullName) {
+        map.set(guest.id, guest.fullName);
       }
     });
     return map;

@@ -29,10 +29,11 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { useAtom, useAtomValue } from "jotai";
 import { eventTitleAtom, editModeAtom } from "@/lib/atoms";
 import { useToast } from "@/components/ui/use-toast";
-import { setPin as setVenuePin } from "@/lib/api/venues";
+import { setEditPin as setVenueEditPin, setViewPin as setVenueViewPin } from "@/lib/api/venues";
 import { tryVerifyAdminSession } from "@/lib/adminAuth";
 
 export function ThemeToggle() {
@@ -70,8 +71,11 @@ export type SaveStatus = "saved" | "saving" | "unsaved";
 interface HeaderProps {
   slug: string;
   isAdmin: boolean;
-  hasPin: boolean;
+  hasEditPin: boolean;
+  hasViewPin: boolean;
+  viewPinRequired: boolean;
   onUnlockWithPin: (pin: string) => Promise<boolean>;
+  onViewPinChanged: () => void;
   onBackToManager: () => void;
   totalGuests: number;
   onReset: () => void;
@@ -90,8 +94,11 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   slug,
   isAdmin,
-  hasPin,
+  hasEditPin,
+  hasViewPin,
+  viewPinRequired,
   onUnlockWithPin,
+  onViewPinChanged,
   onBackToManager,
   totalGuests,
   onReset,
@@ -112,7 +119,9 @@ export const Header: React.FC<HeaderProps> = ({
 
   const [pinEntry, setPinEntry] = useState("");
   const [isPinSubmitting, setIsPinSubmitting] = useState(false);
-  const [isRegeneratingPin, setIsRegeneratingPin] = useState(false);
+  const [isRegeneratingEditPin, setIsRegeneratingEditPin] = useState(false);
+  const [isTogglingViewPin, setIsTogglingViewPin] = useState(false);
+  const [isRegeneratingViewPin, setIsRegeneratingViewPin] = useState(false);
 
   // Update document title when eventTitle changes
   useEffect(() => {
@@ -163,16 +172,16 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const handleRegeneratePin = async () => {
-    setIsRegeneratingPin(true);
+  const handleRegenerateEditPin = async () => {
+    setIsRegeneratingEditPin(true);
     try {
       const adminSession = await tryVerifyAdminSession();
       if (!adminSession) {
         throw new Error("Admin session required.");
       }
-      const newPin = await setVenuePin(slug, adminSession.token);
+      const newPin = await setVenueEditPin(slug, adminSession.token);
       toast({
-        title: "New PIN Generated",
+        title: "New Edit PIN Generated",
         description: `Share PIN: ${newPin} — the previous PIN no longer works.`,
       });
     } catch (error: unknown) {
@@ -182,7 +191,65 @@ export const Header: React.FC<HeaderProps> = ({
         variant: "destructive",
       });
     } finally {
-      setIsRegeneratingPin(false);
+      setIsRegeneratingEditPin(false);
+    }
+  };
+
+  // Toggling this venue's view PIN on/off. Admin-only — see
+  // seating_chart_set_view_pin. Turning it on generates a fresh PIN
+  // every time (never silently reuses an old one).
+  const handleToggleViewPin = async (checked: boolean) => {
+    setIsTogglingViewPin(true);
+    try {
+      const adminSession = await tryVerifyAdminSession();
+      if (!adminSession) {
+        throw new Error("Admin session required.");
+      }
+      const newPin = await setVenueViewPin(slug, adminSession.token, checked);
+      if (checked) {
+        toast({
+          title: "View PIN Enabled",
+          description: `Share PIN: ${newPin} — anyone without it can no longer view this chart.`,
+        });
+      } else {
+        toast({
+          title: "View PIN Disabled",
+          description: "Anyone with the link can view this chart again.",
+        });
+      }
+      onViewPinChanged();
+    } catch (error: unknown) {
+      toast({
+        title: "Couldn't Update View PIN",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setIsTogglingViewPin(false);
+    }
+  };
+
+  const handleRegenerateViewPin = async () => {
+    setIsRegeneratingViewPin(true);
+    try {
+      const adminSession = await tryVerifyAdminSession();
+      if (!adminSession) {
+        throw new Error("Admin session required.");
+      }
+      const newPin = await setVenueViewPin(slug, adminSession.token, true);
+      toast({
+        title: "New View PIN Generated",
+        description: `Share PIN: ${newPin} — the previous PIN no longer works.`,
+      });
+      onViewPinChanged();
+    } catch (error: unknown) {
+      toast({
+        title: "Couldn't Regenerate View PIN",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setIsRegeneratingViewPin(false);
     }
   };
 
@@ -449,23 +516,69 @@ export const Header: React.FC<HeaderProps> = ({
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              {hasPin && (
+              {hasEditPin && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={handleRegeneratePin}
-                        disabled={isRegeneratingPin}
+                        onClick={handleRegenerateEditPin}
+                        disabled={isRegeneratingEditPin}
                         className="shadow-sm"
                       >
                         <KeyRound size={14} className="mr-1.5" />
-                        {isRegeneratingPin ? "…" : "New PIN"}
+                        {isRegeneratingEditPin ? "…" : "New Edit PIN"}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent className="bg-card text-card-foreground border-border">
                       <p>Generate a new edit PIN for this chart (invalidates the old one).</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-1.5 bg-muted/20 border border-muted rounded-md px-2.5 py-1.5">
+                      <Eye size={14} className="text-muted-foreground" />
+                      <span className="hidden text-xs font-medium text-muted-foreground sm:inline">
+                        View PIN
+                      </span>
+                      <Switch
+                        checked={viewPinRequired}
+                        onCheckedChange={handleToggleViewPin}
+                        disabled={isTogglingViewPin}
+                        aria-label="Require a PIN to view this chart"
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent className="bg-card text-card-foreground border-border">
+                    <p>
+                      {viewPinRequired
+                        ? "Only admin and people with a PIN can view this chart."
+                        : "Anyone with the link can view this chart (default)."}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              {viewPinRequired && hasViewPin && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleRegenerateViewPin}
+                        disabled={isRegeneratingViewPin}
+                        className="shadow-sm"
+                      >
+                        <Eye size={14} className="mr-1.5" />
+                        {isRegeneratingViewPin ? "…" : "New View PIN"}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="bg-card text-card-foreground border-border">
+                      <p>Generate a new view PIN for this chart (invalidates the old one).</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -482,7 +595,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <Eye size={16} className="mr-1.5" />
                 <span className="hidden sm:inline">View Only</span>
               </div>
-              {hasPin && (
+              {hasEditPin && (
                 <>
                   <Input
                     type="password"
@@ -491,7 +604,7 @@ export const Header: React.FC<HeaderProps> = ({
                     value={pinEntry}
                     onChange={(e) => setPinEntry(e.target.value.replace(/\D/g, ""))}
                     className="h-10 w-20 bg-card/60 border-border/30 focus:border-primary/50 focus:bg-card/80 text-center font-mono tracking-widest"
-                    aria-label="Enter this chart's 4-digit PIN to edit"
+                    aria-label="Enter this chart's 4-digit edit PIN"
                     disabled={isPinSubmitting}
                   />
                   <Button

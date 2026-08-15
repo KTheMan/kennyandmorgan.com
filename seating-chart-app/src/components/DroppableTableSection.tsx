@@ -1,12 +1,51 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { Guest } from "../types/seatingChart";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DraggableGuestListItem } from "./DraggableGuestListItem";
-import { Users, Coffee, PlusCircle } from "lucide-react";
+import { Users, Coffee, PlusCircle, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+type GuestListEntry =
+  | { kind: "header"; key: string; label: string }
+  | { kind: "guest"; key: string; guest: Guest };
+
+// Clusters contiguous guests sharing a groupId (party) under a small
+// header, e.g. "Jane Doe's Party (4)" — only meaningful for Unassigned,
+// where guests aren't already ordered by physical seat. Assumes the
+// caller has already sorted `guests` so same-party guests are adjacent
+// (see Sidebar's groupedGuests sort).
+function buildGuestListEntries(guests: Guest[]): GuestListEntry[] {
+  const entries: GuestListEntry[] = [];
+  let i = 0;
+  while (i < guests.length) {
+    const guest = guests[i];
+    if (guest.groupId) {
+      let j = i;
+      const run: Guest[] = [];
+      while (j < guests.length && guests[j].groupId === guest.groupId) {
+        run.push(guests[j]);
+        j += 1;
+      }
+      if (run.length > 1) {
+        const primary = run.find((g) => g.isPrimary) ?? run[0];
+        entries.push({
+          kind: "header",
+          key: `party-${guest.groupId}`,
+          label: `${primary.fullName}'s Party (${run.length})`,
+        });
+      }
+      run.forEach((g) => entries.push({ kind: "guest", key: g.id, guest: g }));
+      i = j;
+    } else {
+      entries.push({ kind: "guest", key: guest.id, guest });
+      i += 1;
+    }
+  }
+  return entries;
+}
 
 interface GroupData {
   // Define locally or import if exported from Sidebar
@@ -56,6 +95,13 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
   const { setNodeRef, isOver } = useDroppable({ id: tableId });
   const totalSeats = groupData.tableCapacity || 0;
   const occupiedSeats = groupData.guests.length;
+
+  // Only cluster by party in Unassigned — once seated, guest order
+  // reflects actual chair position and shouldn't be reshuffled by party.
+  const listEntries = useMemo(
+    () => (isUnassigned ? buildGuestListEntries(groupData.guests) : groupData.guests.map((guest) => ({ kind: "guest" as const, key: guest.id, guest }))),
+    [groupData.guests, isUnassigned],
+  );
 
   const outlineClass = isFlashingError
     ? "outline outline-2 outline-destructive outline-offset-2 ring-destructive"
@@ -112,16 +158,26 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
 
       {/* Guest List */}
       <ul className="space-y-1">
-        {groupData.guests.map((guest) => (
-          <DraggableGuestListItem
-            key={guest.id}
-            guest={guest}
-            isHighlighted={guest.id === hoveredGuestId}
-            onMouseEnter={onGuestMouseEnter}
-            onMouseLeave={onGuestMouseLeave}
-            onRemove={onGuestRemove}
-          />
-        ))}
+        {listEntries.map((entry) =>
+          entry.kind === "header" ? (
+            <li
+              key={entry.key}
+              className="flex items-center gap-1.5 pt-2 pb-0.5 px-1 text-xs font-medium uppercase tracking-wide text-sidebar-foreground/50"
+            >
+              <UsersRound size={12} strokeWidth={1.5} />
+              {entry.label}
+            </li>
+          ) : (
+            <DraggableGuestListItem
+              key={entry.key}
+              guest={entry.guest}
+              isHighlighted={entry.guest.id === hoveredGuestId}
+              onMouseEnter={onGuestMouseEnter}
+              onMouseLeave={onGuestMouseLeave}
+              onRemove={onGuestRemove}
+            />
+          ),
+        )}
       </ul>
 
       {/* Add Guest Input / Button */}

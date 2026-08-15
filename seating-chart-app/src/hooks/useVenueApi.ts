@@ -5,35 +5,42 @@ import {
   type UseQueryOptions,
   type UseMutationOptions,
 } from "@tanstack/react-query";
-import { getVenue, saveVenue, type VenuePayload } from "@/lib/api/venues";
+import { getVenue, saveVenue, type VenueFetchResult } from "@/lib/api/venues";
 import type { VenueData } from "@shared/types/venue";
 
 type SaveVenueVariables = {
   slug: string;
   venueData: VenueData;
-  credentials: { token?: string | null; pin?: string | null };
+  credentials: { token?: string | null; editPin?: string | null };
 };
 
 // --- Query Hook ---
 
 /**
- * Fetches a venue by slug. Viewing is always public — no credentials
- * needed — so this is enabled whenever a slug is present.
+ * Fetches a venue by slug. Always public to call — the result itself
+ * says whether it's locked behind a view PIN (see VenueFetchResult).
  */
 export const useVenueQuery = (
   slug: string | null,
+  credentials: { token?: string | null; viewPin?: string | null; editPin?: string | null } = {},
   options?: Omit<
-    UseQueryOptions<VenuePayload, Error, VenuePayload, readonly [string, string | null]>,
+    UseQueryOptions<VenueFetchResult, Error, VenueFetchResult, readonly [string, string | null, string | null, string | null, string | null]>,
     "queryKey" | "queryFn" | "enabled"
   >,
 ) => {
   return useQuery({
-    queryKey: ["seating-chart-venue", slug] as const,
+    queryKey: [
+      "seating-chart-venue",
+      slug,
+      credentials.token ?? null,
+      credentials.viewPin ?? null,
+      credentials.editPin ?? null,
+    ] as const,
     queryFn: () => {
       if (!slug) {
         return Promise.reject(new Error("A chart slug is required."));
       }
-      return getVenue(slug);
+      return getVenue(slug, credentials);
     },
     enabled: !!slug,
     ...options,

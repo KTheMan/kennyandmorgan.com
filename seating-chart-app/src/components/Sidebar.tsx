@@ -151,10 +151,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (group.tableNumber !== null) {
         group.guests.sort((a, b) => (a.chairIndex ?? 0) - (b.chairIndex ?? 0));
       } else {
+        // Cluster unassigned guests by party (groupId) so a family/table
+        // group stays visually together instead of scattering
+        // alphabetically; ungrouped (manually-added) guests sort after,
+        // by name.
         group.guests.sort((a, b) => {
-          const nameA = `${a.lastName}, ${a.firstName}`.toLowerCase();
-          const nameB = `${b.lastName}, ${b.firstName}`.toLowerCase();
-          return nameA.localeCompare(nameB);
+          const groupA = (a.groupId || "").toLowerCase();
+          const groupB = (b.groupId || "").toLowerCase();
+          if (groupA !== groupB) {
+            if (!groupA) return 1;
+            if (!groupB) return -1;
+            return groupA.localeCompare(groupB);
+          }
+          if (Boolean(a.isPrimary) !== Boolean(b.isPrimary)) {
+            return a.isPrimary ? -1 : 1;
+          }
+          return (a.fullName || "").toLowerCase().localeCompare((b.fullName || "").toLowerCase());
         });
       }
     });
@@ -226,8 +238,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       const newGuest: Guest = {
         id: `guest-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        firstName: name,
-        lastName: "",
+        fullName: name,
         tableId: tableId === "unassigned" ? "" : tableId,
         chairIndex: nextSeatIndex,
       };
@@ -338,18 +349,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         for (const acceptedGuest of party.guests) {
           if (existingIds.has(acceptedGuest.weddingGuestId)) continue;
 
-          const nameParts = acceptedGuest.fullName.trim().split(/\s+/);
-          const lastName = nameParts.length > 1 ? nameParts.pop()! : "";
-          const firstName = nameParts.join(" ") || acceptedGuest.fullName;
-
           newGuests.push({
             id: `wg-${acceptedGuest.weddingGuestId}`,
-            firstName,
-            lastName,
+            fullName: acceptedGuest.fullName,
             tableId: "",
             chairIndex: null,
             weddingGuestId: acceptedGuest.weddingGuestId,
             groupId: party.groupId,
+            isPrimary: acceptedGuest.isPrimary,
+            isPlusOne: acceptedGuest.isPlusOne,
+            isChild: acceptedGuest.isChild,
             mealChoice: acceptedGuest.mealChoice,
             dietaryNotes: acceptedGuest.dietaryNotes,
           });
@@ -530,7 +539,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div className="bg-sidebar p-3 rounded-md shadow-xl border border-primary/50 flex items-center opacity-90 cursor-grabbing">
                 <UserCircle size={18} className="mr-2 text-primary shrink-0" />
                 <span className="font-medium text-sidebar-primary truncate">
-                  {activeDragData.firstName} {activeDragData.lastName}
+                  {activeDragData.fullName}
                 </span>
               </div>
             ) : null}
