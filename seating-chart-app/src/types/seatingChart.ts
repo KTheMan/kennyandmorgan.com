@@ -45,6 +45,12 @@ export interface Table {
   // Degrees, clockwise. Missing/omitted means 0 — every table saved
   // before rotation existed renders unrotated, as before.
   rotation?: number;
+  // When true, this specific table is locked: it can't be dragged,
+  // resized, rotated, or have its capacity/seating layout changed, and
+  // it's skipped by the Delete key — independent of the venue-space lock,
+  // which only governs the venue space shape itself. Missing/omitted
+  // means unlocked, same as every table saved before this existed.
+  locked?: boolean;
 }
 
 export interface VenueElement {
