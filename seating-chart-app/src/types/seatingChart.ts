@@ -42,6 +42,9 @@ export interface Table {
   bottomSeats?: number; // rectangle tables in "opposing" seatingStyle only
   capacity: number;
   draggable?: boolean;
+  // Degrees, clockwise. Missing/omitted means 0 — every table saved
+  // before rotation existed renders unrotated, as before.
+  rotation?: number;
 }
 
 export interface VenueElement {

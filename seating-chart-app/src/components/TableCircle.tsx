@@ -36,6 +36,11 @@ const MAX_RECT_WIDTH = 400;
 const MIN_RECT_HEIGHT = 60;
 const MAX_RECT_HEIGHT = 220;
 const RECT_CORNER_RADIUS = 8;
+// A rotationSnapTolerance just over half the 45° gap between snap points
+// means every possible drag angle is always within range of one of them —
+// hard-quantizing rotation to these 8 angles rather than "free rotation
+// that happens to snap near common angles."
+const ROTATION_SNAPS = [0, 45, 90, 135, 180, 225, 270, 315];
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(value, max));
@@ -358,6 +363,10 @@ const TableCircleContent: React.FC<{
     const scaleY = node.scaleY();
     node.scaleX(1);
     node.scaleY(1);
+    // The rotate handle writes straight to the node's rotation, already
+    // snapped to a 45° step by rotationSnaps/rotationSnapTolerance below —
+    // just normalize into 0-315 before persisting.
+    const rotation = ((node.rotation() % 360) + 360) % 360;
 
     if (isRectangle) {
       setShape((prev) => {
@@ -369,6 +378,7 @@ const TableCircleContent: React.FC<{
           ...prev,
           x: node.x(),
           y: node.y(),
+          rotation,
           width: newWidth,
           height: newHeight,
           radius: newWidth / 2, // kept in sync for older code paths that assume a radius
@@ -388,6 +398,7 @@ const TableCircleContent: React.FC<{
         ...prev,
         x: node.x(),
         y: node.y(),
+        rotation,
         radius: clampedRadius,
       };
     });
@@ -458,6 +469,7 @@ const TableCircleContent: React.FC<{
         id={shape.id}
         x={shape.x}
         y={shape.y}
+        rotation={shape.rotation ?? 0}
         draggable={isDraggable}
         onClick={handleSelect}
         onTap={handleSelect}
@@ -768,7 +780,17 @@ const TableCircleContent: React.FC<{
               : (oldBox, newBox) => {
                   const newRadius = Math.max(newBox.width, newBox.height) / 2;
                   if (newRadius < 10) return oldBox;
-                  return { ...oldBox, width: newRadius * 2, height: newRadius * 2 };
+                  // Round tables resize from their own center (oldBox's x/y,
+                  // not newBox's corner-anchored ones) — but rotation must
+                  // still come from newBox, or the rotate handle would look
+                  // frozen: every drag, resize or rotate, goes through this
+                  // same boundBoxFunc.
+                  return {
+                    ...oldBox,
+                    rotation: newBox.rotation,
+                    width: newRadius * 2,
+                    height: newRadius * 2,
+                  };
                 }
           }
           enabledAnchors={
@@ -785,7 +807,9 @@ const TableCircleContent: React.FC<{
                 ]
               : ["top-left", "top-right", "bottom-left", "bottom-right"]
           }
-          rotateEnabled={false}
+          rotateEnabled
+          rotationSnaps={ROTATION_SNAPS}
+          rotationSnapTolerance={23}
           borderStroke={COLORS.tableStroke}
           anchorFill={COLORS.tableFill}
           anchorStroke={COLORS.tableStroke}
