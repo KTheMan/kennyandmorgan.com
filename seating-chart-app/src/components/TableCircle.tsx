@@ -147,12 +147,16 @@ const TableCircleContent: React.FC<{
   const bottomSeats = shape.bottomSeats ?? Math.floor(shape.capacity / 2);
   const setTableSeatingModalState = useSetAtom(tableSeatingModalStateAtom);
 
-  // A table's own lock, independent of the venue-space lock above — see
-  // the Table.locked doc comment.
+  // A table's own position lock, independent of the venue-space lock
+  // above and of seatingLocked below — see the Table.locked doc comment.
+  // It only affects draggability; everything else on this table (resize,
+  // rotate, capacity, seating layout, duplicate, delete) still works
+  // while locked.
   const isLocked = shape.locked === true;
+  const isSeatingLocked = shape.seatingLocked === true;
 
   // Draggability depends on shape prop, not panning, edit mode, AND this
-  // table's own lock.
+  // table's own position lock.
   const isDraggable = shape.draggable !== false && !isPanning && editMode && !isLocked;
 
   // Hooks are now safe
@@ -341,7 +345,7 @@ const TableCircleContent: React.FC<{
   };
 
   const handleCapacityChange = (change: number) => {
-    if (!editMode || isLocked) {
+    if (!editMode) {
       // Optionally show a toast here if desired
       return;
     }
@@ -387,7 +391,7 @@ const TableCircleContent: React.FC<{
   const handleSettingsMouseEnter = () => setIsSettingsHovered(true);
   const handleSettingsMouseLeave = () => setIsSettingsHovered(false);
   const handleOpenSeatingSettings = () => {
-    if (!editMode || isLocked) return;
+    if (!editMode) return;
     setTableSeatingModalState({ isOpen: true, tableId: shape.id });
   };
   const handleDuplicateMouseEnter = () => setIsDuplicateHovered(true);
@@ -417,9 +421,9 @@ const TableCircleContent: React.FC<{
     setSelectedShapeId(newTable.id);
   };
 
-  // This table's own lock — independent of, and not affected by, the
-  // venue-space lock. Always togglable in edit mode, even while locked,
-  // since that's the only way back out.
+  // This table's own position lock — independent of, and not affected
+  // by, the venue-space lock or seatingLocked. Always togglable in edit
+  // mode, even while locked, since that's the only way back out.
   const handleToggleLock = () => {
     if (!editMode) return;
     setShape((prev) => ({ ...prev, locked: !prev.locked }));
@@ -518,9 +522,9 @@ const TableCircleContent: React.FC<{
           />
         )}
 
-        {/* Persistent lock badge — visible whenever this table is locked,
-            not just on hover, so it's obvious at a glance why it won't
-            drag/resize/rotate. */}
+        {/* Persistent position-lock badge — visible whenever this table's
+            position is locked, not just on hover, so it's obvious at a
+            glance why it won't drag. */}
         {isLocked && (
           <Text
             text="🔒"
@@ -528,6 +532,21 @@ const TableCircleContent: React.FC<{
             listening={false}
             perfectDrawEnabled={false}
             x={(isRectangle ? rectWidth / 2 : shape.radius) - 18}
+            y={-(isRectangle ? rectHeight / 2 : shape.radius) + 4}
+          />
+        )}
+
+        {/* Persistent seating-lock badge — mirrors the position-lock
+            badge on the opposite corner, so it's clear at a glance that
+            this table's guests can't be added/removed/rearranged. Toggled
+            from the sidebar guest list, not from here. */}
+        {isSeatingLocked && (
+          <Text
+            text="🔐"
+            fontSize={13}
+            listening={false}
+            perfectDrawEnabled={false}
+            x={-(isRectangle ? rectWidth / 2 : shape.radius) + 4}
             y={-(isRectangle ? rectHeight / 2 : shape.radius) + 4}
           />
         )}
@@ -583,6 +602,7 @@ const TableCircleContent: React.FC<{
               guestId={guestId}
               registerRef={registerRef}
               previewOrder={previewOrder >= 0 ? previewOrder + 1 : null}
+              seatingLocked={isSeatingLocked}
             />
           );
         })}
@@ -837,8 +857,10 @@ const TableCircleContent: React.FC<{
           </Group>
         </Group>
       </Group>
-      {/* Only show Transformer if selected, in edit mode, and unlocked */}
-      {isSelected && editMode && !isLocked && (
+      {/* Only show Transformer if selected and in edit mode — resize/
+          rotate stay available even while this table's position is
+          locked; the position lock only blocks dragging. */}
+      {isSelected && editMode && (
         <Transformer
           ref={trRef}
           boundBoxFunc={

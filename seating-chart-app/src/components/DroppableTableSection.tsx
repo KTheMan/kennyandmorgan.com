@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DraggableGuestListItem } from "./DraggableGuestListItem";
 import { DraggableGroupHeader } from "./DraggableGroupHeader";
-import { Users, Coffee, PlusCircle } from "lucide-react";
+import { Users, Coffee, PlusCircle, Lock, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type GuestListEntry =
@@ -54,6 +54,7 @@ interface GroupData {
   // Define locally or import if exported from Sidebar
   tableNumber: number | null;
   tableCapacity?: number;
+  seatingLocked?: boolean;
   guests: Guest[];
 }
 
@@ -76,6 +77,11 @@ interface DroppableTableSectionProps {
   isFlashingError: boolean;
   isInputVisible?: boolean;
   onToggleInput?: () => void;
+  // Whether this table's seat assignments are frozen (see
+  // Table.seatingLocked). Undefined/omitted for the Unassigned section,
+  // which can't be locked.
+  isSeatingLocked?: boolean;
+  onToggleSeatingLock?: () => void;
 }
 
 export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
@@ -94,8 +100,13 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
   isFlashingError,
   isInputVisible,
   onToggleInput,
+  isSeatingLocked = false,
+  onToggleSeatingLock,
 }) => {
-  const { setNodeRef, isOver } = useDroppable({ id: tableId });
+  const { setNodeRef, isOver } = useDroppable({
+    id: tableId,
+    disabled: isSeatingLocked,
+  });
   const totalSeats = groupData.tableCapacity || 0;
   const occupiedSeats = groupData.guests.length;
 
@@ -140,22 +151,59 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
             </span>
           )}
         </h3>
-        {isUnassigned ? (
-          <Badge
-            variant="outline"
-            className="text-xs bg-sidebar-accent/10 text-sidebar-foreground/80 shadow-sm border-sidebar-border/40"
-          >
-            {occupiedSeats}
-          </Badge>
-        ) : (
-          <Badge
-            variant="outline"
-            className="text-xs bg-sidebar-accent/10 text-sidebar-foreground/80 shadow-sm border-sidebar-border/40 px-2"
-          >
-            <Users size={12} className="mr-1.5" strokeWidth={1.5} />
-            {occupiedSeats}/{totalSeats}
-          </Badge>
-        )}
+        <div className="flex items-center gap-1.5">
+          {isUnassigned ? (
+            <Badge
+              variant="outline"
+              className="text-xs bg-sidebar-accent/10 text-sidebar-foreground/80 shadow-sm border-sidebar-border/40"
+            >
+              {occupiedSeats}
+            </Badge>
+          ) : (
+            <>
+              <Badge
+                variant="outline"
+                className="text-xs bg-sidebar-accent/10 text-sidebar-foreground/80 shadow-sm border-sidebar-border/40 px-2"
+              >
+                <Users size={12} className="mr-1.5" strokeWidth={1.5} />
+                {occupiedSeats}/{totalSeats}
+              </Badge>
+              {/* Seating lock — freezes this table's guest assignments
+                  (add/remove/rearrange, both here and by dragging seat
+                  nodes on the canvas). Independent of the table's own
+                  position lock on the canvas. */}
+              {onToggleSeatingLock && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={`h-6 w-6 shrink-0 rounded-full ${
+                    isSeatingLocked
+                      ? "text-destructive hover:text-destructive hover:bg-destructive/10"
+                      : "text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent/20"
+                  }`}
+                  onClick={onToggleSeatingLock}
+                  aria-label={
+                    isSeatingLocked
+                      ? "Unlock this table's seating"
+                      : "Lock this table's seating"
+                  }
+                  title={
+                    isSeatingLocked
+                      ? "Seating locked — click to unlock"
+                      : "Lock seating arrangement"
+                  }
+                >
+                  {isSeatingLocked ? (
+                    <Lock size={14} strokeWidth={1.75} />
+                  ) : (
+                    <Unlock size={14} strokeWidth={1.75} />
+                  )}
+                </Button>
+              )}
+            </>
+          )}
+        </div>
       </div>
       <Separator className="mb-3 bg-sidebar-accent/20" />
 
@@ -177,6 +225,7 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
               onMouseEnter={onGuestMouseEnter}
               onMouseLeave={onGuestMouseLeave}
               onRemove={onGuestRemove}
+              disabled={isSeatingLocked}
             />
           ),
         )}
@@ -208,7 +257,7 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
           )}
         </div>
       ) : (
-        occupiedSeats < totalSeats && (
+        !isSeatingLocked && occupiedSeats < totalSeats && (
           <div className="mt-2 pl-3 pr-1 relative">
             <Input
               type="text"

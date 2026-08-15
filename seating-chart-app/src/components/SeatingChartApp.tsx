@@ -298,7 +298,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
       const hit = stagePoint
         ? findTableUnderPoint(tables, stagePoint, GROUP_DROP_HIT_MARGIN)
         : null;
-      if (!hit) {
+      if (!hit || hit.table.seatingLocked) {
         setGroupDropPreview(null);
         return;
       }
@@ -382,6 +382,14 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
             });
             return;
           }
+          if (hit.table.seatingLocked) {
+            toast({
+              title: "Seating Locked",
+              description: `Table ${hit.table.number}'s seating is locked. Unlock it from the sidebar to seat guests there.`,
+              variant: "destructive",
+            });
+            return;
+          }
           const occupied = new Set(
             guestsValue
               .filter(
@@ -438,6 +446,14 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
           (s): s is Table => s.type === "table" && s.id === targetTableId,
         );
         if (!targetTable) return;
+        if (targetTable.seatingLocked) {
+          toast({
+            title: "Seating Locked",
+            description: `Table ${targetTable.number}'s seating is locked. Unlock it from the sidebar to seat guests there.`,
+            variant: "destructive",
+          });
+          return;
+        }
 
         // Same greedy sequential fill single-guest sidebar drops use,
         // generalized to seat all N guests in one pass.
@@ -492,6 +508,17 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
           });
           return;
         }
+        const targetChairTable = baseShapesValue.find(
+          (s): s is Table => s.type === "table" && s.id === target.tableId,
+        );
+        if (targetChairTable?.seatingLocked) {
+          toast({
+            title: "Seating Locked",
+            description: `Table ${targetChairTable.number}'s seating is locked. Unlock it from the sidebar to seat guests there.`,
+            variant: "destructive",
+          });
+          return;
+        }
         const occupant = guestsValue.find(
           (g) =>
             g.tableId === target.tableId && g.chairIndex === target.chairIndex,
@@ -535,6 +562,14 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         (s): s is Table => s.type === "table" && s.id === targetTableId,
       );
       if (!targetTable) return;
+      if (targetTable.seatingLocked) {
+        toast({
+          title: "Seating Locked",
+          description: `Table ${targetTable.number}'s seating is locked. Unlock it from the sidebar to seat guests there.`,
+          variant: "destructive",
+        });
+        return;
+      }
       const guestsAtTargetTable = guestsValue.filter(
         (g) => g.tableId === targetTableId,
       );

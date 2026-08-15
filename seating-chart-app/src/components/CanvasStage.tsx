@@ -34,7 +34,6 @@ import {
 } from "@/components/ui/tooltip";
 import { ChairCircle } from "./ChairCircle"; // Assuming ChairCircle exports the group ref or similar
 import { CanvasTipsOverlay } from "./CanvasTipsOverlay"; // <-- ADD THIS IMPORT
-import { useToast } from "@/components/ui/use-toast";
 
 // Define props if needed later
 interface CanvasStageProps {
@@ -103,7 +102,6 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   const isVenueLocked = useAtomValue(venueSpaceLockedAtom); // Get venue lock state
 
   const setBaseShapes = useSetAtom(baseShapesAtom); // Get setter for base shapes
-  const { toast } = useToast();
 
   // Ref map for chair groups, keyed by guestId
   const chairRefs = useRef<Record<string, Konva.Group>>({});
@@ -287,19 +285,9 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
         setIsAltPressed(true);
         e.preventDefault(); // Prevent browser menu focus
       } else if (e.key === "Delete" && selectedShapeId) {
-        // Delete the selected shape when Delete key is pressed — unless
-        // it's a table that's individually locked (see Table.locked);
-        // that lock exists specifically to block this.
-        const selectedShape = baseShapes.find((s) => s.id === selectedShapeId);
-        if (selectedShape?.type === "table" && selectedShape.locked) {
-          toast({
-            title: "Table Locked",
-            description: "Unlock this table before deleting it.",
-            variant: "destructive",
-          });
-          e.preventDefault();
-          return;
-        }
+        // Delete the selected shape when Delete key is pressed. A
+        // table's position lock (Table.locked) only blocks dragging, so
+        // it doesn't guard deletion here.
         setBaseShapes((prevShapes) =>
           prevShapes.filter((shape) => shape.id !== selectedShapeId),
         );
@@ -330,7 +318,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [selectedShapeId, setBaseShapes, setSelectedShapeId, fitContentToView, baseShapes, toast]);
+  }, [selectedShapeId, setBaseShapes, setSelectedShapeId, fitContentToView]);
 
   // Effect to update cursor styles based on interaction state
   useEffect(() => {
