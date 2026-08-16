@@ -1029,16 +1029,6 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     }
   };
 
-  const showAddVenueSpaceRequiredToast = () => {
-    toast({
-      title: "Action Unavailable",
-      description:
-        "Please add and define the Venue Space first before adding tables or other elements.",
-      variant: "destructive",
-      duration: 3000,
-    });
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -1066,7 +1056,6 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         isVenueSpacePresent={venueSpaceExists}
         isVenueSpaceLocked={isVenueLocked}
         onToggleVenueLock={handleToggleVenueLock}
-        onShowDisabledInfo={showAddVenueSpaceRequiredToast}
         saveStatus={saveStatus}
         onToggleMobileSidebar={() => setIsSheetOpen((prev) => !prev)}
         isMobileSidebarOpen={isSheetOpen}

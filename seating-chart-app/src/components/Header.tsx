@@ -23,6 +23,7 @@ import {
   ImagePlus,
   Image as ImageIcon,
   Trash2,
+  MoreHorizontal,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -35,12 +36,14 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuCheckboxItem,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -50,36 +53,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { setEditPin as setVenueEditPin, setViewPin as setVenueViewPin } from "@/lib/api/venues";
 import { tryVerifyAdminSession } from "@/lib/adminAuth";
 import type { BackgroundImage } from "@/types/seatingChart";
-
-export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-
-  const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
-  };
-
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={toggleTheme}
-            className="border-accent/30 bg-accent/5 hover:bg-accent/15 hover:border-accent/50 relative h-10 w-10 shadow-sm transition-all duration-300"
-          >
-            <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all duration-300 dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all duration-300 dark:rotate-0 dark:scale-100" />
-            <span className="sr-only">Toggle theme</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Switch to {theme === "dark" ? "light" : "dark"} mode</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
 
 export type SaveStatus = "saved" | "saving" | "unsaved";
 
@@ -100,7 +73,6 @@ interface HeaderProps {
   isVenueSpacePresent: boolean;
   isVenueSpaceLocked: boolean;
   onToggleVenueLock: () => void;
-  onShowDisabledInfo: () => void;
   saveStatus: SaveStatus;
   onToggleMobileSidebar: () => void;
   isMobileSidebarOpen: boolean;
@@ -129,7 +101,6 @@ export const Header: React.FC<HeaderProps> = ({
   isVenueSpacePresent,
   isVenueSpaceLocked,
   onToggleVenueLock,
-  onShowDisabledInfo,
   saveStatus,
   onToggleMobileSidebar,
   isMobileSidebarOpen,
@@ -142,6 +113,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [eventTitle, setEventTitle] = useAtom(eventTitleAtom);
   const editMode = useAtomValue(editModeAtom);
+  const { theme, setTheme } = useTheme();
   const { toast } = useToast();
   const backgroundFileInputRef = useRef<HTMLInputElement>(null);
   // Live drag position for the opacity slider — the atom (and thus the
@@ -293,129 +265,256 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="relative bg-gradient-to-r from-card to-card/95 border-b border-border/40 shadow-sm px-4 sm:px-7 py-4 overflow-hidden">
-      {/* Refined texture overlay */}
-      <div className="absolute inset-0 texture-elegant pointer-events-none"></div>
-      <div className="relative z-10 flex flex-wrap items-center justify-between">
-        {/* Mobile Sidebar Toggle Button - visible only on small screens */}
-        <div className="lg:hidden mr-2">
-          {" "}
-          {/* Container for the button, shows on <lg screens */}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={onToggleMobileSidebar}
-            className="border-accent/30 bg-accent/5 hover:bg-accent/15 h-10 w-10 shadow-sm"
-            aria-label="Toggle sidebar"
-          >
-            {isMobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </Button>
-        </div>
+    <header className="relative overflow-hidden border-b border-border/40 bg-gradient-to-r from-card to-card/95 px-3 py-2.5 shadow-sm sm:px-5">
+      <div className="texture-elegant pointer-events-none absolute inset-0" />
+      <TooltipProvider delayDuration={300}>
+        <div className="relative z-10 flex min-w-0 flex-col gap-2.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onToggleMobileSidebar}
+              className="h-9 w-9 shrink-0 border-accent/30 bg-accent/5 shadow-sm hover:border-accent/50 hover:bg-accent/15 lg:hidden"
+              aria-label={isMobileSidebarOpen ? "Close guest sidebar" : "Open guest sidebar"}
+            >
+              {isMobileSidebarOpen ? <X size={18} /> : <Menu size={18} />}
+            </Button>
 
-        {/* Item 1: Logo and app name */}
-        <div className="flex-shrink-0 mr-3 sm:mr-4 flex items-center">
-          {/* On small screens, only show the app name, on sm+ show icon too */}
-          <span className="hidden sm:inline-flex items-center justify-center mr-2 text-primary/80">
-            <Armchair size={24} strokeWidth={1.5} />
-          </span>
-          <h1 className="text-xl sm:text-2xl font-medium text-card-foreground tracking-wide">
-            Seating Chart
-          </h1>
-        </div>
+            <div className="flex shrink-0 items-center gap-2 text-card-foreground">
+              <Armchair className="hidden text-primary/80 sm:block" size={22} strokeWidth={1.5} />
+              <h1 className="text-base font-semibold tracking-wide sm:text-lg">Seating Chart</h1>
+            </div>
 
-        {/* Item 2: Controls (Add Buttons) - adjust margins if needed due to toggle button */}
-        <div className="flex items-center gap-2 sm:gap-3 order-3 lg:order-2 w-full lg:w-auto mt-3 lg:mt-0 justify-center lg:justify-start lg:mr-auto lg:ml-4">
-          <TooltipProvider delayDuration={300}>
+            <Input
+              value={eventTitle}
+              onChange={(event) => setEventTitle(event.target.value)}
+              className="mx-2 hidden h-9 min-w-0 flex-1 bg-card/60 text-center text-base font-semibold md:block"
+              placeholder="Enter Event Title"
+              aria-label="Event Title"
+              disabled={!editMode}
+            />
+
+            <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className={cn(
+                      "flex h-9 items-center rounded-md border px-2 text-sm font-medium shadow-sm sm:px-3",
+                      saveStatus === "saved" && "border-muted bg-muted/30 text-muted-foreground",
+                      saveStatus === "saving" && "border-accent/40 bg-accent/40 text-accent-foreground",
+                      saveStatus === "unsaved" && "border-secondary/30 bg-secondary/20 text-secondary-foreground",
+                    )}
+                    role="status"
+                    aria-live="polite"
+                    aria-label={saveStatus === "saved" ? "All changes saved" : saveStatus === "saving" ? "Saving changes" : "Unsaved changes"}
+                  >
+                    {saveStatus === "saved" ? (
+                      <Check size={16} strokeWidth={2} />
+                    ) : saveStatus === "saving" ? (
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    ) : (
+                      <Save size={16} strokeWidth={1.5} />
+                    )}
+                    <span className="ml-1.5 hidden sm:inline">
+                      {saveStatus === "saved" ? "Saved" : saveStatus === "saving" ? "Saving…" : "Unsaved"}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="border-border bg-card text-card-foreground">
+                  <p>{saveStatus === "saved" ? "All changes saved" : saveStatus === "saving" ? "Saving changes…" : "Changes will be saved shortly"}</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <div className="hidden h-9 items-center rounded-md border border-border/30 bg-card/80 px-3 text-sm font-medium text-foreground/90 shadow-sm md:flex">
+                <Users size={16} className="mr-1.5 text-primary/80" strokeWidth={1.5} />
+                {totalGuests} {totalGuests === 1 ? "Guest" : "Guests"}
+              </div>
+
+              {!isAdmin && (
+                <div className={cn(
+                  "hidden h-9 items-center rounded-md border px-2.5 text-sm font-medium shadow-sm sm:flex",
+                  editMode
+                    ? "border-[#BFCB8A] bg-[#EEF3DC] text-[#2E3A1C]"
+                    : "border-muted bg-muted/30 text-muted-foreground",
+                )}>
+                  {editMode ? <KeyRound size={15} className="mr-1.5" /> : <Eye size={15} className="mr-1.5" />}
+                  {editMode ? "Editing" : "View only"}
+                </div>
+              )}
+
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 shrink-0 border-accent/30 bg-accent/5 shadow-sm hover:border-accent/50 hover:bg-accent/15"
+                        aria-label="Open chart menu"
+                      >
+                        <MoreHorizontal size={18} />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>Chart menu</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="end" sideOffset={8} className="w-64 border-border bg-card text-card-foreground">
+                  <DropdownMenuLabel className="font-normal">
+                    <span className="block text-xs uppercase tracking-wide text-muted-foreground">Access</span>
+                    <span className="mt-0.5 block font-medium">
+                      {isAdmin ? "Administrator" : editMode ? "Editing unlocked" : "View only"}
+                    </span>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+
+                  {isAdmin && (
+                    <>
+                      <DropdownMenuItem onSelect={() => void handleShare()}>
+                        <Share2 size={15} className="mr-2" />
+                        Copy share link
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <a href="../admin.html">
+                          <ShieldCheck size={15} className="mr-2" />
+                          Open admin console
+                        </a>
+                      </DropdownMenuItem>
+                      {hasEditPin && (
+                        <DropdownMenuItem
+                          onSelect={() => void handleRegenerateEditPin()}
+                          disabled={isRegeneratingEditPin}
+                        >
+                          <KeyRound size={15} className="mr-2" />
+                          {isRegeneratingEditPin ? "Generating edit PIN…" : "Generate new edit PIN"}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuCheckboxItem
+                        checked={viewPinRequired}
+                        onCheckedChange={(checked) => void handleToggleViewPin(checked === true)}
+                        onSelect={(event) => event.preventDefault()}
+                        disabled={isTogglingViewPin}
+                      >
+                        Require a PIN to view
+                      </DropdownMenuCheckboxItem>
+                      {viewPinRequired && hasViewPin && (
+                        <DropdownMenuItem
+                          onSelect={() => void handleRegenerateViewPin()}
+                          disabled={isRegeneratingViewPin}
+                        >
+                          <Eye size={15} className="mr-2" />
+                          {isRegeneratingViewPin ? "Generating view PIN…" : "Generate new view PIN"}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+
+                  <DropdownMenuItem onSelect={() => setTheme(theme === "dark" ? "light" : "dark")}>
+                    {theme === "dark" ? <Sun size={15} className="mr-2" /> : <Moon size={15} className="mr-2" />}
+                    Use {theme === "dark" ? "light" : "dark"} theme
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={isAdmin ? onBackToManager : () => { window.location.href = "../index.html"; }}
+                  >
+                    <ArrowLeft size={15} className="mr-2" />
+                    {isAdmin ? "Back to seating charts" : "Back to wedding site"}
+                  </DropdownMenuItem>
+                  {editMode && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={onReset}
+                        className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                      >
+                        <RotateCcw size={15} className="mr-2" />
+                        Reset chart
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          <Input
+            value={eventTitle}
+            onChange={(event) => setEventTitle(event.target.value)}
+            className="h-9 w-full bg-card/60 text-center text-base font-semibold md:hidden"
+            placeholder="Enter Event Title"
+            aria-label="Event Title"
+            disabled={!editMode}
+          />
+
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <div className={editMode ? "contents" : "hidden"}>
             {!isVenueSpacePresent ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     size="sm"
-                    variant="outline"
                     onClick={onAddVenueSpace}
-                    className="border-secondary/40 bg-secondary/5 hover:bg-secondary/15 text-foreground transition-all font-medium shadow-sm"
+                    className="h-9 bg-primary/90 font-medium text-primary-foreground shadow-sm hover:bg-primary"
                   >
                     <BookOpen className="mr-2" size={16} strokeWidth={1.5} />
                     Draw Event Space
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent className="bg-card text-card-foreground border-border">
-                  <p>First step: Add a Venue Space to define your event area</p>
+                <TooltipContent className="border-border bg-card text-card-foreground">
+                  <p>Define the usable event area</p>
                 </TooltipContent>
               </Tooltip>
             ) : (
               <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span
-                      tabIndex={0}
-                      onClick={
-                        !isVenueSpacePresent ? onShowDisabledInfo : undefined
-                      }
-                    >
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild disabled={!isVenueSpacePresent}>
-                          <Button
-                            size="sm"
-                            disabled={!isVenueSpacePresent}
-                            className="bg-primary/90 hover:bg-primary text-primary-foreground transition-all shadow-sm font-medium dark:glow-subtle"
-                          >
-                            <Utensils
-                              className="mr-2"
-                              size={16}
-                              strokeWidth={1.5}
-                            />
-                            Add Table
-                            <ChevronDown className="ml-1.5" size={14} strokeWidth={1.5} />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="bg-card text-card-foreground border-border">
-                          <DropdownMenuItem onClick={() => onAddTable("round")}>
-                            <Circle className="mr-2" size={14} strokeWidth={1.5} />
-                            Round Table
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onAddTable("rectangle")}>
-                            <RectangleHorizontal className="mr-2" size={14} strokeWidth={1.5} />
-                            Rectangular Table
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent className="bg-card text-card-foreground border-border">
-                    <p>Add a new table with seats for guests</p>
-                  </TooltipContent>
-                </Tooltip>
+                <DropdownMenu>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          disabled={!isVenueSpacePresent}
+                          className="h-9 bg-primary/90 font-medium text-primary-foreground shadow-sm hover:bg-primary dark:glow-subtle"
+                        >
+                          <Utensils className="mr-2" size={16} strokeWidth={1.5} />
+                          Add Table
+                          <ChevronDown className="ml-1.5" size={14} strokeWidth={1.5} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent className="border-border bg-card text-card-foreground">
+                      <p>Add a table with seats for guests</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <DropdownMenuContent align="start" className="border-border bg-card text-card-foreground">
+                    <DropdownMenuItem onClick={() => onAddTable("round")}>
+                      <Circle className="mr-2" size={14} strokeWidth={1.5} />
+                      Round Table
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onAddTable("rectangle")}>
+                      <RectangleHorizontal className="mr-2" size={14} strokeWidth={1.5} />
+                      Rectangular Table
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span
-                      tabIndex={0}
-                      onClick={
-                        !isVenueSpacePresent ? onShowDisabledInfo : undefined
-                      }
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={onAddVenueElement}
+                      disabled={!isVenueSpacePresent}
+                      className="h-9 shrink-0 shadow-sm"
+                      aria-label="Add custom element"
                     >
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={onAddVenueElement}
-                        disabled={!isVenueSpacePresent}
-                        className="shadow-sm"
-                      >
-                        <Armchair
-                          className="mr-2"
-                          size={16}
-                          strokeWidth={1.5}
-                        />
-                        Add Custom Element
-                      </Button>
-                    </span>
+                      <Armchair className="sm:mr-2" size={16} strokeWidth={1.5} />
+                      <span className="hidden sm:inline">Add Element</span>
+                    </Button>
                   </TooltipTrigger>
-                  <TooltipContent className="bg-card text-card-foreground border-border">
-                    <p>
-                      Add decorative elements like dance floors, bars, or other
-                      venue features
-                    </p>
+                  <TooltipContent className="border-border bg-card text-card-foreground">
+                    <p>Add a dance floor, bar, or other venue feature</p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -423,53 +522,31 @@ export const Header: React.FC<HeaderProps> = ({
                   <TooltipTrigger asChild>
                     <Button
                       size="sm"
-                      variant="secondary"
+                      variant="outline"
                       onClick={onToggleVenueLock}
-                      className="bg-secondary/80 hover:bg-secondary text-secondary-foreground transition-all font-medium shadow-sm"
+                      className="h-9 shrink-0 shadow-sm"
+                      aria-label={isVenueSpaceLocked ? "Unlock event space" : "Lock event space"}
                     >
-                      {isVenueSpaceLocked ? (
-                        <>
-                          <Unlock
-                            className="mr-2"
-                            size={16}
-                            strokeWidth={1.5}
-                          />{" "}
-                          Unlock Space
-                        </>
-                      ) : (
-                        <>
-                          <Lock className="mr-2" size={16} strokeWidth={1.5} />{" "}
-                          Lock Space
-                        </>
-                      )}
+                      {isVenueSpaceLocked ? <Unlock className="sm:mr-2" size={16} strokeWidth={1.5} /> : <Lock className="sm:mr-2" size={16} strokeWidth={1.5} />}
+                      <span className="hidden sm:inline">{isVenueSpaceLocked ? "Unlock Space" : "Lock Space"}</span>
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent className="bg-card text-card-foreground border-border">
-                    <p>
-                      {isVenueSpaceLocked
-                        ? "Allow editing of the venue space"
-                        : "Prevent accidental changes to venue space"}
-                    </p>
+                  <TooltipContent className="border-border bg-card text-card-foreground">
+                    <p>{isVenueSpaceLocked ? "Allow changes to the event space" : "Prevent accidental event-space changes"}</p>
                   </TooltipContent>
                 </Tooltip>
               </>
             )}
-          </TooltipProvider>
 
-          {/* Background floorplan image — deliberately available even
-              before a Venue Space exists, since uploading the real
-              floorplan first is a natural way to trace the venue space
-              boundary on top of it. */}
-          <input
-            ref={backgroundFileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleBackgroundFileChange}
-            disabled={!editMode}
-          />
-          {!backgroundImage ? (
-            <TooltipProvider delayDuration={300}>
+            <input
+              ref={backgroundFileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleBackgroundFileChange}
+              disabled={!editMode}
+            />
+            {!backgroundImage ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -477,398 +554,111 @@ export const Header: React.FC<HeaderProps> = ({
                     variant="outline"
                     onClick={() => backgroundFileInputRef.current?.click()}
                     disabled={!editMode}
-                    className="shadow-sm"
+                    className="h-9 shrink-0 shadow-sm"
+                    aria-label="Add background image"
                   >
-                    <ImagePlus className="mr-2" size={16} strokeWidth={1.5} />
-                    Add Background Image
+                    <ImagePlus className="sm:mr-2" size={16} strokeWidth={1.5} />
+                    <span className="hidden sm:inline">Background</span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent className="bg-card text-card-foreground border-border">
-                  <p>
-                    Upload a photo or scan of the real floorplan to trace
-                    tables over. JPEG, PNG, WebP, GIF, SVG, BMP, and AVIF
-                    all work.
-                  </p>
+                <TooltipContent className="max-w-72 border-border bg-card text-card-foreground">
+                  <p>Upload a floorplan image to trace and arrange tables over</p>
                 </TooltipContent>
               </Tooltip>
-            </TooltipProvider>
-          ) : (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!editMode}
-                  className="shadow-sm"
-                >
-                  <ImageIcon className="mr-2" size={16} strokeWidth={1.5} />
-                  Background
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent
-                className="w-72 bg-card text-card-foreground border-border"
-                align="start"
-              >
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Background Image</span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={onSelectBackgroundImage}
-                      disabled={!editMode}
-                    >
-                      Edit Placement
-                    </Button>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Opacity</span>
-                      <span className="tabular-nums">
-                        {Math.round(opacityDraft ?? backgroundImage.opacity * 100)}%
-                      </span>
-                    </div>
-                    <Slider
-                      value={[opacityDraft ?? backgroundImage.opacity * 100]}
-                      min={5}
-                      max={100}
-                      step={5}
-                      disabled={!editMode}
-                      onValueChange={([value]) => setOpacityDraft(value)}
-                      onValueCommit={([value]) => {
-                        onSetBackgroundOpacity(value / 100);
-                        setOpacityDraft(null);
-                      }}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={onToggleBackgroundLock}
-                      disabled={!editMode}
-                      className="flex-1"
-                    >
-                      {backgroundImage.locked ? (
-                        <>
-                          <Unlock className="mr-2" size={14} strokeWidth={1.5} />
-                          Unlock
-                        </>
-                      ) : (
-                        <>
-                          <Lock className="mr-2" size={14} strokeWidth={1.5} />
-                          Lock
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => backgroundFileInputRef.current?.click()}
-                      disabled={!editMode}
-                      className="flex-1"
-                    >
-                      <ImagePlus className="mr-2" size={14} strokeWidth={1.5} />
-                      Replace
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={onRemoveBackgroundImage}
-                      disabled={!editMode}
-                      aria-label="Remove background image"
-                    >
-                      <Trash2 size={14} strokeWidth={1.5} />
-                    </Button>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
-        </div>
-
-        {/* Item 3: Middle section - Event Title */}
-        <div className="flex-grow max-w-[18rem] mr-2 ml-2 hidden md:block lg:order-3">
-          <Input
-            value={eventTitle}
-            onChange={(e) => setEventTitle(e.target.value)}
-            className="h-10 bg-card/60 border-border/30 focus:border-primary/50 focus:bg-card/80 text-xl font-bold text-center"
-            placeholder="Enter Event Title"
-            aria-label="Event Title"
-            disabled={!editMode}
-          />
-        </div>
-
-        {/* Right section - Stats and actions - ensure this section doesn't cause overflow with new button */}
-        <div className="flex items-center space-x-2 sm:space-x-3 flex-shrink-0 order-2 lg:order-4">
-          {/* Save Status Indicator */}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className={cn(
-                    "flex items-center rounded-md px-4 py-1.5 min-w-24 text-sm font-medium shadow-sm",
-                    saveStatus === "saved" &&
-                      "bg-muted/30 text-muted-foreground border border-muted",
-                    saveStatus === "saving" &&
-                      "bg-accent/40 text-accent-foreground",
-                    saveStatus === "unsaved" &&
-                      "bg-secondary/20 text-secondary-foreground",
-                  )}
-                >
-                  {saveStatus === "saved" ? (
-                    <>
-                      <Check className="mr-1.5" size={16} strokeWidth={2} />{" "}
-                      Saved
-                    </>
-                  ) : saveStatus === "saving" ? (
-                    <>
-                      <svg
-                        className="mr-1.5 animate-spin h-4 w-4"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-1.5" size={16} strokeWidth={1.5} />{" "}
-                      Unsaved
-                    </>
-                  )}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent className="bg-card text-card-foreground border-border">
-                <p>
-                  {saveStatus === "saved"
-                    ? "All changes are saved to localStorage"
-                    : saveStatus === "saving"
-                      ? "Saving changes..."
-                      : "Changes will be auto-saved soon"}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          {/* Access indicator: admin (full access + share tools), editor
-              (unlocked this venue's PIN), or viewer (read-only, with a
-              PIN unlock form if this venue has one). This app has no
-              login of its own — see AdminGate / VenueGate. */}
-          {isAdmin ? (
-            <>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <a
-                      href="../admin.html"
-                      className="flex items-center bg-muted/30 text-muted-foreground border border-muted rounded-md px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-muted/50 transition-colors"
-                    >
-                      <ShieldCheck size={16} className="mr-1.5 text-primary/80" />
-                      <span className="hidden sm:inline">Admin</span>
-                    </a>
-                  </TooltipTrigger>
-                  <TooltipContent className="bg-card text-card-foreground border-border">
-                    <p>Signed in via the wedding site's admin console.</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="sm" onClick={handleShare} className="shadow-sm">
-                      <Share2 size={14} className="mr-1.5" /> Share
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent className="bg-card text-card-foreground border-border">
-                    <p>Copy this chart's link — viewing never needs a password.</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              {hasEditPin && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleRegenerateEditPin}
-                        disabled={isRegeneratingEditPin}
-                        className="shadow-sm"
-                      >
-                        <KeyRound size={14} className="mr-1.5" />
-                        {isRegeneratingEditPin ? "…" : "New Edit PIN"}
+            ) : (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!editMode}
+                    className="h-9 shrink-0 shadow-sm"
+                    aria-label="Background image settings"
+                  >
+                    <ImageIcon className="sm:mr-2" size={16} strokeWidth={1.5} />
+                    <span className="hidden sm:inline">Background</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 border-border bg-card text-card-foreground" align="start">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Background Image</span>
+                      <Button size="sm" variant="ghost" onClick={onSelectBackgroundImage} disabled={!editMode}>
+                        Edit Placement
                       </Button>
-                    </TooltipTrigger>
-                    <TooltipContent className="bg-card text-card-foreground border-border">
-                      <p>Generate a new edit PIN for this chart (invalidates the old one).</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-1.5 bg-muted/20 border border-muted rounded-md px-2.5 py-1.5">
-                      <Eye size={14} className="text-muted-foreground" />
-                      <span className="hidden text-xs font-medium text-muted-foreground sm:inline">
-                        View PIN
-                      </span>
-                      <Switch
-                        checked={viewPinRequired}
-                        onCheckedChange={handleToggleViewPin}
-                        disabled={isTogglingViewPin}
-                        aria-label="Require a PIN to view this chart"
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Opacity</span>
+                        <span className="tabular-nums">{Math.round(opacityDraft ?? backgroundImage.opacity * 100)}%</span>
+                      </div>
+                      <Slider
+                        value={[opacityDraft ?? backgroundImage.opacity * 100]}
+                        min={5}
+                        max={100}
+                        step={5}
+                        disabled={!editMode}
+                        onValueChange={([value]) => setOpacityDraft(value)}
+                        onValueCommit={([value]) => {
+                          onSetBackgroundOpacity(value / 100);
+                          setOpacityDraft(null);
+                        }}
                       />
                     </div>
-                  </TooltipTrigger>
-                  <TooltipContent className="bg-card text-card-foreground border-border">
-                    <p>
-                      {viewPinRequired
-                        ? "Only admin and people with a PIN can view this chart."
-                        : "Anyone with the link can view this chart (default)."}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              {viewPinRequired && hasViewPin && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleRegenerateViewPin}
-                        disabled={isRegeneratingViewPin}
-                        className="shadow-sm"
-                      >
-                        <Eye size={14} className="mr-1.5" />
-                        {isRegeneratingViewPin ? "…" : "New View PIN"}
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" onClick={onToggleBackgroundLock} disabled={!editMode} className="flex-1">
+                        {backgroundImage.locked ? <Unlock className="mr-2" size={14} strokeWidth={1.5} /> : <Lock className="mr-2" size={14} strokeWidth={1.5} />}
+                        {backgroundImage.locked ? "Unlock" : "Lock"}
                       </Button>
-                    </TooltipTrigger>
-                    <TooltipContent className="bg-card text-card-foreground border-border">
-                      <p>Generate a new view PIN for this chart (invalidates the old one).</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-            </>
-          ) : editMode ? (
-            <div className="flex items-center bg-[#EEF3DC] text-[#2E3A1C] border border-[#BFCB8A] rounded-md px-3 py-1.5 text-sm font-medium shadow-sm">
-              <KeyRound size={16} className="mr-1.5" />
-              <span className="hidden sm:inline">Editing</span>
+                      <Button size="sm" variant="outline" onClick={() => backgroundFileInputRef.current?.click()} disabled={!editMode} className="flex-1">
+                        <ImagePlus className="mr-2" size={14} strokeWidth={1.5} />
+                        Replace
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={onRemoveBackgroundImage} disabled={!editMode} aria-label="Remove background image">
+                        <Trash2 size={14} strokeWidth={1.5} />
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
             </div>
-          ) : (
-            <div className="flex items-center gap-1.5">
-              <div className="flex items-center bg-muted/30 text-muted-foreground border border-muted rounded-md px-3 py-1.5 text-sm font-medium shadow-sm">
-                <Eye size={16} className="mr-1.5" />
-                <span className="hidden sm:inline">View Only</span>
-              </div>
-              {hasEditPin && (
-                <>
-                  <Input
-                    type="password"
-                    maxLength={4}
-                    placeholder="PIN"
-                    value={pinEntry}
-                    onChange={(e) => setPinEntry(e.target.value.replace(/\D/g, ""))}
-                    className="h-10 w-20 bg-card/60 border-border/30 focus:border-primary/50 focus:bg-card/80 text-center font-mono tracking-widest"
-                    aria-label="Enter this chart's 4-digit edit PIN"
-                    disabled={isPinSubmitting}
-                  />
-                  <Button
-                    variant="outline"
-                    size="default"
-                    onClick={handlePinUnlock}
-                    disabled={isPinSubmitting || pinEntry.length !== 4}
-                    className="h-10 shadow-sm border-primary/50 text-primary hover:bg-primary/5 hover:text-primary"
-                  >
-                    <Unlock size={16} className="mr-1.5" />
-                    {isPinSubmitting ? "…" : "Unlock"}
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
+
+            {!isAdmin && !editMode && hasEditPin && (
+              <form
+                className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handlePinUnlock();
+                }}
+              >
+                <Input
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={4}
+                  placeholder="Edit PIN"
+                  value={pinEntry}
+                  onChange={(event) => setPinEntry(event.target.value.replace(/\D/g, ""))}
+                  className="h-9 min-w-0 flex-1 bg-card/60 text-center font-mono tracking-widest sm:w-28 sm:flex-none"
+                  aria-label="Enter this chart's 4-digit edit PIN"
+                  disabled={isPinSubmitting}
+                />
                 <Button
+                  type="submit"
                   variant="outline"
-                  size="icon"
-                  onClick={isAdmin ? onBackToManager : () => { window.location.href = "../index.html"; }}
-                  className="h-10 w-10 border-accent/30 bg-accent/5 hover:bg-accent/15 shadow-sm"
-                  aria-label={isAdmin ? "Back to Seating Charts" : "Back to wedding site"}
+                  size="sm"
+                  disabled={isPinSubmitting || pinEntry.length !== 4}
+                  className="h-9 shrink-0 border-primary/50 text-primary shadow-sm hover:bg-primary/5 hover:text-primary"
                 >
-                  <ArrowLeft size={18} strokeWidth={1.5} />
+                  <Unlock size={16} className="mr-1.5" />
+                  {isPinSubmitting ? "Unlocking…" : "Unlock editing"}
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent className="bg-card text-card-foreground border-border">
-                <p>{isAdmin ? "Back to Seating Charts" : "Back to the wedding site"}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <div className="bg-card/80 backdrop-blur-sm border border-border/30 rounded-lg px-4 py-2.5 shadow-sm transition-all hover:shadow-md">
-            <div className="flex items-center">
-              <Users
-                size={18}
-                className="mr-2 text-primary/80"
-                strokeWidth={1.5}
-              />
-              <span className="font-medium text-foreground/90">
-                {totalGuests} {totalGuests === 1 ? "Guest" : "Guests"}
-              </span>
-            </div>
+              </form>
+            )}
           </div>
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="destructive"
-                  onClick={onReset}
-                  className="bg-destructive/90 hover:bg-destructive text-destructive-foreground py-2.5 font-medium shadow-sm transition-all duration-300"
-                >
-                  <RotateCcw size={16} className="mr-2" strokeWidth={1.5} />
-                  Reset
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Clear the canvas and start fresh</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <ThemeToggle />
         </div>
-
-        {/* Event Title for smaller screens (md:hidden ensures it does not overlap with the md:block version) */}
-        <div className="w-full mt-3 md:hidden order-5">
-          <Input
-            value={eventTitle}
-            onChange={(e) => setEventTitle(e.target.value)}
-            className="h-10 bg-card/60 border-border/30 focus:border-primary/50 focus:bg-card/80 text-xl font-bold text-center"
-            placeholder="Enter Event Title"
-            aria-label="Event Title"
-            disabled={!editMode}
-          />
-        </div>
-      </div>
+      </TooltipProvider>
     </header>
   );
 };

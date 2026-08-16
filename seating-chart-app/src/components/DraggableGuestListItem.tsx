@@ -3,10 +3,16 @@ import { useDraggable } from "@dnd-kit/core";
 // import { CSS } from '@dnd-kit/utilities'; // Not strictly needed for basic translate3d
 import { Guest } from "../types/seatingChart";
 import { Button } from "@/components/ui/button";
-import { GripVertical, UserCircle, X, Lock } from "lucide-react";
+import { GripVertical, Lock, MoreVertical, Trash2, UserCircle } from "lucide-react";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
 import { editModeAtom, hoveredGuestIdAtom } from "@/lib/atoms";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface DraggableGuestListItemProps {
   guest: Guest;
@@ -61,7 +67,7 @@ export const DraggableGuestListItem: React.FC<DraggableGuestListItemProps> = ({
       ) : canDrag ? (
         <button
           type="button"
-          className="mr-1 flex h-6 w-6 shrink-0 touch-none cursor-grab items-center justify-center rounded text-sidebar-foreground/35 transition-colors hover:bg-sidebar-accent/30 hover:text-sidebar-foreground/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-primary/50 active:cursor-grabbing"
+          className="mr-1 flex h-6 w-6 shrink-0 touch-none cursor-grab items-center justify-center rounded text-sidebar-foreground/35 transition-colors hover:bg-sidebar-accent/30 hover:text-sidebar-foreground/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-primary/50 active:cursor-grabbing [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
           aria-label={`Drag ${guest.fullName}`}
           title={`Drag ${guest.fullName}`}
           {...listeners}
@@ -98,18 +104,32 @@ export const DraggableGuestListItem: React.FC<DraggableGuestListItemProps> = ({
         </span>
       )}
       {!disabled && editMode && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="ml-1 h-6 w-6 shrink-0 rounded-full p-0.5 text-sidebar-foreground/50 opacity-0 transition-opacity duration-150 hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove(guest.id);
-          }}
-          aria-label={`Remove ${guest.fullName}`}
-        >
-          <X size={14} strokeWidth={2} />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-1 h-6 w-6 shrink-0 touch-manipulation rounded-full p-0.5 text-sidebar-foreground/50 opacity-0 transition-[color,background-color,opacity] duration-150 hover:bg-sidebar-accent/30 hover:text-sidebar-foreground group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:bg-sidebar-accent/30 data-[state=open]:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:h-9 [@media(hover:none)]:w-9 [@media(hover:none)]:opacity-100"
+              onPointerDown={(event) => event.stopPropagation()}
+              aria-label={`Actions for ${guest.fullName}`}
+              title={`Actions for ${guest.fullName}`}
+            >
+              <MoreVertical size={15} strokeWidth={2} aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" sideOffset={4} collisionPadding={8}>
+            <DropdownMenuItem
+              className="cursor-pointer gap-2 text-destructive focus:bg-destructive/10 focus:text-destructive"
+              onSelect={(event) => {
+                event.stopPropagation();
+                onRemove(guest.id);
+              }}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              Remove guest
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </li>
   );
