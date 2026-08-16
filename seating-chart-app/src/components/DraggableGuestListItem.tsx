@@ -1,15 +1,15 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
 // import { CSS } from '@dnd-kit/utilities'; // Not strictly needed for basic translate3d
 import { Guest } from "../types/seatingChart";
 import { Button } from "@/components/ui/button";
 import { UserCircle, X, Lock } from "lucide-react";
 import { useAtomValue } from "jotai";
-import { editModeAtom } from "@/lib/atoms";
+import { selectAtom } from "jotai/utils";
+import { editModeAtom, hoveredGuestIdAtom } from "@/lib/atoms";
 
 interface DraggableGuestListItemProps {
   guest: Guest;
-  isHighlighted: boolean;
   onRemove: (guestId: string) => void;
   onMouseEnter: (guestId: string) => void;
   onMouseLeave: () => void;
@@ -21,13 +21,17 @@ interface DraggableGuestListItemProps {
 
 export const DraggableGuestListItem: React.FC<DraggableGuestListItemProps> = ({
   guest,
-  isHighlighted,
   onRemove,
   onMouseEnter,
   onMouseLeave,
   disabled = false,
 }) => {
   const editMode = useAtomValue(editModeAtom);
+  const isHighlightedAtom = useMemo(
+    () => selectAtom(hoveredGuestIdAtom, (hoveredId) => hoveredId === guest.id),
+    [guest.id],
+  );
+  const isHighlighted = useAtomValue(isHighlightedAtom);
   const canDrag = editMode && !disabled;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =

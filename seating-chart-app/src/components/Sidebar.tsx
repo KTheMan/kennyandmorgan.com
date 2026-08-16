@@ -5,7 +5,7 @@ import React, {
   useState,
   useRef,
 } from "react";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom, useStore } from "jotai";
 import {
   hoveredGuestIdAtom,
   isDraggingAtom,
@@ -53,10 +53,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isInSheet,
   flashErrorTableId,
 }) => {
-  const hoveredGuestId = useAtomValue(hoveredGuestIdAtom);
+  const store = useStore();
   const setHoveredGuestId = useSetAtom(hoveredGuestIdAtom);
   const setHoveredTableId = useSetAtom(hoveredTableIdAtom);
-  const isDragging = useAtomValue(isDraggingAtom);
   const setGlobalGuests = useSetAtom(guestsAtom);
   const setBaseShapes = useSetAtom(baseShapesAtom);
   const editMode = useAtomValue(editModeAtom);
@@ -74,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleGuestMouseEnter = (guestId: string) => {
-    if (isDragging) return;
+    if (store.get(isDraggingAtom)) return;
     setHoveredGuestId(guestId);
   };
 
@@ -83,7 +82,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleTableMouseEnter = (tableId: string) => {
-    if (isDragging || tableId === "unassigned") return;
+    if (store.get(isDraggingAtom) || tableId === "unassigned") return;
     setHoveredTableId(tableId);
   };
 
@@ -404,7 +403,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const sidebarRootClasses = isInSheet
     ? "bg-sidebar flex flex-col h-full overflow-hidden"
-    : "relative bg-sidebar flex flex-col h-full border-r border-sidebar-border/70 overflow-hidden lg:w-80";
+    : "relative shrink-0 bg-sidebar flex flex-col h-full border-r border-sidebar-border/70 overflow-hidden lg:w-80";
 
   return (
     <div className={sidebarRootClasses}>
@@ -471,7 +470,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   tableId={tableId}
                   groupData={groupData}
                   isUnassigned={isUnassigned}
-                  hoveredGuestId={hoveredGuestId}
                   newGuestName={newGuestNames[tableId] || ""}
                   onNewGuestNameChange={(id, value) =>
                     setNewGuestNames((prev) => ({ ...prev, [id]: value }))

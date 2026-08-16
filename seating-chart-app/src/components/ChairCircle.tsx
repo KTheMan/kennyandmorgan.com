@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Circle, Group, Text } from "react-konva";
 import Konva from "konva";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom, useStore } from "jotai";
+import { selectAtom } from "jotai/utils";
 import {
   modalStateAtom,
   guestsAtom,
@@ -91,12 +92,21 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
   previewOrder = null,
   seatingLocked = false,
 }) => {
-  const [, setModalState] = useAtom(modalStateAtom);
-  const [guests, setGuests] = useAtom(guestsAtom);
-  const baseShapes = useAtomValue(baseShapesAtom);
-  const [hoveredGuestId, setHoveredGuestId] = useAtom(hoveredGuestIdAtom); // Read and set
+  const store = useStore();
+  const setModalState = useSetAtom(modalStateAtom);
+  const setGuests = useSetAtom(guestsAtom);
+  const isExternallyHighlightedAtom = useMemo(
+    () =>
+      selectAtom(
+        hoveredGuestIdAtom,
+        (hoveredGuestId) => guestId !== null && hoveredGuestId === guestId,
+      ),
+    [guestId],
+  );
+  const isExternallyHighlighted = useAtomValue(isExternallyHighlightedAtom);
+  const setHoveredGuestId = useSetAtom(hoveredGuestIdAtom);
   const setHoveredSeat = useSetAtom(hoveredSeatAtom);
-  const [isDragging, setIsDragging] = useAtom(isDraggingAtom); // Read/set drag state
+  const setIsDragging = useSetAtom(isDraggingAtom);
   const editMode = useAtomValue(editModeAtom); // Added
   const [isDirectlyHovered, setIsDirectlyHovered] = useState(false);
   const { theme } = useTheme();
@@ -110,37 +120,14 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
 
   // Determine if this chair should be highlighted (moved declaration earlier)
   const shouldHighlight =
-    isDirectlyHovered || (guestId !== null && guestId === hoveredGuestId);
+    isDirectlyHovered || isExternallyHighlighted;
 
-  // IMPORTANT: Force Konva to update when highlighting state changes (original effect)
+  // react-konva redraws changed props itself. The only imperative work needed
+  // on highlight is preserving the highlighted chair's z-order.
   useEffect(() => {
-    if (chairGroupNodeRef.current) {
-      const layer = chairGroupNodeRef.current.getLayer();
-      if (layer) {
-        layer.batchDraw();
-      }
-    }
-  }, [
-    isDirectlyHovered,
-    guestId,
-    hoveredGuestId,
-    tableId,
-    chairIndex,
-    shouldHighlight,
-  ]); // Added shouldHighlight as it summarizes dependencies for redraw
-
-  // New effect for moveToTop logic
-  useEffect(() => {
-    if (chairGroupNodeRef.current) {
-      if (shouldHighlight) {
-        chairGroupNodeRef.current.moveToTop();
-      }
-      // Ensure layer is redrawn if moveToTop happened or if tooltip visibility changes.
-      const layer = chairGroupNodeRef.current.getLayer();
-      if (layer) {
-        layer.batchDraw(); // This batchDraw might be redundant if the one above catches all changes
-      }
-    }
+    if (!shouldHighlight || !chairGroupNodeRef.current) return;
+    chairGroupNodeRef.current.moveToTop();
+    chairGroupNodeRef.current.getLayer()?.batchDraw();
   }, [shouldHighlight]);
 
   const handleClick = () => {
@@ -155,7 +142,7 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
   };
 
   const handleMouseEnter = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (isDragging) return; // Don't trigger hover if dragging
+    if (store.get(isDraggingAtom)) return; // Don't trigger hover if dragging
 
     setIsDirectlyHovered(true);
     setHoveredSeat({ tableId, chairIndex });
@@ -179,27 +166,29 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
     }
   };
 
-  // Dragging an occupied, unlocked seat moves just this chair (see
-  // draggable on the Group below) — independent of the table's own
-  // position lock, which only governs dragging the table as a whole.
-  // Konva starts the drag on whichever node under the pointer is
-  // draggable, walking up from the event target, so setting it here
-  // takes precedence over the table Group's draggable without any extra
-  // coordination.
+  // Only the occupant marker is draggable. The outer chair group remains at
+  // its table-defined position so the seat itself never follows the pointer.
+  const handleChairPointerDown = (
+    e: Konva.KonvaEventObject<MouseEvent | TouchEvent>,
+  ) => {
+    // The table group can also be draggable. Keep this pointer-down from
+    // reaching it so Konva registers only the occupant marker as the drag
+    // source, never the table or fixed chair behind it.
+    e.cancelBubble = true;
+  };
+
   const handleChairDragStart = (e: Konva.KonvaEventObject<DragEvent>) => {
     e.cancelBubble = true;
     setIsDragging(true);
     e.target.moveToTop();
+    const stage = e.target.getStage();
+    if (stage) stage.container().style.cursor = "grabbing";
     // Drop the name tooltip rather than let it trail a chair mid-drag —
     // it's keyed to this chair's resting position, not the pointer.
     setHoveredSeat(null);
   };
 
-  // No-op beyond stopping propagation: the table's own onDragMove (grid
-  // snapping) would otherwise fire for this chair too, since Konva drag
-  // events bubble up the node tree by default. This chair doesn't need
-  // grid snapping — its position is reset on drop regardless (see
-  // handleChairDragEnd), free movement in between just looks natural.
+  // Stop the nested marker's drag from reaching the table drag handlers.
   const handleChairDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     e.cancelBubble = true;
   };
@@ -210,20 +199,27 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
     const node = e.target;
     const stage = node.getStage();
     const pointerPos = stage?.getPointerPosition() ?? null;
+    const layer = node.getLayer();
 
-    // This chair's screen position is derived from the table's layout
-    // (the x/y props), not free-floating — always snap the node back;
-    // an actual move happens through the guests atom below, which
-    // re-renders this chair (and the target chair) at their real spots.
-    node.position({ x, y });
+    // Exclude the dragged marker from Konva's hit canvas before resolving
+    // the drop target. Merely hiding it is not enough: getIntersection reads
+    // the already-rendered hit canvas, which otherwise still contains the
+    // marker at the pointer and resolves every drop back to the source seat.
+    node.hide();
+    layer?.drawHit();
+    let hit: Konva.Node | null =
+      stage && pointerPos ? stage.getIntersection(pointerPos) : null;
+
+    // The marker lives at (0, 0) inside the fixed chair group. Always return
+    // it there; changing guest assignments below causes the correct source
+    // and target markers to render on their respective seats.
+    node.position({ x: 0, y: 0 });
+    node.show();
+    layer?.drawHit();
+    layer?.batchDraw();
+    if (stage) stage.container().style.cursor = "grab";
 
     if (!stage || !pointerPos || !guestId) return;
-
-    // Hit-test excluding this node itself, so dropping back onto your own
-    // seat (or very near it) doesn't misresolve to something else.
-    node.hide();
-    let hit: Konva.Node | null = stage.getIntersection(pointerPos);
-    node.show();
 
     let targetTableId: string | null = null;
     let targetChairIndex: number | null = null;
@@ -241,7 +237,7 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
     if (targetTableId === null || targetChairIndex === null) return; // dropped somewhere that isn't a seat
     if (targetTableId === tableId && targetChairIndex === chairIndex) return; // dropped back on itself
 
-    const targetTable = baseShapes.find(
+    const targetTable = store.get(baseShapesAtom).find(
       (s): s is Table => s.type === "table" && s.id === targetTableId,
     );
     if (targetTable?.seatingLocked) {
@@ -253,7 +249,7 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
       return;
     }
 
-    const occupant = guests.find(
+    const occupant = store.get(guestsAtom).find(
       (g) => g.tableId === targetTableId && g.chairIndex === targetChairIndex,
     );
 
@@ -276,9 +272,10 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
     setIsDirectlyHovered(false);
 
     // Clear hoveredGuestId when mouse leaves a chair with a guest
-    if (guestId && hoveredGuestId === guestId) {
-      // Only clear if it matches this chair's guest
-      setHoveredGuestId(null);
+    if (guestId) {
+      setHoveredGuestId((hoveredGuestId) =>
+        hoveredGuestId === guestId ? null : hoveredGuestId,
+      );
     }
 
     // Only clear if it matches this chair, so a leave that fires after the
@@ -359,14 +356,10 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
       // Read back by SeatTooltipLayer to know which way "away from the
       // table" is for this seat, combined with the table's own rotation.
       outwardAngle={angle}
-      // Only occupied, unlocked seats are draggable — an empty seat's
-      // group stays non-draggable so a click-drag there still falls
-      // through to the table's own draggable (moving the whole table),
-      // exactly as before this feature existed.
-      draggable={editMode && guestId !== null && !seatingLocked}
-      onDragStart={handleChairDragStart}
-      onDragMove={handleChairDragMove}
-      onDragEnd={handleChairDragEnd}
+      onClick={editMode ? handleClick : undefined}
+      onTap={editMode ? handleClick : undefined}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       <Circle
         ref={circleRef}
@@ -380,14 +373,10 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
         shadowBlur={shadowBlur}
         shadowColor={COLORS.shadowColor}
         shadowOpacity={shadowOpacity}
+        shadowEnabled={shouldHighlight}
         shadowOffset={{ x: 1, y: 1 }}
         offsetX={0}
         offsetY={0}
-        // Only attach click listener if in edit mode
-        onClick={editMode ? handleClick : undefined}
-        onTap={editMode ? handleClick : undefined}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
         perfectDrawEnabled={false}
         listening={!previewOrder}
       />
@@ -412,20 +401,33 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
         />
       )}
 
-      {/* Enhanced indicator for occupied seats */}
+      {/* The occupant marker moves independently; the chair circle above
+          remains fixed at the seat's table-defined position. The transparent
+          hit circle keeps the marker easy to grab without changing its look. */}
       {showCenterDot && (
-        <Circle
-          radius={radius / 2.5}
-          fill={COLORS.centerDotFill}
-          strokeWidth={1}
-          stroke={COLORS.centerDotStroke}
-          offsetX={0}
-          offsetY={0}
-          perfectDrawEnabled={false}
-          listening={false}
-          scaleX={shouldHighlight ? 1.2 : 1}
-          scaleY={shouldHighlight ? 1.2 : 1}
-        />
+        <Group
+          name={`occupant-${guestId}`}
+          draggable={editMode && !seatingLocked}
+          onMouseDown={handleChairPointerDown}
+          onTouchStart={handleChairPointerDown}
+          onDragStart={handleChairDragStart}
+          onDragMove={handleChairDragMove}
+          onDragEnd={handleChairDragEnd}
+        >
+          <Circle radius={radius * 0.72} fill="rgba(0,0,0,0.001)" />
+          <Circle
+            radius={radius / 2.5}
+            fill={COLORS.centerDotFill}
+            strokeWidth={1}
+            stroke={COLORS.centerDotStroke}
+            offsetX={0}
+            offsetY={0}
+            perfectDrawEnabled={false}
+            listening={false}
+            scaleX={shouldHighlight ? 1.2 : 1}
+            scaleY={shouldHighlight ? 1.2 : 1}
+          />
+        </Group>
       )}
     </Group>
   );

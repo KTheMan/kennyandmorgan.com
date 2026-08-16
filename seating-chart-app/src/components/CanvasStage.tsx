@@ -14,8 +14,6 @@ import {
   otherShapeAtomsAtom,
   isPanningAtom,
   baseShapesAtom,
-  hoveredGuestIdAtom,
-  guestsAtom,
   stageScaleAtom,
   venueSpaceLockedAtom,
 } from "../lib/atoms";
@@ -47,15 +45,14 @@ interface CanvasStageProps {
 }
 
 // Type-safe atom renderer component
-const AtomRenderer: React.FC<{
+const AtomRenderer = React.memo<{
   shapeAtom: PrimitiveAtom<Shape>;
-  highlightedGuestId: string | null;
   registerRef: (
     tableId: string,
     chairIndex: number,
     node: Konva.Group | null,
   ) => void; // Add prop
-}> = ({ shapeAtom, highlightedGuestId, registerRef }) => {
+}>(({ shapeAtom, registerRef }) => {
   const shape = useAtomValue(shapeAtom);
 
   if (shape.type === "venue") {
@@ -67,19 +64,18 @@ const AtomRenderer: React.FC<{
       <TableCircle
         key={`table-${shape.id}`}
         shapeAtom={shapeAtom}
-        highlightedGuestId={highlightedGuestId}
         registerRef={registerRef} // Pass down
       />
     );
   }
 
   return null;
-};
+});
 
 // Venue filter component
-const VenueElementRenderer: React.FC<{
+const VenueElementRenderer = React.memo<{
   shapeAtom: PrimitiveAtom<Shape>;
-}> = ({ shapeAtom }) => {
+}>(({ shapeAtom }) => {
   const shape = useAtomValue(shapeAtom);
 
   if (shape.type !== "venue" || shape.title === "Venue Space") {
@@ -89,14 +85,14 @@ const VenueElementRenderer: React.FC<{
   return (
     <ElementRect key={`venue-element-${shape.id}`} shapeAtom={shapeAtom} />
   );
-};
+});
 
 // Background-image filter component — rendered in its own layer, first,
 // so it always sits behind the venue space, other venue elements, and
 // tables regardless of where in `shapes` it happens to be.
-const BackgroundImageRenderer: React.FC<{
+const BackgroundImageRenderer = React.memo<{
   shapeAtom: PrimitiveAtom<Shape>;
-}> = ({ shapeAtom }) => {
+}>(({ shapeAtom }) => {
   const shape = useAtomValue(shapeAtom);
 
   if (shape.type !== "backgroundImage") {
@@ -106,7 +102,7 @@ const BackgroundImageRenderer: React.FC<{
   return (
     <BackgroundImageShape key={`background-${shape.id}`} shapeAtom={shapeAtom} />
   );
-};
+});
 
 export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   const stageRef = useRef<Konva.Stage>(null);
@@ -120,8 +116,6 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   const [isAltPressed, setIsAltPressed] = useState(false);
   const [isDeletePressed, setIsDeletePressed] = useState(false);
   const [isMouseDownOnStage, setIsMouseDownOnStage] = useState(false);
-  const hoveredGuestId = useAtomValue(hoveredGuestIdAtom);
-  const guests = useAtomValue(guestsAtom);
   const [initialFitDone, setInitialFitDone] = useState(false);
   const isVenueLocked = useAtomValue(venueSpaceLockedAtom); // Get venue lock state
   const { toast } = useToast();
@@ -150,17 +144,6 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   // Get the derived atom values
   const venueSpaceAtoms = useAtomValue(venueSpaceShapeAtomsAtom);
   const baseShapes = useAtomValue(baseShapesAtom);
-
-  // Guest map for quick name lookup
-  const guestNameMap = useMemo(() => {
-    const map = new Map<string, string>();
-    guests.forEach((guest) => {
-      if (guest.id && guest.fullName) {
-        map.set(guest.id, guest.fullName);
-      }
-    });
-    return map;
-  }, [guests]);
 
   // Function to fit all content in view
   const fitContentToView = useCallback(() => {
@@ -551,7 +534,6 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
                 {/* This will only render TableCircle if the atom is a table type */}
                 <AtomRenderer
                   shapeAtom={shapeAtom}
-                  highlightedGuestId={hoveredGuestId}
                   registerRef={registerChairRef} // Pass down register function
                 />
               </React.Fragment>

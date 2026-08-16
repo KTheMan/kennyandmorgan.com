@@ -51,6 +51,26 @@ export const venueSpaceLockedAtom = atom<boolean>(false);
 // Atom to store all guests
 export const guestsAtom = atom<Guest[]>([]);
 
+// Build the chair lookup once per guest-list change. Previously every table
+// scanned the entire guest list to build its own map, turning one assignment
+// into O(tables * guests) work before any chairs were even rendered.
+export const guestSeatsByTableAtom = atom((get) => {
+  const seatsByTable = new Map<string, Map<number, string>>();
+
+  for (const guest of get(guestsAtom)) {
+    if (!guest.tableId || typeof guest.chairIndex !== "number") continue;
+
+    let tableSeats = seatsByTable.get(guest.tableId);
+    if (!tableSeats) {
+      tableSeats = new Map<number, string>();
+      seatsByTable.set(guest.tableId, tableSeats);
+    }
+    tableSeats.set(guest.chairIndex, guest.id);
+  }
+
+  return seatsByTable;
+});
+
 // Atom to calculate the total number of guests
 export const totalGuestsAtom = atom((get) => get(guestsAtom).length);
 

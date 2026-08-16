@@ -167,6 +167,23 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
       ),
     [baseShapesValue],
   );
+  const tablesValue = useMemo(
+    () => baseShapesValue.filter((shape): shape is Table => shape.type === "table"),
+    [baseShapesValue],
+  );
+  const occupiedChairIndexesByTable = useMemo(() => {
+    const occupiedByTable = new Map<string, Set<number>>();
+    for (const guest of guestsValue) {
+      if (!guest.tableId || typeof guest.chairIndex !== "number") continue;
+      let occupied = occupiedByTable.get(guest.tableId);
+      if (!occupied) {
+        occupied = new Set<number>();
+        occupiedByTable.set(guest.tableId, occupied);
+      }
+      occupied.add(guest.chairIndex);
+    }
+    return occupiedByTable;
+  }, [guestsValue]);
 
   // --- Drag-and-drop: dragging a guest from the sidebar list either onto
   // a sidebar table section (existing behavior — lands in that table's
@@ -199,6 +216,8 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
   const lastPointerPosRef = useRef<{ x: number; y: number } | null>(
     null,
   );
+  const previewFrameRef = useRef<number | null>(null);
+  const pendingPreviewPointRef = useRef<{ x: number; y: number } | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const [isPointerOverCanvas, setIsPointerOverCanvas] = useState(false);
 
@@ -307,24 +326,14 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     (clientX: number, clientY: number) => {
       if (activeDragPayload?.kind !== "group") return;
       const stagePoint = resolveStagePoint(clientX, clientY);
-      const tables = baseShapesValue.filter(
-        (s): s is Table => s.type === "table",
-      );
       const hit = stagePoint
-        ? findTableUnderPoint(tables, stagePoint, GROUP_DROP_HIT_MARGIN)
+        ? findTableUnderPoint(tablesValue, stagePoint, GROUP_DROP_HIT_MARGIN)
         : null;
       if (!hit || hit.table.seatingLocked) {
         setGroupDropPreview(null);
         return;
       }
-      const occupied = new Set(
-        guestsValue
-          .filter(
-            (g) =>
-              g.tableId === hit.table.id && typeof g.chairIndex === "number",
-          )
-          .map((g) => g.chairIndex as number),
-      );
+      const occupied = occupiedChairIndexesByTable.get(hit.table.id) ?? new Set<number>();
       const plan = computeGroupSeatPlan(
         hit.table,
         occupied,
@@ -332,11 +341,43 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         hit.localX,
         hit.localY,
       );
-      setGroupDropPreview(
-        plan ? { tableId: hit.table.id, chairIndexes: plan } : null,
-      );
+      const nextPreview = plan ? { tableId: hit.table.id, chairIndexes: plan } : null;
+      setGroupDropPreview((currentPreview) => {
+        if (currentPreview === nextPreview) return currentPreview;
+        if (!currentPreview || !nextPreview) return nextPreview;
+        if (
+          currentPreview.tableId === nextPreview.tableId &&
+          currentPreview.chairIndexes.length === nextPreview.chairIndexes.length &&
+          currentPreview.chairIndexes.every(
+            (chairIndex, index) => chairIndex === nextPreview.chairIndexes[index],
+          )
+        ) {
+          return currentPreview;
+        }
+        return nextPreview;
+      });
     },
-    [activeDragPayload, baseShapesValue, guestsValue, resolveStagePoint, setGroupDropPreview],
+    [
+      activeDragPayload,
+      occupiedChairIndexesByTable,
+      resolveStagePoint,
+      setGroupDropPreview,
+      tablesValue,
+    ],
+  );
+
+  const scheduleGroupDropPreview = useCallback(
+    (clientX: number, clientY: number) => {
+      pendingPreviewPointRef.current = { x: clientX, y: clientY };
+      if (previewFrameRef.current !== null) return;
+      previewFrameRef.current = requestAnimationFrame(() => {
+        previewFrameRef.current = null;
+        const point = pendingPreviewPointRef.current;
+        pendingPreviewPointRef.current = null;
+        if (point) updateGroupDropPreview(point.x, point.y);
+      });
+    },
+    [updateGroupDropPreview],
   );
 
   useEffect(() => {
@@ -350,16 +391,27 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         event.clientY >= rect.top &&
         event.clientY <= rect.bottom;
       setIsPointerOverCanvas(overCanvas);
-      if (overCanvas) {
-        updateGroupDropPreview(event.clientX, event.clientY);
+      if (overCanvas && activeDragPayload?.kind === "group") {
+        scheduleGroupDropPreview(event.clientX, event.clientY);
       } else if (activeDragPayload?.kind === "group") {
+        if (previewFrameRef.current !== null) {
+          cancelAnimationFrame(previewFrameRef.current);
+          previewFrameRef.current = null;
+        }
+        pendingPreviewPointRef.current = null;
         setGroupDropPreview(null);
       }
     };
     window.addEventListener("pointermove", handlePointerMove, true);
-    return () =>
+    return () => {
       window.removeEventListener("pointermove", handlePointerMove, true);
-  }, [isDragActive, activeDragPayload, updateGroupDropPreview, setGroupDropPreview]);
+      if (previewFrameRef.current !== null) {
+        cancelAnimationFrame(previewFrameRef.current);
+        previewFrameRef.current = null;
+      }
+      pendingPreviewPointRef.current = null;
+    };
+  }, [isDragActive, activeDragPayload, scheduleGroupDropPreview, setGroupDropPreview]);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -367,6 +419,11 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
       const payload = activeDragPayload;
       const pointerPos = lastPointerPosRef.current;
       const wasOverCanvas = isPointerOverCanvas;
+      if (previewFrameRef.current !== null) {
+        cancelAnimationFrame(previewFrameRef.current);
+        previewFrameRef.current = null;
+      }
+      pendingPreviewPointRef.current = null;
       setActiveDragPayload(null);
       setIsDragActive(false);
       setIsPointerOverCanvas(false);
@@ -379,14 +436,14 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
       // a time. No new field or relationship links them after this.
       if (payload.kind === "group") {
         const groupGuestIds = new Set(payload.guests.map((g) => g.id));
+        const groupGuestIndex = new Map(
+          payload.guests.map((guest, index) => [guest.id, index]),
+        );
 
         if (wasOverCanvas && pointerPos) {
           const stagePoint = resolveStagePoint(pointerPos.x, pointerPos.y);
-          const tables = baseShapesValue.filter(
-            (s): s is Table => s.type === "table",
-          );
           const hit = stagePoint
-            ? findTableUnderPoint(tables, stagePoint, GROUP_DROP_HIT_MARGIN)
+            ? findTableUnderPoint(tablesValue, stagePoint, GROUP_DROP_HIT_MARGIN)
             : null;
           if (!hit) {
             toast({
@@ -434,8 +491,8 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
           }
           setGuestsValue((prev) =>
             prev.map((g) => {
-              const idx = payload.guests.findIndex((pg) => pg.id === g.id);
-              return idx === -1
+              const idx = groupGuestIndex.get(g.id);
+              return idx === undefined
                 ? g
                 : { ...g, tableId: hit.table.id, chairIndex: plan[idx] };
             }),
@@ -497,8 +554,8 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         }
         setGuestsValue((prev) =>
           prev.map((g) => {
-            const idx = payload.guests.findIndex((pg) => pg.id === g.id);
-            return idx === -1
+            const idx = groupGuestIndex.get(g.id);
+            return idx === undefined
               ? g
               : { ...g, tableId: targetTableId, chairIndex: openSeats[idx] };
           }),
@@ -621,6 +678,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
       resolveStagePoint,
       setGroupDropPreview,
       setGuestsValue,
+      tablesValue,
       toast,
     ],
   );
@@ -1010,9 +1068,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
           {isDesktop ? (
             <Sidebar
               guests={guestsValue}
-              tables={baseShapesValue.filter(
-                (s): s is Table => s.type === "table",
-              )}
+              tables={tablesValue}
               isAdmin={isAdmin}
               flashErrorTableId={flashErrorTableId}
             />
@@ -1027,9 +1083,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
                 </SheetHeader>
                 <Sidebar
                   guests={guestsValue}
-                  tables={baseShapesValue.filter(
-                    (s): s is Table => s.type === "table",
-                  )}
+                  tables={tablesValue}
                   isAdmin={isAdmin}
                   isInSheet={true}
                   flashErrorTableId={flashErrorTableId}
@@ -1037,7 +1091,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
               </SheetContent>
             </Sheet>
           )}
-          <div className="flex-1 flex flex-col p-4 md:p-5 border-l border-border/40 bg-background/50">
+          <div className="min-w-0 flex-1 flex flex-col p-4 md:p-5 border-l border-border/40 bg-background/50">
             <div
               ref={setCanvasRefs}
               className={`flex-1 relative rounded-lg border shadow-md overflow-hidden transition-colors ${

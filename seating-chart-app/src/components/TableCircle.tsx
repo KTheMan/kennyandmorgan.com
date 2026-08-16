@@ -1,14 +1,14 @@
 import React, { useRef, useEffect, useMemo, useState } from "react";
 import { Circle, Rect, Text, Group, Transformer } from "react-konva";
 import Konva from "konva";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
+import { selectAtom } from "jotai/utils";
 import {
   selectedShapeIdAtom,
-  guestsAtom,
+  guestSeatsByTableAtom,
   isPanningAtom,
   isDraggingAtom,
   hoveredTableIdAtom,
-  venueSpaceLockedAtom,
   editModeAtom,
   tableSeatingModalStateAtom,
   groupDropPreviewAtom,
@@ -32,7 +32,6 @@ import { snapToGrid } from "@/lib/gridSnap";
 
 interface TableCircleProps {
   shapeAtom: PrimitiveAtom<Shape>;
-  highlightedGuestId?: string | null;
   registerRef: (
     tableId: string,
     chairIndex: number,
@@ -58,6 +57,23 @@ const ROTATION_SNAPS = [0, 45, 90, 135, 180, 225, 270, 315];
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(value, max));
+
+const EMPTY_SEAT_MAP = new Map<number, string>();
+
+const seatMapsEqual = (left: Map<number, string>, right: Map<number, string>) => {
+  if (left === right) return true;
+  if (left.size !== right.size) return false;
+  for (const [chairIndex, guestId] of left) {
+    if (right.get(chairIndex) !== guestId) return false;
+  }
+  return true;
+};
+
+const numberArraysEqual = (left: number[] | null, right: number[] | null) => {
+  if (left === right) return true;
+  if (!left || !right || left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+};
 
 // Colors for light and dark mode — light mirrors the wedding site's Ticket
 // Show palette; dark mirrors the site's own dark/RSVP section.
@@ -110,27 +126,52 @@ const DARK_COLORS = {
 // Inner component assumes shapeAtom is for a Table
 const TableCircleContent: React.FC<{
   shapeAtom: PrimitiveAtom<Table>;
-  highlightedGuestId?: string | null;
   registerRef: (
     tableId: string,
     chairIndex: number,
     node: Konva.Group | null,
   ) => void;
-}> = ({ shapeAtom, highlightedGuestId, registerRef }) => {
+}> = ({ shapeAtom, registerRef }) => {
   const [shape, setShape] = useAtom(shapeAtom);
-  const [selectedShapeId, setSelectedShapeId] = useAtom(selectedShapeIdAtom);
-  const currentlyHoveredTableId = useAtomValue(hoveredTableIdAtom);
-  const guests = useAtomValue(guestsAtom);
-  const groupDropPreview = useAtomValue(groupDropPreviewAtom);
+  const store = useStore();
+  const setSelectedShapeId = useSetAtom(selectedShapeIdAtom);
+  const isSelectedAtom = useMemo(
+    () => selectAtom(selectedShapeIdAtom, (selectedId) => selectedId === shape.id),
+    [shape.id],
+  );
+  const isSelected = useAtomValue(isSelectedAtom);
+  const isHoveredAtom = useMemo(
+    () => selectAtom(hoveredTableIdAtom, (hoveredId) => hoveredId === shape.id),
+    [shape.id],
+  );
+  const isTableHighlighted = useAtomValue(isHoveredAtom);
+  const tableGuestMapAtom = useMemo(
+    () =>
+      selectAtom(
+        guestSeatsByTableAtom,
+        (seatsByTable) => seatsByTable.get(shape.id) ?? EMPTY_SEAT_MAP,
+        seatMapsEqual,
+      ),
+    [shape.id],
+  );
+  const guestMap = useAtomValue(tableGuestMapAtom);
+  const groupDropChairIndexesAtom = useMemo(
+    () =>
+      selectAtom(
+        groupDropPreviewAtom,
+        (preview) => (preview?.tableId === shape.id ? preview.chairIndexes : null),
+        numberArraysEqual,
+      ),
+    [shape.id],
+  );
+  const groupDropChairIndexes = useAtomValue(groupDropChairIndexesAtom);
   const isPanning = useAtomValue(isPanningAtom);
   const setIsDragging = useSetAtom(isDraggingAtom);
-  const currentVenueLockState = useAtomValue(venueSpaceLockedAtom);
   const editMode = useAtomValue(editModeAtom);
   const setBaseShapes = useSetAtom(baseShapesAtom);
-  const [tableCounterValue, setTableCounter] = useAtom(tableCounterAtom);
+  const setTableCounter = useSetAtom(tableCounterAtom);
   const shapeRef = useRef<Konva.Group>(null);
   const trRef = useRef<Konva.Transformer>(null);
-  const isSelected = shape.id === selectedShapeId;
   const { theme } = useTheme();
   const { toast } = useToast();
 
@@ -201,7 +242,7 @@ const TableCircleContent: React.FC<{
     if (shapeRef.current) {
       shapeRef.current.getLayer()?.batchDraw();
     }
-  }, [theme, currentlyHoveredTableId]); // Re-run when theme or hoveredTableId changes
+  }, [theme, isTableHighlighted]);
 
   // Chair position calculation
   const chairPositions = useMemo(() => {
@@ -247,39 +288,15 @@ const TableCircleContent: React.FC<{
     bottomSeats,
   ]);
 
-  // Guest lookup map
-  const guestMap = useMemo(() => {
-    const map = new Map<string, string>();
-    guests.forEach((guest) => {
-      map.set(`${guest.tableId}---${guest.chairIndex}`, guest.id);
-    });
-    return map;
-  }, [guests]);
-
-  // Count occupied seats at this table
-  const occupiedSeatCount = useMemo(() => {
-    let count = 0;
-    for (let i = 0; i < shape.capacity; i++) {
-      if (guestMap.has(`${shape.id}---${i}`)) {
-        count++;
-      }
-    }
-    return count;
-  }, [shape.id, shape.capacity, guestMap]);
-
   // Find the highest occupied chair index (to prevent reducing capacity below this)
   const highestOccupiedChairIndex = useMemo(() => {
     let highest = -1;
 
-    // Check which chairs are occupied
-    for (let i = 0; i < shape.capacity; i++) {
-      if (guestMap.has(`${shape.id}---${i}`)) {
-        highest = Math.max(highest, i);
-      }
+    for (const chairIndex of guestMap.keys()) {
+      highest = Math.max(highest, chairIndex);
     }
-
     return highest;
-  }, [shape.id, shape.capacity, guestMap]);
+  }, [guestMap]);
 
   const handleSelect = () => {
     // Allow selection only when in edit mode
@@ -438,7 +455,7 @@ const TableCircleContent: React.FC<{
     const newTable: Table = {
       ...shape,
       id: `table-${Date.now()}-${nanoid(4)}`,
-      number: tableCounterValue,
+      number: store.get(tableCounterAtom),
       x: snapToGrid(shape.x + offset),
       y: snapToGrid(shape.y + offset),
       locked: false,
@@ -555,18 +572,19 @@ const TableCircleContent: React.FC<{
             cornerRadius={RECT_CORNER_RADIUS}
             fill={COLORS.tableFill}
             stroke={
-              shape.id === currentlyHoveredTableId
+              isTableHighlighted
                 ? COLORS.highlightedTableStroke
                 : COLORS.tableStroke
             }
             strokeWidth={
-              shape.id === currentlyHoveredTableId
+              isTableHighlighted
                 ? COLORS.highlightedTableStrokeWidth
                 : 2
             }
             shadowBlur={isSelected ? 12 : 6}
             shadowColor={COLORS.shadowColor}
             shadowOpacity={isSelected ? 0.4 : 0.2}
+            shadowEnabled={isSelected || isTableHighlighted}
             shadowOffset={{ x: 2, y: 2 }}
             perfectDrawEnabled={false}
             listening={true}
@@ -576,18 +594,19 @@ const TableCircleContent: React.FC<{
             radius={shape.radius}
             fill={COLORS.tableFill}
             stroke={
-              shape.id === currentlyHoveredTableId
+              isTableHighlighted
                 ? COLORS.highlightedTableStroke
                 : COLORS.tableStroke
             }
             strokeWidth={
-              shape.id === currentlyHoveredTableId
+              isTableHighlighted
                 ? COLORS.highlightedTableStrokeWidth
                 : 2
             }
             shadowBlur={isSelected ? 12 : 6}
             shadowColor={COLORS.shadowColor}
             shadowOpacity={isSelected ? 0.4 : 0.2}
+            shadowEnabled={isSelected || isTableHighlighted}
             shadowOffset={{ x: 2, y: 2 }}
             perfectDrawEnabled={false}
             listening={true}
@@ -657,11 +676,9 @@ const TableCircleContent: React.FC<{
 
         {/* Chairs */}
         {chairPositions.map((pos, index) => {
-          const guestId = guestMap.get(`${shape.id}---${index}`) || null;
+          const guestId = guestMap.get(index) || null;
           const previewOrder =
-            groupDropPreview?.tableId === shape.id
-              ? groupDropPreview.chairIndexes.indexOf(index)
-              : -1;
+            groupDropChairIndexes?.indexOf(index) ?? -1;
 
           return (
             <ChairCircle
@@ -989,7 +1006,6 @@ const TableCircleContent: React.FC<{
 // Wrapper component
 export const TableCircle: React.FC<TableCircleProps> = ({
   shapeAtom,
-  highlightedGuestId,
   registerRef,
 }) => {
   const shapeValue = useAtomValue(shapeAtom);
@@ -1001,7 +1017,6 @@ export const TableCircle: React.FC<TableCircleProps> = ({
   return (
     <TableCircleContent
       shapeAtom={shapeAtom as PrimitiveAtom<Table>}
-      highlightedGuestId={highlightedGuestId}
       registerRef={registerRef}
     />
   );

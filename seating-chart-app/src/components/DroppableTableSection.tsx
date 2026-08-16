@@ -62,7 +62,6 @@ interface DroppableTableSectionProps {
   tableId: string;
   groupData: GroupData;
   isUnassigned: boolean;
-  hoveredGuestId: string | null;
   newGuestName: string; // For the input field
   onNewGuestNameChange: (tableId: string, value: string) => void;
   onNewGuestSubmit: (
@@ -88,7 +87,6 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
   tableId,
   groupData,
   isUnassigned,
-  hoveredGuestId,
   newGuestName,
   onNewGuestNameChange,
   onNewGuestSubmit,
@@ -221,7 +219,6 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
             <DraggableGuestListItem
               key={entry.key}
               guest={entry.guest}
-              isHighlighted={entry.guest.id === hoveredGuestId}
               onMouseEnter={onGuestMouseEnter}
               onMouseLeave={onGuestMouseLeave}
               onRemove={onGuestRemove}
