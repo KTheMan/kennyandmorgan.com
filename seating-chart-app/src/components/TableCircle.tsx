@@ -5,6 +5,7 @@ import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { selectAtom } from "jotai/utils";
 import {
   selectedShapeIdAtom,
+  selectedTableIdsAtom,
   guestSeatsByTableAtom,
   isPanningAtom,
   isDraggingAtom,
@@ -33,6 +34,7 @@ import {
   findSeatToRemove,
 } from "@/lib/seatRemoval";
 import { getLinkedTableComponent } from "@/lib/tableLinks";
+import { getSelectedTableUnits } from "@/lib/tableAlignment";
 
 interface TableCircleProps {
   shapeAtom: PrimitiveAtom<Shape>;
@@ -139,11 +141,17 @@ const TableCircleContent: React.FC<{
   const [shape, setShape] = useAtom(shapeAtom);
   const store = useStore();
   const setSelectedShapeId = useSetAtom(selectedShapeIdAtom);
-  const isSelectedAtom = useMemo(
+  const isTransformTargetAtom = useMemo(
     () => selectAtom(selectedShapeIdAtom, (selectedId) => selectedId === shape.id),
     [shape.id],
   );
+  const isTransformTarget = useAtomValue(isTransformTargetAtom);
+  const isSelectedAtom = useMemo(
+    () => selectAtom(selectedTableIdsAtom, (selectedIds) => selectedIds.has(shape.id)),
+    [shape.id],
+  );
   const isSelected = useAtomValue(isSelectedAtom);
+  const setSelectedTableIds = useSetAtom(selectedTableIdsAtom);
   const isHoveredAtom = useMemo(
     () => selectAtom(hoveredTableIdAtom, (hoveredId) => hoveredId === shape.id),
     [shape.id],
@@ -233,11 +241,11 @@ const TableCircleContent: React.FC<{
 
   // Hooks are now safe
   useEffect(() => {
-    if (isSelected && trRef.current && shapeRef.current) {
+    if (isTransformTarget && trRef.current && shapeRef.current) {
       trRef.current.nodes([shapeRef.current]);
       trRef.current.getLayer()?.batchDraw();
     }
-  }, [isSelected]);
+  }, [isTransformTarget]);
 
   // Konva stacks tables-layer children in render order (i.e. the order
   // they appear in baseShapesAtom), so an overlapping table added later
@@ -254,9 +262,9 @@ const TableCircleContent: React.FC<{
     if (!isTableHovered && !isSelected) return;
     const layer = shapeRef.current?.getLayer();
     shapeRef.current?.moveToTop();
-    if (isSelected) trRef.current?.moveToTop();
+    if (isTransformTarget) trRef.current?.moveToTop();
     layer?.batchDraw();
-  }, [isTableHovered, isSelected]);
+  }, [isTableHovered, isSelected, isTransformTarget]);
 
   // Effect to ensure the table color is correctly set initially and after any theme changes
   useEffect(() => {
@@ -269,12 +277,37 @@ const TableCircleContent: React.FC<{
 
   const chairPositions = useMemo(() => computeTableChairPositions(shape), [shape]);
 
-  const handleSelect = () => {
+  const handleSelect = (
+    e: Konva.KonvaEventObject<MouseEvent | TouchEvent>,
+  ) => {
     // Allow selection only when in edit mode
     if (!editMode) {
       return;
     }
-    setSelectedShapeId(shape.id);
+    const tables = store
+      .get(baseShapesAtom)
+      .filter((item): item is Table => item.type === "table");
+    const componentIds = new Set(
+      getLinkedTableComponent(tables, shape.id).map((table) => table.id),
+    );
+    const pointerEvent = e.evt as MouseEvent;
+    const additive = Boolean(pointerEvent.ctrlKey || pointerEvent.metaKey);
+    if (!additive) {
+      setSelectedTableIds(componentIds);
+      setSelectedShapeId(shape.id);
+      return;
+    }
+
+    const next = new Set(store.get(selectedTableIdsAtom));
+    const removeComponent = [...componentIds].every((id) => next.has(id));
+    componentIds.forEach((id) =>
+      removeComponent ? next.delete(id) : next.add(id),
+    );
+    setSelectedTableIds(next);
+    const remainingUnits = getSelectedTableUnits(tables, next);
+    setSelectedShapeId(
+      remainingUnits.length === 1 ? remainingUnits[0].tables[0].id : null,
+    );
   };
 
   const handleDragStart = (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -477,6 +510,7 @@ const TableCircleContent: React.FC<{
     };
     setBaseShapes((prev) => [...prev, newTable]);
     setTableCounter((prev) => prev + 1);
+    setSelectedTableIds(new Set([newTable.id]));
     setSelectedShapeId(newTable.id);
   };
 
@@ -595,12 +629,12 @@ const TableCircleContent: React.FC<{
             cornerRadius={RECT_CORNER_RADIUS}
             fill={COLORS.tableFill}
             stroke={
-              isTableHighlighted
+              isTableHighlighted || isSelected
                 ? COLORS.highlightedTableStroke
                 : COLORS.tableStroke
             }
             strokeWidth={
-              isTableHighlighted
+              isTableHighlighted || isSelected
                 ? COLORS.highlightedTableStrokeWidth
                 : 2
             }
@@ -617,12 +651,12 @@ const TableCircleContent: React.FC<{
             radius={shape.radius}
             fill={COLORS.tableFill}
             stroke={
-              isTableHighlighted
+              isTableHighlighted || isSelected
                 ? COLORS.highlightedTableStroke
                 : COLORS.tableStroke
             }
             strokeWidth={
-              isTableHighlighted
+              isTableHighlighted || isSelected
                 ? COLORS.highlightedTableStrokeWidth
                 : 2
             }
@@ -757,7 +791,7 @@ const TableCircleContent: React.FC<{
             table's own bottom edge (see BUTTON_RADIUS/controlsRowY math
             above), so it always sits inside the shape instead of
             spilling past it. */}
-        <Group x={0} y={0} visible={isTableHovered || isSelected}>
+        <Group x={0} y={0} visible={isTableHovered || isTransformTarget}>
           {/* Minus/Plus total-capacity buttons — hidden for rectangle
               tables in "opposing" seating style, where the top/bottom
               counts (set independently via the settings button below)
@@ -970,7 +1004,7 @@ const TableCircleContent: React.FC<{
       {/* Only show Transformer if selected and in edit mode — resize/
           rotate stay available even while this table's position is
           locked; the position lock only blocks dragging. */}
-      {isSelected && editMode && (
+      {isTransformTarget && editMode && (
         <Transformer
           ref={trRef}
           boundBoxFunc={

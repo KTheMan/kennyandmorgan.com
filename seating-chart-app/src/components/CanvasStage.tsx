@@ -10,6 +10,7 @@ import Konva from "konva"; // Import Konva namespace
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
   selectedShapeIdAtom,
+  selectedTableIdsAtom,
   venueSpaceShapeAtomsAtom,
   otherShapeAtomsAtom,
   isPanningAtom,
@@ -34,8 +35,10 @@ import {
 import { ChairCircle } from "./ChairCircle"; // Assuming ChairCircle exports the group ref or similar
 import { CanvasTipsOverlay } from "./CanvasTipsOverlay"; // <-- ADD THIS IMPORT
 import { SeatTooltipLayer } from "./SeatTooltipLayer";
+import { SeatLabelLayer } from "./SeatLabelLayer";
 import { useToast } from "@/components/ui/use-toast";
 import { BackgroundImageShape } from "./BackgroundImageShape";
+import { TableAlignmentToolbar } from "./TableAlignmentToolbar";
 import type { Table } from "../types/seatingChart";
 import {
   restoreGuestsAfterSeatInsertions,
@@ -119,6 +122,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   const [stageInternalScale, setStageInternalScale] = useState(1); // Renamed to avoid conflict, used for local calculations
   const setGlobalStageScale = useSetAtom(stageScaleAtom); // Setter for the global atom
   const [selectedShapeId, setSelectedShapeId] = useAtom(selectedShapeIdAtom);
+  const [selectedTableIds, setSelectedTableIds] = useAtom(selectedTableIdsAtom);
   const [isPanning, setIsPanning] = useAtom(isPanningAtom);
   const [isAltPressed, setIsAltPressed] = useState(false);
   const [isDeletePressed, setIsDeletePressed] = useState(false);
@@ -152,6 +156,20 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   // Get the derived atom values
   const venueSpaceAtoms = useAtomValue(venueSpaceShapeAtomsAtom);
   const baseShapes = useAtomValue(baseShapesAtom);
+
+  useEffect(() => {
+    const validTableIds = new Set(
+      baseShapes
+        .filter((shape): shape is Table => shape.type === "table")
+        .map((table) => table.id),
+    );
+    const next = new Set(
+      [...selectedTableIds].filter((tableId) => validTableIds.has(tableId)),
+    );
+    if (next.size !== selectedTableIds.size) {
+      setSelectedTableIds(next);
+    }
+  }, [baseShapes, selectedTableIds, setSelectedTableIds]);
 
   // Function to fit all content in view
   const fitContentToView = useCallback(() => {
@@ -324,13 +342,22 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
       if (e.key === "Alt") {
         setIsAltPressed(true);
         e.preventDefault(); // Prevent browser menu focus
-      } else if (e.key === "Delete" && selectedShapeId) {
+      } else if (
+        e.key === "Delete" &&
+        (selectedShapeId || selectedTableIds.size > 0)
+      ) {
         // Delete the selected shape when Delete key is pressed. A
         // table's position lock (Table.locked) only blocks dragging, so
         // it doesn't guard deletion here — but a locked background image
         // (BackgroundImage.locked) still blocks it, same as it blocks
         // drag/resize/rotate.
         const selectedShape = baseShapes.find((s) => s.id === selectedShapeId);
+        const deletingTableSelection =
+          (selectedShapeId === null && selectedTableIds.size > 0) ||
+          (selectedShape?.type === "table" && selectedTableIds.has(selectedShape.id));
+        const idsToDelete = deletingTableSelection
+          ? new Set(selectedTableIds)
+          : new Set(selectedShapeId ? [selectedShapeId] : []);
         if (selectedShape?.type === "backgroundImage" && selectedShape.locked) {
           toast({
             title: "Background Locked",
@@ -340,13 +367,14 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
           e.preventDefault();
           return;
         }
-        if (selectedShape?.type === "table") {
+        if (deletingTableSelection) {
           const restorations = baseShapes
             .filter((shape): shape is Table => shape.type === "table")
+            .filter((shape) => !idsToDelete.has(shape.id))
             .flatMap((shape) =>
               TABLE_EDGES.flatMap((edge) => {
                 const link = shape.linkedEdges?.[edge];
-                return link?.tableId === selectedShapeId
+                return link && idsToDelete.has(link.tableId)
                   ? [{ tableId: shape.id, indexes: link.removedSeatIndexes ?? [] }]
                   : [];
               }),
@@ -367,11 +395,14 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
         }
         setBaseShapes((prevShapes) =>
           prevShapes
-            .filter((shape) => shape.id !== selectedShapeId)
+            .filter((shape) => !idsToDelete.has(shape.id))
             .map((shape) => {
               if (shape.type !== "table") return shape;
               const linkedEdge = TABLE_EDGES.find(
-                (edge) => shape.linkedEdges?.[edge]?.tableId === selectedShapeId,
+                (edge) => {
+                  const tableId = shape.linkedEdges?.[edge]?.tableId;
+                  return tableId ? idsToDelete.has(tableId) : false;
+                },
               );
               if (!linkedEdge) return shape;
               const linkedEdges = { ...shape.linkedEdges };
@@ -384,6 +415,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
               };
             }),
         );
+        setSelectedTableIds(new Set());
         setSelectedShapeId(RESET);
         e.preventDefault();
       } else if (e.key === "0" && (e.ctrlKey || e.metaKey)) {
@@ -415,9 +447,11 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
     baseShapes,
     fitContentToView,
     selectedShapeId,
+    selectedTableIds,
     setBaseShapes,
     setGuests,
     setSelectedShapeId,
+    setSelectedTableIds,
     toast,
   ]);
 
@@ -491,6 +525,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
 
     // Original logic for when venue space is LOCKED:
     setSelectedShapeId(RESET);
+    setSelectedTableIds(new Set());
 
     if (isAltPressed) {
       setIsPanning(true);
@@ -534,6 +569,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
           <span className="mr-1">🖱️</span> Panning Mode
         </div>
       )}
+      <TableAlignmentToolbar />
       {/* Conditionally render Stage only when dimensions are known and valid */}
       {stageSize.width > 0 && stageSize.height > 0 ? (
         <Stage
@@ -595,6 +631,12 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
                 />
               </React.Fragment>
             ))}
+          </Layer>
+
+          {/* Persistent guest labels are planned globally so they can react
+              to available room across neighboring tables and seats. */}
+          <Layer name="seat-label-layer" listening={false}>
+            <SeatLabelLayer />
           </Layer>
 
           {/* Third layer: seat-name tooltip (always on top, drawn after

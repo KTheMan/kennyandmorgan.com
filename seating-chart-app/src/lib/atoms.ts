@@ -18,6 +18,11 @@ export const shapeAtomsAtom = splitAtom(baseShapesAtom);
 // Atom to store the currently selected shape ID
 export const selectedShapeIdAtom = atom<string | null>(null);
 
+// Table-only multi-selection. Kept separate from selectedShapeIdAtom so
+// existing single-shape editing (venue elements, background, transformer)
+// stays intact while Ctrl/Cmd-click can build a table selection set.
+export const selectedTableIdsAtom = atom<Set<string>>(new Set());
+
 // Atom to store the currently hovered guest ID
 export const hoveredGuestIdAtom = atom<string | null>(null);
 

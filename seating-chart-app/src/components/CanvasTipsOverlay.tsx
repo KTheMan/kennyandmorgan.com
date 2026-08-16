@@ -94,6 +94,16 @@ export const CanvasTipsOverlay: React.FC = () => {
           <span className="mr-1.5 text-xs font-semibold text-primary opacity-80">
             ➤
           </span>{" "}
+          Hold{" "}
+          <kbd className="mx-1 rounded bg-muted/80 px-1.5 py-0.5 text-xs shadow-sm">
+            Ctrl / Cmd
+          </kbd>{" "}
+          and click tables to multi-select
+        </p>
+        <p className="flex items-center text-xs leading-relaxed">
+          <span className="mr-1.5 text-xs font-semibold text-primary opacity-80">
+            ➤
+          </span>{" "}
           Double-click text to rename elements
         </p>
         <p className="mt-1 flex items-center border-t border-border/30 pt-1 text-xs leading-relaxed">

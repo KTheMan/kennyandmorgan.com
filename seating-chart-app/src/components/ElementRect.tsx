@@ -4,6 +4,7 @@ import Konva from "konva";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
   selectedShapeIdAtom,
+  selectedTableIdsAtom,
   venueSpaceLockedAtom,
   isPanningAtom,
   renameModalStateAtom,
@@ -48,6 +49,7 @@ const ElementRectContent: React.FC<{
 }> = ({ shapeAtom }) => {
   const [shape, setShape] = useAtom(shapeAtom);
   const [selectedShapeId, setSelectedShapeId] = useAtom(selectedShapeIdAtom);
+  const setSelectedTableIds = useSetAtom(selectedTableIdsAtom);
   const isPanning = useAtomValue(isPanningAtom);
   const isVenueLocked = useAtomValue(venueSpaceLockedAtom);
   const setRenameModalState = useSetAtom(renameModalStateAtom);
@@ -91,6 +93,7 @@ const ElementRectContent: React.FC<{
     if (!editMode) {
       return;
     }
+    setSelectedTableIds(new Set());
     setSelectedShapeId(shape.id);
   };
 

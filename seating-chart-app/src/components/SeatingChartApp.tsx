@@ -12,6 +12,7 @@ import {
   shapeAtomsAtom,
   venueSpaceLockedAtom,
   selectedShapeIdAtom,
+  selectedTableIdsAtom,
   eventTitleAtom,
   editModeAtom,
   groupDropPreviewAtom,
@@ -166,6 +167,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
   const [isVenueLocked, setIsVenueLocked] = useAtom(venueSpaceLockedAtom);
   const [selectedShapeIdValue, setSelectedShapeId] =
     useAtom(selectedShapeIdAtom);
+  const setSelectedTableIds = useSetAtom(selectedTableIdsAtom);
   const [eventTitle] = useAtom(eventTitleAtom);
 
   const venueSpaceExists = useMemo(
@@ -881,6 +883,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     setBaseShapes((prevShapes) => [...prevShapes, newVenueSpace]);
 
     setIsVenueLocked(false);
+    setSelectedTableIds(new Set());
     setSelectedShapeId(newId);
 
     toast({
@@ -908,12 +911,14 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     const venueSpaceId = venueSpaceElement?.id;
 
     if (!nextLockedState && venueSpaceId) {
+      setSelectedTableIds(new Set());
       setSelectedShapeId(venueSpaceId);
     } else if (
       nextLockedState &&
       venueSpaceId &&
       selectedShapeIdValue === venueSpaceId
     ) {
+      setSelectedTableIds(new Set());
       setSelectedShapeId(null);
     }
 
@@ -1003,6 +1008,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         ? prevShapes.map((s) => (s.id === backgroundImageShape.id ? newShape : s))
         : [newShape, ...prevShapes],
     );
+    setSelectedTableIds(new Set());
     setSelectedShapeId(newShape.id);
 
     toast({
@@ -1015,6 +1021,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
 
   const handleSelectBackgroundImage = () => {
     if (backgroundImageShape) {
+      setSelectedTableIds(new Set());
       setSelectedShapeId(backgroundImageShape.id);
     }
   };
@@ -1026,6 +1033,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
       prev.map((s) => (s.id === backgroundImageShape.id ? { ...s, locked: nextLocked } : s)),
     );
     if (nextLocked && selectedShapeIdValue === backgroundImageShape.id) {
+      setSelectedTableIds(new Set());
       setSelectedShapeId(null);
     }
   };
@@ -1042,6 +1050,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     if (!window.confirm("Remove the background image? This can't be undone.")) return;
     setBaseShapes((prev) => prev.filter((s) => s.id !== backgroundImageShape.id));
     if (selectedShapeIdValue === backgroundImageShape.id) {
+      setSelectedTableIds(new Set());
       setSelectedShapeId(null);
     }
   };

@@ -2,8 +2,8 @@ import React, { useEffect, useRef } from "react";
 import { Image as KonvaImage, Transformer } from "react-konva";
 import useImage from "use-image";
 import Konva from "konva";
-import { useAtom, useAtomValue } from "jotai";
-import { selectedShapeIdAtom, editModeAtom } from "@/lib/atoms";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { selectedShapeIdAtom, selectedTableIdsAtom, editModeAtom } from "@/lib/atoms";
 import { PrimitiveAtom } from "jotai";
 import { BackgroundImage } from "../types/seatingChart";
 import { Shape } from "@/lib/atoms";
@@ -25,6 +25,7 @@ const BackgroundImageShapeContent: React.FC<{
 }> = ({ shapeAtom }) => {
   const [shape, setShape] = useAtom(shapeAtom);
   const [selectedShapeId, setSelectedShapeId] = useAtom(selectedShapeIdAtom);
+  const setSelectedTableIds = useSetAtom(selectedTableIdsAtom);
   const editMode = useAtomValue(editModeAtom);
   const shapeRef = useRef<Konva.Image>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -51,6 +52,7 @@ const BackgroundImageShapeContent: React.FC<{
 
   const handleSelect = () => {
     if (!editMode) return;
+    setSelectedTableIds(new Set());
     setSelectedShapeId(shape.id);
   };
 
