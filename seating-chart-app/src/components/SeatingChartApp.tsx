@@ -61,18 +61,31 @@ type DragPayload =
   | { kind: "guest"; guest: Guest }
   | { kind: "group"; guests: Guest[]; groupLabel: string };
 
-// Placeholder for useMediaQuery hook
+// Tracks whether `query` currently matches. The state used to start
+// hardcoded `false` and only get corrected inside an effect after mount —
+// on a genuinely desktop-width viewport, that meant every fresh mount of
+// this component (a hard refresh, or reaching it for the first time after
+// a PIN unlock) rendered one wrong pass as "not desktop" first: the
+// sidebar swaps to its closed mobile Sheet, and the hamburger button that
+// would reopen it stays hidden too, since *that's* gated by a real CSS
+// breakpoint that was never wrong. Depending on timing, that wrong pass
+// could be the last thing painted before data finished loading, making
+// the sidebar look like it had simply vanished with no way back short of
+// resizing the window. Lazily initializing from the real value up front
+// removes the wrong pass entirely; listening to the MediaQueryList's own
+// `change` event (rather than every window `resize`) is both more
+// correct and cheaper to keep in sync afterward.
 const useMediaQuery = (query: string) => {
-  const [matches, setMatches] = useState(false);
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches,
+  );
   useEffect(() => {
     const media = window.matchMedia(query);
-    if (media.matches !== matches) {
-      setMatches(media.matches);
-    }
-    const listener = () => setMatches(media.matches);
-    window.addEventListener("resize", listener);
-    return () => window.removeEventListener("resize", listener);
-  }, [matches, query]);
+    setMatches(media.matches);
+    const listener = (event: MediaQueryListEvent) => setMatches(event.matches);
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }, [query]);
   return matches;
 };
 
