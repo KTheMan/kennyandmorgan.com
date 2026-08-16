@@ -24,6 +24,18 @@ export const hoveredGuestIdAtom = atom<string | null>(null);
 // Atom to store the currently hovered table ID
 export const hoveredTableIdAtom = atom<string | null>(null);
 
+// Atom to store which seat (table + chair index) is currently under direct
+// pointer hover — separate from hoveredGuestIdAtom, which also lights up
+// from the sidebar guest list and doesn't carry a chair index, and which
+// stays null for hovering an empty seat. The top-level seat-name tooltip
+// (see SeatTooltipLayer) reads this to know which chair's name tag to
+// draw; it's rendered in its own Layer, above every table, specifically so
+// a neighboring table can never paint over it.
+export const hoveredSeatAtom = atom<{
+  tableId: string;
+  chairIndex: number;
+} | null>(null);
+
 // Atom to store the dragging state
 export const isDraggingAtom = atom<boolean>(false);
 

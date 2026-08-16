@@ -1,19 +1,13 @@
-import React, {
-  useState,
-  useMemo,
-  useEffect,
-  useRef,
-  useCallback,
-} from "react";
-import { Circle, Group, Label, Tag, Text } from "react-konva";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Circle, Group, Text } from "react-konva";
 import Konva from "konva";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import {
   modalStateAtom,
   guestsAtom,
   hoveredGuestIdAtom,
+  hoveredSeatAtom,
   isDraggingAtom,
-  stageScaleAtom,
   editModeAtom,
   baseShapesAtom,
 } from "@/lib/atoms";
@@ -28,7 +22,19 @@ interface ChairCircleProps {
   y: number;
   radius: number;
   guestId: string | null; // ID of the guest assigned, if any
-  registerRef: (guestId: string | null, node: Konva.Group | null) => void; // Callback to register the Konva node ref
+  // Outward-facing angle (radians, table-local/unrotated frame) this seat
+  // sits at — e.g. -Math.PI/2 for a seat on a round table's top edge. Used
+  // only to tell the top-level seat-name tooltip which direction "away
+  // from the table" is for this seat; see SeatTooltipLayer.
+  angle: number;
+  // Registers this chair's Konva Group under `${tableId}---${chairIndex}`
+  // — every seat registers, not just occupied ones — so SeatTooltipLayer
+  // can look up any hovered chair's live on-canvas position/rotation.
+  registerRef: (
+    tableId: string,
+    chairIndex: number,
+    node: Konva.Group | null,
+  ) => void;
   // Set while a party is being dragged and this seat is where the Nth
   // guest in that party would land if dropped right now — purely a live
   // preview, never persisted. Only ever set on empty seats.
@@ -51,8 +57,6 @@ const LIGHT_COLORS = {
   shadowColor: "#1E2218", // --ink
   centerDotFill: "#FFFFFF", // --surface
   centerDotStroke: "#54604A", // --inkSoft
-  tooltipFill: "#1E2218", // --ink
-  tooltipText: "#FAF8F0", // --bg
   previewFill: "rgba(122, 154, 31, 0.22)", // translucent --accent
   previewStroke: "#7A9A1F", // --accent olive
   previewNumberText: "#2E3A1C", // --deep
@@ -70,8 +74,6 @@ const DARK_COLORS = {
   shadowColor: "#12160D", // near-black deep green
   centerDotFill: "#2E3A1C", // --heroBg
   centerDotStroke: "#9CAA72", // --heroMuted
-  tooltipFill: "#1E2218", // --ink — tooltip chip stays dark in both themes
-  tooltipText: "#FAF8F0", // --bg
   previewFill: "rgba(200, 220, 88, 0.22)", // translucent --heroAccent
   previewStroke: "#C8DC58", // --heroAccent
   previewNumberText: "#1E2218", // --ink
@@ -84,6 +86,7 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
   y,
   radius,
   guestId,
+  angle,
   registerRef, // Receive the callback function
   previewOrder = null,
   seatingLocked = false,
@@ -91,8 +94,8 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
   const [, setModalState] = useAtom(modalStateAtom);
   const [guests, setGuests] = useAtom(guestsAtom);
   const baseShapes = useAtomValue(baseShapesAtom);
-  const currentStageScale = useAtomValue(stageScaleAtom); // Get current stage scale
   const [hoveredGuestId, setHoveredGuestId] = useAtom(hoveredGuestIdAtom); // Read and set
+  const setHoveredSeat = useSetAtom(hoveredSeatAtom);
   const [isDragging, setIsDragging] = useAtom(isDraggingAtom); // Read/set drag state
   const editMode = useAtomValue(editModeAtom); // Added
   const [isDirectlyHovered, setIsDirectlyHovered] = useState(false);
@@ -104,16 +107,6 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
 
   // Choose colors based on theme
   const COLORS = theme === "dark" ? DARK_COLORS : LIGHT_COLORS;
-
-  const guestNameMap = useMemo(() => {
-    const map = new Map<string, string>();
-    guests.forEach((guest) => {
-      if (guest.id && guest.fullName) {
-        map.set(guest.id, guest.fullName);
-      }
-    });
-    return map;
-  }, [guests]);
 
   // Determine if this chair should be highlighted (moved declaration earlier)
   const shouldHighlight =
@@ -165,6 +158,7 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
     if (isDragging) return; // Don't trigger hover if dragging
 
     setIsDirectlyHovered(true);
+    setHoveredSeat({ tableId, chairIndex });
 
     // Update hoveredGuestId to enable bidirectional highlighting
     if (guestId) {
@@ -196,6 +190,9 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
     e.cancelBubble = true;
     setIsDragging(true);
     e.target.moveToTop();
+    // Drop the name tooltip rather than let it trail a chair mid-drag —
+    // it's keyed to this chair's resting position, not the pointer.
+    setHoveredSeat(null);
   };
 
   // No-op beyond stopping propagation: the table's own onDragMove (grid
@@ -284,34 +281,20 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
       setHoveredGuestId(null);
     }
 
+    // Only clear if it matches this chair, so a leave that fires after the
+    // next chair's enter (ordering isn't guaranteed) can't clobber it.
+    setHoveredSeat((prev) =>
+      prev && prev.tableId === tableId && prev.chairIndex === chairIndex
+        ? null
+        : prev,
+    );
+
     // Always reset cursor on leave
     const stage = e.target.getStage();
     if (stage) {
       stage.container().style.cursor = "default";
     }
   };
-
-  const guestName = guestId
-    ? guestNameMap.get(guestId) || "Unknown Guest"
-    : "Empty Seat";
-
-  // Tooltip specific calculations based on stage scale
-  const tooltipBaseFontSize = 12;
-  const tooltipBasePadding = 6;
-  const tooltipBasePointerWidth = 8;
-  const tooltipBasePointerHeight = 8;
-  const tooltipBaseCornerRadius = 4;
-  const tooltipBaseShadowBlur = 6;
-
-  const ttScale = currentStageScale !== 0 ? 1 / currentStageScale : 1; // Inverse scale for tooltip elements
-
-  const tooltipFontSize = tooltipBaseFontSize * ttScale;
-  const tooltipPadding = tooltipBasePadding * ttScale;
-  const tooltipPointerWidth = tooltipBasePointerWidth * ttScale;
-  const tooltipPointerHeight = tooltipBasePointerHeight * ttScale;
-  const tooltipCornerRadius = tooltipBaseCornerRadius * ttScale;
-  const tooltipShadowBlur = tooltipBaseShadowBlur * ttScale;
-  const tooltipYOffset = (radius + tooltipPointerHeight + 5) * ttScale * 0.85; // Position above the chair, scaled and 15% lower
 
   // Determine fill and stroke colors based on state. Preview wins over
   // hover — you can't be "directly hovering" a seat mid-drag anyway,
@@ -351,10 +334,10 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
       chairGroupNodeRef.current = node; // Assign to our local ref
       if (registerRef) {
         // Call the prop from parent
-        registerRef(guestId, node);
+        registerRef(tableId, chairIndex, node);
       }
     },
-    [guestId, registerRef],
+    [tableId, chairIndex, registerRef],
   );
 
   return (
@@ -373,6 +356,9 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
       chairIndex={chairIndex}
       // Add radius attribute for positioning calculations
       radius={radius}
+      // Read back by SeatTooltipLayer to know which way "away from the
+      // table" is for this seat, combined with the table's own rotation.
+      outwardAngle={angle}
       // Only occupied, unlocked seats are draggable — an empty seat's
       // group stays non-draggable so a click-drag there still falls
       // through to the table's own draggable (moving the whole table),
@@ -440,43 +426,6 @@ export const ChairCircle: React.FC<ChairCircleProps> = ({
           scaleX={shouldHighlight ? 1.2 : 1}
           scaleY={shouldHighlight ? 1.2 : 1}
         />
-      )}
-
-      {/* Tooltip Label - only visible when highlighted */}
-      {shouldHighlight && (
-        <Label
-          x={0} // Centered relative to the chair group
-          y={-tooltipYOffset} // Positioned above the chair
-          offsetX={0} // Will be adjusted by text width if needed, but Konva Label handles this for simple cases
-          opacity={0.9}
-          perfectDrawEnabled={false}
-          listening={false} // Tooltip should not capture mouse events
-        >
-          <Tag
-            fill={COLORS.tooltipFill}
-            pointerDirection={"down"} // Points down towards the chair
-            pointerWidth={tooltipPointerWidth}
-            pointerHeight={tooltipPointerHeight}
-            lineJoin={"round"}
-            shadowColor={COLORS.shadowColor}
-            shadowBlur={tooltipShadowBlur}
-            shadowOffsetX={1 * ttScale}
-            shadowOffsetY={1 * ttScale}
-            shadowOpacity={0.3}
-            cornerRadius={tooltipCornerRadius}
-            // Padding is applied by Text element below for better text measurement handling
-          />
-          <Text
-            text={guestName}
-            fontFamily="'Work Sans', sans-serif"
-            fontSize={tooltipFontSize}
-            padding={tooltipPadding}
-            fill={COLORS.tooltipText}
-            fontStyle="bold"
-            align="center"
-            verticalAlign="middle"
-          />
-        </Label>
       )}
     </Group>
   );

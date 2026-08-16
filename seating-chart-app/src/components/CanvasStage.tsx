@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ChairCircle } from "./ChairCircle"; // Assuming ChairCircle exports the group ref or similar
 import { CanvasTipsOverlay } from "./CanvasTipsOverlay"; // <-- ADD THIS IMPORT
+import { SeatTooltipLayer } from "./SeatTooltipLayer";
 import { useToast } from "@/components/ui/use-toast";
 import { BackgroundImageShape } from "./BackgroundImageShape";
 
@@ -49,7 +50,11 @@ interface CanvasStageProps {
 const AtomRenderer: React.FC<{
   shapeAtom: PrimitiveAtom<Shape>;
   highlightedGuestId: string | null;
-  registerRef: (guestId: string | null, node: Konva.Group | null) => void; // Add prop
+  registerRef: (
+    tableId: string,
+    chairIndex: number,
+    node: Konva.Group | null,
+  ) => void; // Add prop
 }> = ({ shapeAtom, highlightedGuestId, registerRef }) => {
   const shape = useAtomValue(shapeAtom);
 
@@ -119,23 +124,24 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   const guests = useAtomValue(guestsAtom);
   const [initialFitDone, setInitialFitDone] = useState(false);
   const isVenueLocked = useAtomValue(venueSpaceLockedAtom); // Get venue lock state
+  const { toast } = useToast();
 
   const setBaseShapes = useSetAtom(baseShapesAtom); // Get setter for base shapes
 
-  // Ref map for chair groups, keyed by guestId
+  // Ref map for chair groups, keyed by `${tableId}---${chairIndex}` — every
+  // seat registers here, occupied or not, so SeatTooltipLayer can look up
+  // any hovered chair's live on-canvas position/rotation.
   const chairRefs = useRef<Record<string, Konva.Group>>({});
 
   // Callback to register/unregister chair refs
   const registerChairRef = useCallback(
-    (guestId: string | null, node: Konva.Group | null) => {
-      if (guestId) {
-        // Only register if guestId is present
-        if (node) {
-          chairRefs.current[guestId] = node;
-        } else {
-          // Node unmounted, remove from refs
-          delete chairRefs.current[guestId];
-        }
+    (tableId: string, chairIndex: number, node: Konva.Group | null) => {
+      const key = `${tableId}---${chairIndex}`;
+      if (node) {
+        chairRefs.current[key] = node;
+      } else {
+        // Node unmounted, remove from refs
+        delete chairRefs.current[key];
       }
     },
     [],
@@ -552,8 +558,11 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
             ))}
           </Layer>
 
-          {/* Third Layer: Tooltip (always on top) */}
-          {/* <TooltipLayer /> */}
+          {/* Third layer: seat-name tooltip (always on top, drawn after
+              every table so a neighboring table can never paint over it) */}
+          <Layer name="tooltip-layer" listening={false}>
+            <SeatTooltipLayer chairNodes={chairRefs} />
+          </Layer>
         </Stage>
       ) : (
         // Optional: Show a loader or a placeholder while waiting for size
