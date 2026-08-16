@@ -299,18 +299,20 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
     }
   }, [baseShapes, initialFitDone, fitContentToView]);
 
-  // Effect to handle window resizing and set initial stage size
+  // Measure the canvas container without changing the user's viewport.
+  // This effect intentionally has no shape/fit dependencies: recreating it
+  // after every table mutation used to call fitContentToView again, which
+  // made zoom and pan appear to reset after nearly every table action.
   useEffect(() => {
     const containerElement = containerRef.current;
     const updateSize = () => {
       if (containerElement) {
         const { clientWidth, clientHeight } = containerElement;
-        setStageSize({ width: clientWidth, height: clientHeight });
-        // Optional: Re-fit content after resize, maybe throttled/debounced
-        if (baseShapes.length > 0) {
-          // Delay the fit slightly to ensure dimensions have updated
-          setTimeout(() => fitContentToView(), 100);
-        }
+        setStageSize((current) =>
+          current.width === clientWidth && current.height === clientHeight
+            ? current
+            : { width: clientWidth, height: clientHeight },
+        );
       }
     };
 
@@ -333,8 +335,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
         resizeObserver.unobserve(containerElement);
       }
     };
-    // Add fitContentToView and baseShapes.length as dependencies if re-fitting on resize
-  }, [fitContentToView, baseShapes.length]);
+  }, []);
 
   // Effect to listen for key presses (Alt and Delete)
   useEffect(() => {
