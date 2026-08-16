@@ -28,6 +28,7 @@ import {
   getChairIndexesOnEdge,
   getLinkedTableComponent,
   getOccupiedGuestsOnEdge,
+  getTableLinkAlignmentDelta,
   restoreGuestsAfterSeatInsertions,
   restoredCapacityAfterUnlink,
   TABLE_EDGES,
@@ -84,6 +85,8 @@ export const TableSeatingModal: React.FC = () => {
 
     const other = tables.find((item) => item.id === candidate.otherTableId);
     if (!other) return;
+    const alignmentDelta = getTableLinkAlignmentDelta(candidate, tables);
+    if (!alignmentDelta) return;
     const currentGuests = store.get(guestsAtom);
     const blocked = [
       ...getOccupiedGuestsOnEdge(table, candidate.edge, currentGuests),
@@ -112,15 +115,25 @@ export const TableSeatingModal: React.FC = () => {
       ...getLinkedTableComponent(tables, table.id).map((item) => item.id),
       ...getLinkedTableComponent(tables, other.id).map((item) => item.id),
     ]);
+    const otherComponentIds = new Set(
+      getLinkedTableComponent(tables, other.id).map((item) => item.id),
+    );
     setBaseShapes((prev) =>
       prev.map((shape) => {
         if (shape.type !== "table") return shape;
+        const alignedPosition = otherComponentIds.has(shape.id)
+          ? {
+              x: shape.x + alignmentDelta.x,
+              y: shape.y + alignmentDelta.y,
+            }
+          : {};
         const mergedReset = affectedIds.has(shape.id)
           ? { linkedSeatingMerged: false }
           : {};
         if (shape.id === table.id) {
           return {
             ...shape,
+            ...alignedPosition,
             ...mergedReset,
             capacity: shape.capacity - removedFromTable.length,
             topSeats:
@@ -145,6 +158,7 @@ export const TableSeatingModal: React.FC = () => {
         if (shape.id === other.id) {
           return {
             ...shape,
+            ...alignedPosition,
             ...mergedReset,
             capacity: shape.capacity - removedFromOther.length,
             topSeats:
@@ -166,10 +180,15 @@ export const TableSeatingModal: React.FC = () => {
             },
           };
         }
-        return affectedIds.has(shape.id) ? { ...shape, ...mergedReset } : shape;
+        return affectedIds.has(shape.id)
+          ? { ...shape, ...alignedPosition, ...mergedReset }
+          : shape;
       }),
     );
-    toast({ title: "Tables Linked", description: "The shared edge seats were removed and the tables now move together." });
+    toast({
+      title: "Tables Linked",
+      description: "The edges were snapped together, shared seats removed, and the tables now move together.",
+    });
   };
 
   const handleUnlinkEdge = (edge: (typeof TABLE_EDGES)[number]) => {

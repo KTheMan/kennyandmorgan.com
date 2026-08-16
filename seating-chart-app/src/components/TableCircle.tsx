@@ -345,8 +345,8 @@ const TableCircleContent: React.FC<{
     linkedDragOriginsRef.current.forEach((origin, tableId) => {
       if (tableId === shape.id) return;
       stage?.findOne(`#${tableId}`)?.position({
-        x: snapToGrid(origin.x + dx),
-        y: snapToGrid(origin.y + dy),
+        x: origin.x + dx,
+        y: origin.y + dy,
       });
     });
     node.getLayer()?.batchDraw();
@@ -364,7 +364,7 @@ const TableCircleContent: React.FC<{
         prev.map((item) => {
           const origin = origins.get(item.id);
           return item.type === "table" && origin
-            ? { ...item, x: snapToGrid(origin.x + dx), y: snapToGrid(origin.y + dy) }
+            ? { ...item, x: origin.x + dx, y: origin.y + dy }
             : item;
         }),
       );

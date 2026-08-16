@@ -2,6 +2,10 @@ import type { Guest, Table, TableEdge } from "../types/seatingChart";
 import { computeTableChairPositions } from "./tableSeating";
 
 export const TABLE_EDGES: TableEdge[] = ["top", "right", "bottom", "left"];
+// A user naturally stops dragging when the visible seat rings meet. Because
+// those seats sit outside the table body, the body edges can still be about
+// 42 units apart at that point. Keep the explicit link action forgiving.
+export const TABLE_LINK_TOLERANCE = 48;
 export const oppositeTableEdge = (edge: TableEdge): TableEdge =>
   ({ top: "bottom", right: "left", bottom: "top", left: "right" })[edge] as TableEdge;
 
@@ -79,16 +83,19 @@ export interface TableLinkCandidate {
 export const findButtedTableEdge = (
   table: Table,
   tables: Table[],
-  tolerance = 18,
+  tolerance = TABLE_LINK_TOLERANCE,
 ): TableLinkCandidate | null => {
   if (table.shape !== "rectangle") return null;
   let best: { candidate: TableLinkCandidate; score: number } | null = null;
+  const ownComponentIds = new Set(
+    getLinkedTableComponent(tables, table.id).map((member) => member.id),
+  );
 
   for (const edge of TABLE_EDGES) {
     if (table.linkedEdges?.[edge]) continue;
     const a = getWorldEdge(table, edge);
     for (const other of tables) {
-      if (other.id === table.id || other.shape !== "rectangle") continue;
+      if (ownComponentIds.has(other.id) || other.shape !== "rectangle") continue;
       for (const otherEdge of TABLE_EDGES) {
         if (other.linkedEdges?.[otherEdge]) continue;
         const b = getWorldEdge(other, otherEdge);
@@ -113,6 +120,24 @@ export const findButtedTableEdge = (
   }
 
   return best?.candidate ?? null;
+};
+
+// Translation that makes the two selected edge centers exactly coincide.
+// Apply it to every member of the candidate's other linked component so a
+// newly created connection starts flush without distorting either component.
+export const getTableLinkAlignmentDelta = (
+  candidate: TableLinkCandidate,
+  tables: Table[],
+): { x: number; y: number } | null => {
+  const table = tables.find((item) => item.id === candidate.tableId);
+  const other = tables.find((item) => item.id === candidate.otherTableId);
+  if (!table || !other) return null;
+  const edge = getWorldEdge(table, candidate.edge);
+  const otherEdge = getWorldEdge(other, candidate.otherEdge);
+  return {
+    x: edge.center.x - otherEdge.center.x,
+    y: edge.center.y - otherEdge.center.y,
+  };
 };
 
 export const getChairIndexesOnEdge = (table: Table, edge: TableEdge): number[] =>
