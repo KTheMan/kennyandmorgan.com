@@ -57,6 +57,13 @@ const CANVAS_DROP_ZONE_ID = "canvas-drop-zone";
 // cover the ring of chairs sitting just outside the table edge.
 const GROUP_DROP_HIT_MARGIN = 40;
 
+// dnd-kit's default auto-scroller considers every scrollable ancestor,
+// including the page and canvas shell. A sidebar drag should only ever
+// auto-scroll the sidebar's vertical viewport.
+const canAutoScrollSidebar = (element: Element) =>
+  element.hasAttribute("data-radix-scroll-area-viewport") &&
+  Boolean(element.closest("[data-seating-sidebar]"));
+
 type DragPayload =
   | { kind: "guest"; guest: Guest }
   | { kind: "group"; guests: Guest[]; groupLabel: string };
@@ -683,6 +690,18 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     ],
   );
 
+  const handleDragCancel = useCallback(() => {
+    if (previewFrameRef.current !== null) {
+      cancelAnimationFrame(previewFrameRef.current);
+      previewFrameRef.current = null;
+    }
+    pendingPreviewPointRef.current = null;
+    setActiveDragPayload(null);
+    setIsDragActive(false);
+    setIsPointerOverCanvas(false);
+    setGroupDropPreview(null);
+  }, [setGroupDropPreview]);
+
   useEffect(() => {
     if (serverError) {
       toast({
@@ -1062,7 +1081,13 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         sensors={sensors}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
         collisionDetection={closestCenter}
+        autoScroll={{
+          canScroll: canAutoScrollSidebar,
+          acceleration: 8,
+          threshold: { x: 0.15, y: 0.12 },
+        }}
       >
         <div className="flex flex-1 overflow-hidden">
           {isDesktop ? (
@@ -1076,7 +1101,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
               <SheetContent
                 side="left"
-                className="w-72 sm:w-80 p-0 overflow-y-auto"
+                className="w-72 overflow-hidden p-0 sm:w-80"
               >
                 <SheetHeader className="p-5 pb-2 sr-only">
                   <SheetTitle>Guest List and Tables</SheetTitle>
@@ -1106,18 +1131,18 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
           </div>
         </div>
 
-        <DragOverlay>
+        <DragOverlay zIndex={1000}>
           {activeDragPayload?.kind === "guest" ? (
-            <div className="bg-sidebar p-3 rounded-md shadow-xl border border-primary/50 flex items-center opacity-90 cursor-grabbing">
+            <div className="pointer-events-none flex w-max max-w-[calc(100vw-2rem)] cursor-grabbing items-center rounded-md border border-primary/50 bg-sidebar p-3 opacity-95 shadow-xl">
               <UserCircle size={18} className="mr-2 text-primary shrink-0" />
-              <span className="font-medium text-sidebar-primary truncate">
+              <span className="min-w-0 max-w-72 truncate font-medium text-sidebar-primary">
                 {activeDragPayload.guest.fullName}
               </span>
             </div>
           ) : activeDragPayload?.kind === "group" ? (
-            <div className="bg-sidebar p-3 rounded-md shadow-xl border border-primary/50 flex items-center opacity-90 cursor-grabbing">
+            <div className="pointer-events-none flex w-max max-w-[calc(100vw-2rem)] cursor-grabbing items-center rounded-md border border-primary/50 bg-sidebar p-3 opacity-95 shadow-xl">
               <UsersRound size={18} className="mr-2 text-primary shrink-0" />
-              <span className="font-medium text-sidebar-primary truncate">
+              <span className="min-w-0 max-w-72 truncate font-medium text-sidebar-primary">
                 {activeDragPayload.groupLabel} · {activeDragPayload.guests.length} guests
               </span>
             </div>

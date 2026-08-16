@@ -1,7 +1,7 @@
 import React from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { Guest } from "../types/seatingChart";
-import { UsersRound } from "lucide-react";
+import { GripVertical, UsersRound } from "lucide-react";
 import { useAtomValue } from "jotai";
 import { editModeAtom } from "@/lib/atoms";
 
@@ -22,39 +22,39 @@ export const DraggableGroupHeader: React.FC<DraggableGroupHeaderProps> = ({
   label,
 }) => {
   const editMode = useAtomValue(editModeAtom);
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({
-      id: `group-${groupId}`,
-      data: { kind: "group" as const, guests, groupLabel: label },
-      disabled: !editMode,
-    });
-
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        zIndex: isDragging ? 50 : "auto",
-      }
-    : undefined;
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `group-${groupId}`,
+    data: { kind: "group" as const, guests, groupLabel: label },
+    disabled: !editMode,
+  });
 
   return (
     <li
       ref={setNodeRef}
-      style={style}
-      {...(editMode ? listeners : {})}
-      {...(editMode ? attributes : {})}
-      className={`flex items-center gap-1.5 pt-2 pb-0.5 px-1 -mx-1 text-xs font-medium uppercase tracking-wide text-sidebar-foreground/50 rounded-md transition-all ${
-        editMode
-          ? "cursor-grab hover:bg-sidebar-accent/20 hover:text-sidebar-foreground/80"
-          : ""
-      } ${isDragging ? "opacity-50" : ""}`}
-      title={
-        editMode
-          ? "Drag to seat the whole party together"
-          : undefined
-      }
+      className={`min-w-0 max-w-full pt-2 transition-opacity ${isDragging ? "opacity-45" : ""}`}
     >
-      <UsersRound size={12} strokeWidth={1.5} />
-      {label}
+      {editMode ? (
+        <button
+          type="button"
+          className="flex w-full min-w-0 touch-none cursor-grab items-center gap-1.5 rounded-md px-1 py-1 text-left text-xs font-medium uppercase tracking-wide text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent/20 hover:text-sidebar-foreground/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-primary/50 active:cursor-grabbing"
+          title={`Drag ${label} together`}
+          aria-label={`Drag ${label} together`}
+          {...listeners}
+          {...attributes}
+        >
+          <GripVertical size={13} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
+          <UsersRound size={12} strokeWidth={1.5} className="shrink-0" aria-hidden="true" />
+          <span className="min-w-0 truncate">{label}</span>
+        </button>
+      ) : (
+        <div
+          className="flex w-full min-w-0 items-center gap-1.5 px-1 py-1 text-xs font-medium uppercase tracking-wide text-sidebar-foreground/50"
+          title={label}
+        >
+          <UsersRound size={12} strokeWidth={1.5} className="shrink-0" aria-hidden="true" />
+          <span className="min-w-0 truncate">{label}</span>
+        </div>
+      )}
     </li>
   );
 };

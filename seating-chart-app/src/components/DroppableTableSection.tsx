@@ -124,7 +124,7 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-lg px-5 py-4 shadow-sm transition-all ${
+      className={`w-full min-w-0 max-w-full overflow-hidden rounded-lg px-4 py-3.5 shadow-sm transition-all ${
         isUnassigned
           ? "bg-sidebar-accent/5 border border-sidebar-border/30"
           : "bg-sidebar-accent/10"
@@ -133,23 +133,23 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
       onMouseLeave={onTableMouseLeave}
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-2.5">
-        <h3 className="font-medium text-sidebar-primary flex items-center">
+      <div className="mb-2.5 flex min-w-0 items-center justify-between gap-2">
+        <h3 className="flex min-w-0 items-center font-medium text-sidebar-primary">
           {groupData.tableNumber !== null ? (
             <>
               <span className="inline-flex items-center justify-center bg-sidebar-primary/10 text-sidebar-primary w-7 h-7 rounded-full mr-2 text-sm shadow-sm">
                 {groupData.tableNumber}
               </span>
-              <span>Table {groupData.tableNumber}</span>
+              <span className="truncate">Table {groupData.tableNumber}</span>
             </>
           ) : (
-            <span className="text-sidebar-foreground/80 flex items-center">
-              <Coffee size={16} className="mr-1.5" strokeWidth={1.5} />
-              Unassigned Guests
+            <span className="flex min-w-0 items-center text-sidebar-foreground/80">
+              <Coffee size={16} className="mr-1.5 shrink-0" strokeWidth={1.5} />
+              <span className="truncate">Unassigned Guests</span>
             </span>
           )}
         </h3>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           {isUnassigned ? (
             <Badge
               variant="outline"
@@ -206,7 +206,7 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
       <Separator className="mb-3 bg-sidebar-accent/20" />
 
       {/* Guest List */}
-      <ul className="space-y-1">
+      <ul className="min-w-0 space-y-1">
         {listEntries.map((entry) =>
           entry.kind === "header" ? (
             <DraggableGroupHeader
@@ -230,7 +230,7 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
 
       {/* Add Guest Input / Button */}
       {isUnassigned ? (
-        <div className="mt-3 text-center">
+        <div className="mt-3 min-w-0 text-center">
           {isInputVisible ? (
             <Input
               type="text"
@@ -255,7 +255,7 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
         </div>
       ) : (
         !isSeatingLocked && occupiedSeats < totalSeats && (
-          <div className="mt-2 pl-3 pr-1 relative">
+          <div className="relative mt-2 min-w-0 pl-3 pr-1">
             <Input
               type="text"
               placeholder="Add Guest..."

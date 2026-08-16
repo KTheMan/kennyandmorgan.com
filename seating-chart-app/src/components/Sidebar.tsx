@@ -66,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { toast } = useToast();
   const [showUnassignedInput, setShowUnassignedInput] = useState(false);
 
-  const scrollAreaContainerRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRootRef = useRef<HTMLDivElement>(null);
   const scrollContentWrapperRef = useRef<HTMLDivElement>(null);
   const [showScrollIndicator, setShowScrollIndicator] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
@@ -356,7 +356,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   useEffect(() => {
-    const container = scrollAreaContainerRef.current;
+    const root = scrollAreaRootRef.current;
+    const container = root?.querySelector<HTMLElement>(
+      "[data-radix-scroll-area-viewport]",
+    );
     const content = scrollContentWrapperRef.current;
 
     if (!container || !content) {
@@ -369,11 +372,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
       setIsScrolling(true);
 
-      const isScrollable = content.scrollHeight > container.clientHeight;
+      // This sidebar only scrolls vertically. Keeping scrollLeft pinned
+      // prevents a drag gesture from shifting the entire list offscreen.
+      if (container.scrollLeft !== 0) container.scrollLeft = 0;
+
+      const isScrollable = container.scrollHeight > container.clientHeight + 1;
       if (isScrollable) {
         const isAtBottom =
           container.scrollTop + container.clientHeight >=
-          content.scrollHeight - 5;
+          container.scrollHeight - 5;
         setShowScrollIndicator(!isAtBottom);
       } else {
         setShowScrollIndicator(false);
@@ -402,13 +409,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [groupedGuests]);
 
   const sidebarRootClasses = isInSheet
-    ? "bg-sidebar flex flex-col h-full overflow-hidden"
-    : "relative shrink-0 bg-sidebar flex flex-col h-full border-r border-sidebar-border/70 overflow-hidden lg:w-80";
+    ? "bg-sidebar flex min-w-0 flex-col h-full overflow-hidden"
+    : "relative shrink-0 bg-sidebar flex min-w-0 flex-col h-full border-r border-sidebar-border/70 overflow-hidden lg:w-[22rem] 2xl:w-96";
 
   return (
-    <div className={sidebarRootClasses}>
+    <div className={sidebarRootClasses} data-seating-sidebar>
       <div className="absolute inset-0 texture-elegant opacity-90 pointer-events-none"></div>
-      <div className="relative z-10 p-5 border-b border-sidebar-border/50 bg-sidebar-accent/5 shadow-sm">
+      <div
+        className={`relative z-10 border-b border-sidebar-border/50 bg-sidebar-accent/5 p-4 shadow-sm ${isInSheet ? "pr-12" : ""}`}
+      >
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-medium text-sidebar-foreground">
             Guest List
@@ -458,10 +467,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       ) : (
         <ScrollArea
-          ref={scrollAreaContainerRef}
-          className="relative flex-1 p-5 z-10"
+          ref={scrollAreaRootRef}
+          className="relative z-10 min-w-0 flex-1 overflow-x-hidden"
         >
-          <div ref={scrollContentWrapperRef} className="space-y-4">
+          <div
+            ref={scrollContentWrapperRef}
+            className="w-full min-w-0 max-w-full space-y-3 p-4"
+          >
             {Object.entries(groupedGuests).map(([tableId, groupData]) => {
               const isUnassigned = groupData.tableNumber === null;
               return (

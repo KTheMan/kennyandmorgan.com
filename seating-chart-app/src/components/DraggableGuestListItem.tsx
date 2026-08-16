@@ -3,7 +3,7 @@ import { useDraggable } from "@dnd-kit/core";
 // import { CSS } from '@dnd-kit/utilities'; // Not strictly needed for basic translate3d
 import { Guest } from "../types/seatingChart";
 import { Button } from "@/components/ui/button";
-import { UserCircle, X, Lock } from "lucide-react";
+import { GripVertical, UserCircle, X, Lock } from "lucide-react";
 import { useAtomValue } from "jotai";
 import { selectAtom } from "jotai/utils";
 import { editModeAtom, hoveredGuestIdAtom } from "@/lib/atoms";
@@ -34,32 +34,20 @@ export const DraggableGuestListItem: React.FC<DraggableGuestListItemProps> = ({
   const isHighlighted = useAtomValue(isHighlightedAtom);
   const canDrag = editMode && !disabled;
 
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({
-      id: guest.id,
-      data: { kind: "guest" as const, guest },
-      disabled: !canDrag,
-    });
-
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        // Add zIndex to ensure dragged item appears above others during transform
-        zIndex: isDragging ? 50 : "auto",
-      }
-    : undefined;
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: guest.id,
+    data: { kind: "guest" as const, guest },
+    disabled: !canDrag,
+  });
 
   return (
     <li
       ref={setNodeRef}
-      style={style}
-      {...(canDrag ? listeners : {})}
-      {...(canDrag ? attributes : {})}
-      className={`group flex items-center py-2.5 px-3 text-sm rounded-md ${canDrag ? 'cursor-grab' : disabled ? 'cursor-not-allowed' : 'cursor-default'} transition-all duration-300 border ring-1 relative ${
+      className={`group relative flex min-w-0 max-w-full items-center overflow-hidden rounded-md border px-2 py-2 text-sm ring-1 transition-colors duration-150 ${disabled ? "cursor-not-allowed" : "cursor-default"} ${
         isHighlighted
           ? "bg-sidebar-accent/40 shadow-sm border-sidebar-primary/30 ring-sidebar-primary/20"
           : "border-transparent ring-transparent hover:bg-sidebar-accent/20"
-      } ${isDragging ? "opacity-50 shadow-lg" : ""}`} // Keep zIndex separate in style prop
+      } ${isDragging ? "bg-sidebar-accent/30 opacity-45 ring-sidebar-primary/30" : ""}`}
       onMouseEnter={() => onMouseEnter(guest.id)}
       onMouseLeave={onMouseLeave}
     >
@@ -67,24 +55,22 @@ export const DraggableGuestListItem: React.FC<DraggableGuestListItemProps> = ({
         <Lock
           size={13}
           strokeWidth={1.75}
-          className="h-5 w-5 mr-1 shrink-0 p-0.5 text-sidebar-foreground/30"
+          className="mr-1 h-6 w-6 shrink-0 p-1 text-sidebar-foreground/30"
           aria-hidden="true"
         />
-      ) : (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-5 w-5 mr-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 rounded-full p-0.5"
-          onClick={(e) => {
-            if (!editMode) return;
-            e.stopPropagation();
-            onRemove(guest.id);
-          }}
-          aria-label="Remove guest"
-          disabled={!editMode}
+      ) : canDrag ? (
+        <button
+          type="button"
+          className="mr-1 flex h-6 w-6 shrink-0 touch-none cursor-grab items-center justify-center rounded text-sidebar-foreground/35 transition-colors hover:bg-sidebar-accent/30 hover:text-sidebar-foreground/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-primary/50 active:cursor-grabbing"
+          aria-label={`Drag ${guest.fullName}`}
+          title={`Drag ${guest.fullName}`}
+          {...listeners}
+          {...attributes}
         >
-          <X size={14} strokeWidth={2} />
-        </Button>
+          <GripVertical size={15} strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      ) : (
+        <span className="mr-1 h-6 w-6 shrink-0" aria-hidden="true" />
       )}
       <UserCircle
         size={18}
@@ -96,9 +82,10 @@ export const DraggableGuestListItem: React.FC<DraggableGuestListItemProps> = ({
         strokeWidth={1.5}
       />
       <span
-        className={`font-medium flex-grow min-w-0 truncate ml-2 ${
+        className={`ml-2 min-w-0 flex-1 truncate font-medium ${
           isHighlighted ? "text-sidebar-primary" : "text-sidebar-foreground"
         }`}
+        title={guest.fullName}
       >
         {guest.fullName}
         {guest.isChild && (
@@ -106,9 +93,23 @@ export const DraggableGuestListItem: React.FC<DraggableGuestListItemProps> = ({
         )}
       </span>
       {guest.tableId && typeof guest.chairIndex === "number" && (
-        <span className="ml-auto text-xs bg-sidebar-accent/20 px-2 py-0.5 rounded-full text-sidebar-foreground/70">
+        <span className="ml-2 shrink-0 rounded-full bg-sidebar-accent/20 px-2 py-0.5 text-xs text-sidebar-foreground/70">
           Seat {guest.chairIndex + 1}
         </span>
+      )}
+      {!disabled && editMode && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="ml-1 h-6 w-6 shrink-0 rounded-full p-0.5 text-sidebar-foreground/50 opacity-0 transition-opacity duration-150 hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(guest.id);
+          }}
+          aria-label={`Remove ${guest.fullName}`}
+        >
+          <X size={14} strokeWidth={2} />
+        </Button>
       )}
     </li>
   );
