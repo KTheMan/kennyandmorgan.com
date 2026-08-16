@@ -53,6 +53,7 @@ function buildGuestListEntries(guests: Guest[]): GuestListEntry[] {
 interface GroupData {
   // Define locally or import if exported from Sidebar
   tableNumber: number | null;
+  tableLabel?: string;
   tableCapacity?: number;
   seatingLocked?: boolean;
   guests: Guest[];
@@ -140,7 +141,9 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
               <span className="inline-flex items-center justify-center bg-sidebar-primary/10 text-sidebar-primary w-7 h-7 rounded-full mr-2 text-sm shadow-sm">
                 {groupData.tableNumber}
               </span>
-              <span className="truncate">Table {groupData.tableNumber}</span>
+              <span className="truncate">
+                {groupData.tableLabel ?? `Table ${groupData.tableNumber}`}
+              </span>
             </>
           ) : (
             <span className="flex min-w-0 items-center text-sidebar-foreground/80">

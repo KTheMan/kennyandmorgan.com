@@ -33,6 +33,16 @@ import { DroppableTableSection } from "./DroppableTableSection";
 import { ScrollIndicator } from "./ScrollIndicator";
 import { fetchAcceptedGuestParties } from "@/lib/api/guestConnector";
 import { tryVerifyAdminSession } from "@/lib/adminAuth";
+import { getMergedSeatingMembers } from "@/lib/tableLinks";
+
+interface SidebarGuestGroup {
+  tableNumber: number | null;
+  tableLabel?: string;
+  tableCapacity?: number;
+  seatingLocked?: boolean;
+  memberTableIds?: string[];
+  guests: Guest[];
+}
 
 interface SidebarProps {
   guests: Guest[];
@@ -97,24 +107,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [tables]);
 
   const groupedGuests = useMemo(() => {
-    const groups: Record<
-      string,
-      {
-        tableNumber: number | null;
-        tableCapacity?: number;
-        seatingLocked?: boolean;
-        guests: Guest[];
-      }
-    > = {
+    const groups: Record<string, SidebarGuestGroup> = {
       unassigned: { tableNumber: null, guests: [] },
     };
-    const unassignedGuestsFromLoop: Guest[] = [];
+    const tableGroupKeys = new Map<string, string>();
 
     tables.forEach((table) => {
-      groups[table.id] = {
-        tableNumber: table.number,
-        tableCapacity: table.capacity,
-        seatingLocked: table.seatingLocked === true,
+      const members = getMergedSeatingMembers(tables, table.id);
+      const primary = members[0] ?? table;
+      const groupKey = primary.id;
+      members.forEach((member) => tableGroupKeys.set(member.id, groupKey));
+      if (groups[groupKey]) return;
+      groups[groupKey] = {
+        tableNumber: primary.number,
+        tableLabel:
+          members.length > 1
+            ? `Table ${primary.number} · linked with ${members
+                .filter((member) => member.id !== primary.id)
+                .map((member) => member.number)
+                .join("+")}`
+            : `Table ${primary.number}`,
+        tableCapacity: members.reduce((sum, member) => sum + member.capacity, 0),
+        seatingLocked: members.some((member) => member.seatingLocked === true),
+        memberTableIds: members.map((member) => member.id),
         guests: [],
       };
     });
@@ -123,15 +138,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const guestTableId = guest.tableId || "unassigned";
 
       if (guestTableId !== "unassigned" && tableMap.has(guestTableId)) {
-        if (!groups[guestTableId]) {
-          groups[guestTableId] = {
+        const groupKey = tableGroupKeys.get(guestTableId) ?? guestTableId;
+        if (!groups[groupKey]) {
+          groups[groupKey] = {
             tableNumber: tableMap.get(guestTableId)?.number ?? null,
             tableCapacity: tableMap.get(guestTableId)?.capacity,
             seatingLocked: tableMap.get(guestTableId)?.seatingLocked === true,
+            memberTableIds: [guestTableId],
             guests: [],
           };
         }
-        groups[guestTableId].guests.push(guest);
+        groups[groupKey].guests.push(guest);
       } else {
         groups["unassigned"].guests.push(guest);
       }
@@ -139,7 +156,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     Object.values(groups).forEach((group) => {
       if (group.tableNumber !== null) {
-        group.guests.sort((a, b) => (a.chairIndex ?? 0) - (b.chairIndex ?? 0));
+        const memberOrder = new Map(
+          (group.memberTableIds ?? []).map((tableId, index) => [tableId, index]),
+        );
+        group.guests.sort(
+          (a, b) =>
+            (memberOrder.get(a.tableId) ?? 0) - (memberOrder.get(b.tableId) ?? 0) ||
+            (a.chairIndex ?? 0) - (b.chairIndex ?? 0),
+        );
       } else {
         // Cluster unassigned guests by party (groupId) so a family/table
         // group stays visually together instead of scattering
@@ -169,15 +193,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return numA - numB;
     });
 
-    const sortedGroups: Record<
-      string,
-      {
-        tableNumber: number | null;
-        tableCapacity?: number;
-        seatingLocked?: boolean;
-        guests: Guest[];
-      }
-    > = {};
+    const sortedGroups: Record<string, SidebarGuestGroup> = {};
     sortedGroupKeys.forEach((key) => {
       sortedGroups[key] = groups[key];
     });
@@ -221,18 +237,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
       });
       return;
     }
-    const capacity =
-      tableId === "unassigned" ? Infinity : group.tableCapacity || 0;
-    const currentTableGuests = group.guests;
-
     if (event.key === "Enter") {
       event.preventDefault();
       const name = (newGuestNames[tableId] || "").trim();
       if (!name) return;
 
       let nextSeatIndex: number | null = null;
+      let targetPhysicalTableId = tableId;
       if (tableId !== "unassigned") {
-        nextSeatIndex = findNextAvailableSeat(currentTableGuests, capacity);
+        for (const memberTableId of group.memberTableIds ?? [tableId]) {
+          const member = tableMap.get(memberTableId);
+          if (!member) continue;
+          nextSeatIndex = findNextAvailableSeat(
+            guests.filter((guest) => guest.tableId === memberTableId),
+            member.capacity,
+          );
+          if (nextSeatIndex !== null) {
+            targetPhysicalTableId = memberTableId;
+            break;
+          }
+        }
         if (nextSeatIndex === null) {
           console.error("Attempted to add guest to a full table:", tableId);
           return;
@@ -242,7 +266,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const newGuest: Guest = {
         id: `guest-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         fullName: name,
-        tableId: tableId === "unassigned" ? "" : tableId,
+        tableId: tableId === "unassigned" ? "" : targetPhysicalTableId,
         chairIndex: nextSeatIndex,
       };
       setGlobalGuests((prev) => [...prev, newGuest]);
@@ -279,10 +303,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // position lock on the canvas.
   const handleToggleSeatingLock = (tableId: string) => {
     if (!editMode) return;
+    const members = getMergedSeatingMembers(tables, tableId);
+    const memberIds = new Set(members.map((member) => member.id));
+    const nextLocked = !members.some((member) => member.seatingLocked === true);
     setBaseShapes((prev) =>
       prev.map((s) =>
-        s.type === "table" && s.id === tableId
-          ? { ...s, seatingLocked: !s.seatingLocked }
+        s.type === "table" && memberIds.has(s.id)
+          ? { ...s, seatingLocked: nextLocked }
           : s,
       ),
     );

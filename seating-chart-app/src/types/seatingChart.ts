@@ -20,6 +20,17 @@ export interface Guest {
   dietaryNotes?: string | null;
 }
 
+export type TableEdge = "top" | "right" | "bottom" | "left";
+
+export interface TableEdgeLink {
+  tableId: string;
+  edge: TableEdge;
+  // Seats removed from this table when this edge was joined. Kept so
+  // unlinking can restore the table's prior capacity.
+  removedSeats: number;
+  removedSeatIndexes?: number[];
+}
+
 export interface Table {
   type: "table";
   id: string;
@@ -62,6 +73,14 @@ export interface Table {
   // wide open. Missing/omitted means unlocked, same as every table saved
   // before this existed.
   seatingLocked?: boolean;
+  // Rectangle tables can be joined edge-to-edge. Links are reciprocal:
+  // each table stores its own edge and the corresponding edge/table on
+  // the other side. Missing means the edge is free.
+  linkedEdges?: Partial<Record<TableEdge, TableEdgeLink>>;
+  // When true on a linked component, the sidebar presents every member as
+  // one combined seating section while guests remain attached to their
+  // physical chair/table under the hood. This makes unmerging lossless.
+  linkedSeatingMerged?: boolean;
 }
 
 export interface VenueElement {

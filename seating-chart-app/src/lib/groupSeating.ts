@@ -11,10 +11,7 @@
 
 import { Table } from "../types/seatingChart";
 import {
-  CHAIR_RADIUS,
-  CHAIR_PADDING,
-  computeRectangleChairPositions,
-  computeOpposingSidesChairPositions,
+  computeTableChairPositions,
   roundTableChairAngle,
   type TableSide,
 } from "./tableSeating";
@@ -60,19 +57,7 @@ export function findTableUnderPoint(
 }
 
 const partitionSeatIndexesBySide = (table: Table): Record<TableSide, number[]> => {
-  const width = table.width ?? table.radius * 2;
-  const height = table.height ?? table.radius * 2;
-  const positions =
-    table.seatingStyle === "opposing"
-      ? computeOpposingSidesChairPositions(
-          width,
-          height,
-          table.topSeats ?? Math.ceil(table.capacity / 2),
-          table.bottomSeats ?? Math.floor(table.capacity / 2),
-          CHAIR_RADIUS,
-          CHAIR_PADDING,
-        )
-      : computeRectangleChairPositions(width, height, table.capacity, CHAIR_RADIUS, CHAIR_PADDING);
+  const positions = computeTableChairPositions(table);
 
   const bySide: Record<TableSide, number[]> = { top: [], right: [], bottom: [], left: [] };
   positions.forEach((pos, index) => bySide[pos.side].push(index));

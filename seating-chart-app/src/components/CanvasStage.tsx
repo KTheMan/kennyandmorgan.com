@@ -14,6 +14,7 @@ import {
   otherShapeAtomsAtom,
   isPanningAtom,
   baseShapesAtom,
+  guestsAtom,
   stageScaleAtom,
   venueSpaceLockedAtom,
 } from "../lib/atoms";
@@ -35,6 +36,12 @@ import { CanvasTipsOverlay } from "./CanvasTipsOverlay"; // <-- ADD THIS IMPORT
 import { SeatTooltipLayer } from "./SeatTooltipLayer";
 import { useToast } from "@/components/ui/use-toast";
 import { BackgroundImageShape } from "./BackgroundImageShape";
+import type { Table } from "../types/seatingChart";
+import {
+  restoreGuestsAfterSeatInsertions,
+  restoredCapacityAfterUnlink,
+  TABLE_EDGES,
+} from "@/lib/tableLinks";
 
 // Define props if needed later
 interface CanvasStageProps {
@@ -121,6 +128,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   const { toast } = useToast();
 
   const setBaseShapes = useSetAtom(baseShapesAtom); // Get setter for base shapes
+  const setGuests = useSetAtom(guestsAtom);
 
   // Ref map for chair groups, keyed by `${tableId}---${chairIndex}` — every
   // seat registers here, occupied or not, so SeatTooltipLayer can look up
@@ -332,8 +340,49 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
           e.preventDefault();
           return;
         }
+        if (selectedShape?.type === "table") {
+          const restorations = baseShapes
+            .filter((shape): shape is Table => shape.type === "table")
+            .flatMap((shape) =>
+              TABLE_EDGES.flatMap((edge) => {
+                const link = shape.linkedEdges?.[edge];
+                return link?.tableId === selectedShapeId
+                  ? [{ tableId: shape.id, indexes: link.removedSeatIndexes ?? [] }]
+                  : [];
+              }),
+            );
+          if (restorations.length > 0) {
+            setGuests((prev) =>
+              restorations.reduce(
+                (current, restoration) =>
+                  restoreGuestsAfterSeatInsertions(
+                    current,
+                    restoration.tableId,
+                    restoration.indexes,
+                  ),
+                prev,
+              ),
+            );
+          }
+        }
         setBaseShapes((prevShapes) =>
-          prevShapes.filter((shape) => shape.id !== selectedShapeId),
+          prevShapes
+            .filter((shape) => shape.id !== selectedShapeId)
+            .map((shape) => {
+              if (shape.type !== "table") return shape;
+              const linkedEdge = TABLE_EDGES.find(
+                (edge) => shape.linkedEdges?.[edge]?.tableId === selectedShapeId,
+              );
+              if (!linkedEdge) return shape;
+              const linkedEdges = { ...shape.linkedEdges };
+              delete linkedEdges[linkedEdge];
+              return {
+                ...shape,
+                ...restoredCapacityAfterUnlink(shape, linkedEdge),
+                linkedEdges,
+                linkedSeatingMerged: false,
+              };
+            }),
         );
         setSelectedShapeId(RESET);
         e.preventDefault();
@@ -362,7 +411,15 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [selectedShapeId, setBaseShapes, setSelectedShapeId, fitContentToView]);
+  }, [
+    baseShapes,
+    fitContentToView,
+    selectedShapeId,
+    setBaseShapes,
+    setGuests,
+    setSelectedShapeId,
+    toast,
+  ]);
 
   // Effect to update cursor styles based on interaction state
   useEffect(() => {

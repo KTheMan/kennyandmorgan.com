@@ -20,6 +20,7 @@ import { findTableUnderPoint, computeGroupSeatPlan, type StagePoint } from "@/li
 import { Guest, Table, VenueElement, BackgroundImage } from "../types/seatingChart";
 import { processBackgroundImageFile } from "@/lib/backgroundImageProcessing";
 import { snapToGrid } from "@/lib/gridSnap";
+import { getMergedSeatingMembers } from "@/lib/tableLinks";
 import { GuestAssignmentModal } from "./GuestAssignmentModal";
 import { RenameElementModal } from "./RenameElementModal";
 import { TableSeatingModal } from "./TableSeatingModal";
@@ -525,7 +526,8 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
           (s): s is Table => s.type === "table" && s.id === targetTableId,
         );
         if (!targetTable) return;
-        if (targetTable.seatingLocked) {
+        const targetMembers = getMergedSeatingMembers(tablesValue, targetTableId);
+        if (targetMembers.some((member) => member.seatingLocked)) {
           toast({
             title: "Seating Locked",
             description: `Table ${targetTable.number}'s seating is locked. Unlock it from the sidebar to seat guests there.`,
@@ -536,17 +538,22 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
 
         // Same greedy sequential fill single-guest sidebar drops use,
         // generalized to seat all N guests in one pass.
-        const guestsAtTargetTable = guestsValue.filter(
-          (g) => g.tableId === targetTableId,
-        );
-        const occupied = new Set(
-          guestsAtTargetTable
-            .map((g) => g.chairIndex)
-            .filter((i): i is number => typeof i === "number"),
-        );
-        const openSeats: number[] = [];
-        for (let i = 0; i < targetTable.capacity; i++) {
-          if (!occupied.has(i)) openSeats.push(i);
+        const openSeats: { tableId: string; chairIndex: number }[] = [];
+        const targetMemberIds = new Set(targetMembers.map((member) => member.id));
+        if (payload.guests.every((guest) => targetMemberIds.has(guest.tableId))) return;
+        for (const member of targetMembers) {
+          const occupied = new Set(
+            guestsValue
+              .filter(
+                (guest) =>
+                  guest.tableId === member.id && !groupGuestIds.has(guest.id),
+              )
+              .map((guest) => guest.chairIndex)
+              .filter((index): index is number => typeof index === "number"),
+          );
+          for (let index = 0; index < member.capacity; index += 1) {
+            if (!occupied.has(index)) openSeats.push({ tableId: member.id, chairIndex: index });
+          }
         }
         if (openSeats.length < payload.guests.length) {
           toast({
@@ -564,7 +571,11 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
             const idx = groupGuestIndex.get(g.id);
             return idx === undefined
               ? g
-              : { ...g, tableId: targetTableId, chairIndex: openSeats[idx] };
+              : {
+                  ...g,
+                  tableId: openSeats[idx].tableId,
+                  chairIndex: openSeats[idx].chairIndex,
+                };
           }),
         );
         return;
@@ -641,7 +652,8 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         (s): s is Table => s.type === "table" && s.id === targetTableId,
       );
       if (!targetTable) return;
-      if (targetTable.seatingLocked) {
+      const targetMembers = getMergedSeatingMembers(tablesValue, targetTableId);
+      if (targetMembers.some((member) => member.seatingLocked)) {
         toast({
           title: "Seating Locked",
           description: `Table ${targetTable.number}'s seating is locked. Unlock it from the sidebar to seat guests there.`,
@@ -649,14 +661,19 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         });
         return;
       }
-      const guestsAtTargetTable = guestsValue.filter(
-        (g) => g.tableId === targetTableId,
-      );
-      const nextSeatIndex = findNextAvailableSeat(
-        guestsAtTargetTable,
-        targetTable.capacity,
-      );
-      if (nextSeatIndex === null) {
+      if (targetMembers.some((member) => member.id === draggedGuest.tableId)) return;
+      let nextSeat: { tableId: string; chairIndex: number } | null = null;
+      for (const member of targetMembers) {
+        const nextSeatIndex = findNextAvailableSeat(
+          guestsValue.filter((guest) => guest.tableId === member.id),
+          member.capacity,
+        );
+        if (nextSeatIndex !== null) {
+          nextSeat = { tableId: member.id, chairIndex: nextSeatIndex };
+          break;
+        }
+      }
+      if (nextSeat === null) {
         toast({
           title: "Table Full",
           description: `Table ${targetTable.number} has no available seats.`,
@@ -670,7 +687,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
       setGuestsValue((prev) =>
         prev.map((g) =>
           g.id === guestId
-            ? { ...g, tableId: targetTableId, chairIndex: nextSeatIndex }
+            ? { ...g, tableId: nextSeat.tableId, chairIndex: nextSeat.chairIndex }
             : g,
         ),
       );

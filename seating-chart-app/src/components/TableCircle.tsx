@@ -13,6 +13,7 @@ import {
   tableSeatingModalStateAtom,
   groupDropPreviewAtom,
   baseShapesAtom,
+  guestsAtom,
   tableCounterAtom,
 } from "@/lib/atoms";
 import { nanoid } from "nanoid";
@@ -24,11 +25,14 @@ import { useTheme } from "@/components/ThemeProvider";
 import { useToast } from "@/components/ui/use-toast";
 import {
   CHAIR_RADIUS,
-  CHAIR_PADDING,
-  computeRectangleChairPositions,
-  computeOpposingSidesChairPositions,
+  computeTableChairPositions,
 } from "@/lib/tableSeating";
 import { snapToGrid } from "@/lib/gridSnap";
+import {
+  compactGuestsAfterSeatRemoval,
+  findSeatToRemove,
+} from "@/lib/seatRemoval";
+import { getLinkedTableComponent } from "@/lib/tableLinks";
 
 interface TableCircleProps {
   shapeAtom: PrimitiveAtom<Shape>;
@@ -169,9 +173,11 @@ const TableCircleContent: React.FC<{
   const setIsDragging = useSetAtom(isDraggingAtom);
   const editMode = useAtomValue(editModeAtom);
   const setBaseShapes = useSetAtom(baseShapesAtom);
+  const setGuests = useSetAtom(guestsAtom);
   const setTableCounter = useSetAtom(tableCounterAtom);
   const shapeRef = useRef<Konva.Group>(null);
   const trRef = useRef<Konva.Transformer>(null);
+  const linkedDragOriginsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const { theme } = useTheme();
   const { toast } = useToast();
 
@@ -192,8 +198,6 @@ const TableCircleContent: React.FC<{
   const rectWidth = shape.width ?? shape.radius * 2;
   const rectHeight = shape.height ?? shape.radius * 2;
   const isOpposingSides = isRectangle && shape.seatingStyle === "opposing";
-  const topSeats = shape.topSeats ?? Math.ceil(shape.capacity / 2);
-  const bottomSeats = shape.bottomSeats ?? Math.floor(shape.capacity / 2);
   const setTableSeatingModalState = useSetAtom(tableSeatingModalStateAtom);
 
   // A table's own position lock, independent of the venue-space lock
@@ -203,10 +207,29 @@ const TableCircleContent: React.FC<{
   // while locked.
   const isLocked = shape.locked === true;
   const isSeatingLocked = shape.seatingLocked === true;
+  const hasLinkedTables = Object.keys(shape.linkedEdges ?? {}).length > 0;
+  const linkedComponent = hasLinkedTables
+    ? getLinkedTableComponent(
+        store.get(baseShapesAtom).filter((item): item is Table => item.type === "table"),
+        shape.id,
+      )
+    : [shape];
+  const linkedSetLocked = linkedComponent.some((table) => table.locked === true);
+  const mergedForSeating =
+    linkedComponent.length > 1 &&
+    linkedComponent.some((table) => table.linkedSeatingMerged);
+  const mergedPrimary = [...linkedComponent].sort(
+    (a, b) => a.number - b.number || a.id.localeCompare(b.id),
+  )[0];
+  const displayedTableNumber = mergedForSeating ? mergedPrimary.number : shape.number;
+  const displayedCapacity = mergedForSeating
+    ? linkedComponent.reduce((sum, table) => sum + table.capacity, 0)
+    : shape.capacity;
 
   // Draggability depends on shape prop, not panning, edit mode, AND this
   // table's own position lock.
-  const isDraggable = shape.draggable !== false && !isPanning && editMode && !isLocked;
+  const isDraggable =
+    shape.draggable !== false && !isPanning && editMode && !isLocked && !linkedSetLocked;
 
   // Hooks are now safe
   useEffect(() => {
@@ -244,59 +267,7 @@ const TableCircleContent: React.FC<{
     }
   }, [theme, isTableHighlighted]);
 
-  // Chair position calculation
-  const chairPositions = useMemo(() => {
-    if (isOpposingSides) {
-      return computeOpposingSidesChairPositions(
-        rectWidth,
-        rectHeight,
-        topSeats,
-        bottomSeats,
-        CHAIR_RADIUS,
-        CHAIR_PADDING,
-      );
-    }
-    if (isRectangle) {
-      return computeRectangleChairPositions(
-        rectWidth,
-        rectHeight,
-        shape.capacity,
-        CHAIR_RADIUS,
-        CHAIR_PADDING,
-      );
-    }
-    const positions = [];
-    const angleStep = (2 * Math.PI) / shape.capacity;
-    const distance = shape.radius + CHAIR_RADIUS + CHAIR_PADDING;
-    for (let i = 0; i < shape.capacity; i++) {
-      const angle = i * angleStep - Math.PI / 2;
-      positions.push({
-        x: distance * Math.cos(angle),
-        y: distance * Math.sin(angle),
-        angle, // Store the angle for tooltip positioning
-      });
-    }
-    return positions;
-  }, [
-    shape.capacity,
-    shape.radius,
-    isRectangle,
-    isOpposingSides,
-    rectWidth,
-    rectHeight,
-    topSeats,
-    bottomSeats,
-  ]);
-
-  // Find the highest occupied chair index (to prevent reducing capacity below this)
-  const highestOccupiedChairIndex = useMemo(() => {
-    let highest = -1;
-
-    for (const chairIndex of guestMap.keys()) {
-      highest = Math.max(highest, chairIndex);
-    }
-    return highest;
-  }, [guestMap]);
+  const chairPositions = useMemo(() => computeTableChairPositions(shape), [shape]);
 
   const handleSelect = () => {
     // Allow selection only when in edit mode
@@ -308,6 +279,15 @@ const TableCircleContent: React.FC<{
 
   const handleDragStart = (e: Konva.KonvaEventObject<DragEvent>) => {
     setIsDragging(true);
+    const tables = store
+      .get(baseShapesAtom)
+      .filter((item): item is Table => item.type === "table");
+    linkedDragOriginsRef.current = new Map(
+      getLinkedTableComponent(tables, shape.id).map((table) => [
+        table.id,
+        { x: table.x, y: table.y },
+      ]),
+    );
     // Prevent stage drag if Alt is pressed when starting shape drag
     if (e.evt.altKey) {
       e.target.getStage()?.stopDrag();
@@ -324,18 +304,39 @@ const TableCircleContent: React.FC<{
     const node = e.target;
     node.x(snapToGrid(node.x()));
     node.y(snapToGrid(node.y()));
+    const ownOrigin = linkedDragOriginsRef.current.get(shape.id);
+    if (!ownOrigin || linkedDragOriginsRef.current.size <= 1) return;
+    const dx = node.x() - ownOrigin.x;
+    const dy = node.y() - ownOrigin.y;
+    const stage = node.getStage();
+    linkedDragOriginsRef.current.forEach((origin, tableId) => {
+      if (tableId === shape.id) return;
+      stage?.findOne(`#${tableId}`)?.position({
+        x: snapToGrid(origin.x + dx),
+        y: snapToGrid(origin.y + dy),
+      });
+    });
+    node.getLayer()?.batchDraw();
   };
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     setIsDragging(false);
     // Update shape position only if it was actually draggable
     if (shape.draggable !== false) {
-      setShape((prev) => ({
-        ...prev,
-        x: snapToGrid(e.target.x()),
-        y: snapToGrid(e.target.y()),
-      }));
+      const origins = linkedDragOriginsRef.current;
+      const ownOrigin = origins.get(shape.id) ?? { x: shape.x, y: shape.y };
+      const dx = snapToGrid(e.target.x()) - ownOrigin.x;
+      const dy = snapToGrid(e.target.y()) - ownOrigin.y;
+      setBaseShapes((prev) =>
+        prev.map((item) => {
+          const origin = origins.get(item.id);
+          return item.type === "table" && origin
+            ? { ...item, x: snapToGrid(origin.x + dx), y: snapToGrid(origin.y + dy) }
+            : item;
+        }),
+      );
     }
+    linkedDragOriginsRef.current = new Map();
   };
 
   const handleTransformEnd = (e: Konva.KonvaEventObject<Event>) => {
@@ -395,16 +396,22 @@ const TableCircleContent: React.FC<{
     }
     // For animation effect
     if (change < 0) {
-      // Prevent reducing capacity below the number of occupied chairs
-      const minimumRequiredCapacity = highestOccupiedChairIndex + 1;
-      if (shape.capacity + change < minimumRequiredCapacity) {
+      const minimumCapacity = hasLinkedTables ? 0 : MIN_CAPACITY;
+      if (shape.capacity <= minimumCapacity) return;
+
+      const currentGuests = store.get(guestsAtom);
+      const removedChairIndex = findSeatToRemove(
+        currentGuests,
+        shape.id,
+        0,
+        shape.capacity,
+      );
+      if (removedChairIndex === null) {
         setIsMinusPressed(true);
         setTimeout(() => setIsMinusPressed(false), 200);
-
-        // Show toast notification
         toast({
           title: "Cannot Reduce Capacity",
-          description: `Please remove guests from seats ${minimumRequiredCapacity} to ${shape.capacity} first.`,
+          description: "Every seat is occupied. Remove a guest first.",
           variant: "destructive",
         });
         return;
@@ -412,6 +419,12 @@ const TableCircleContent: React.FC<{
 
       setIsMinusPressed(true);
       setTimeout(() => setIsMinusPressed(false), 200);
+
+      setGuests((prev) =>
+        compactGuestsAfterSeatRemoval(prev, shape.id, removedChairIndex),
+      );
+      setShape((prev) => ({ ...prev, capacity: prev.capacity - 1 }));
+      return;
     } else {
       setIsPlusPressed(true);
       setTimeout(() => setIsPlusPressed(false), 200);
@@ -420,7 +433,7 @@ const TableCircleContent: React.FC<{
     setShape((prev) => {
       const newCapacity = prev.capacity + change;
       const clampedCapacity = Math.max(
-        MIN_CAPACITY,
+        hasLinkedTables ? 0 : MIN_CAPACITY,
         Math.min(newCapacity, MAX_CAPACITY),
       );
       return { ...prev, capacity: clampedCapacity };
@@ -459,6 +472,8 @@ const TableCircleContent: React.FC<{
       x: snapToGrid(shape.x + offset),
       y: snapToGrid(shape.y + offset),
       locked: false,
+      linkedEdges: undefined,
+      linkedSeatingMerged: false,
     };
     setBaseShapes((prev) => [...prev, newTable]);
     setTableCounter((prev) => prev + 1);
@@ -470,7 +485,15 @@ const TableCircleContent: React.FC<{
   // mode, even while locked, since that's the only way back out.
   const handleToggleLock = () => {
     if (!editMode) return;
-    setShape((prev) => ({ ...prev, locked: !prev.locked }));
+    const memberIds = new Set(linkedComponent.map((table) => table.id));
+    const nextLocked = !linkedComponent.some((table) => table.locked === true);
+    setBaseShapes((prev) =>
+      prev.map((item) =>
+        item.type === "table" && memberIds.has(item.id)
+          ? { ...item, locked: nextLocked }
+          : item,
+      ),
+    );
   };
 
   // Updated font sizes for better readability
@@ -644,7 +667,7 @@ const TableCircleContent: React.FC<{
 
         {/* Table Number - Improved contrast and visibility */}
         <Text
-          text={`Table ${shape.number}`}
+          text={`Table ${displayedTableNumber}`}
           fontSize={FONT_SIZE_LARGE}
           fontFamily="'DM Serif Display', 'Playfair Display', serif"
           fill={COLORS.tableTextPrimary}
@@ -660,7 +683,7 @@ const TableCircleContent: React.FC<{
 
         {/* Capacity Text - Enhanced visibility */}
         <Text
-          text={`${shape.capacity} Guests`}
+          text={`${displayedCapacity} Guests`}
           fontSize={FONT_SIZE_SMALL}
           fontFamily="'Work Sans', sans-serif"
           fontStyle="bold"
@@ -747,7 +770,7 @@ const TableCircleContent: React.FC<{
                 y={controlsRowY}
                 onClick={() => handleCapacityChange(-1)}
                 onTap={() => handleCapacityChange(-1)}
-                opacity={shape.capacity > MIN_CAPACITY ? 1 : 0.5}
+                opacity={shape.capacity > (hasLinkedTables ? 0 : MIN_CAPACITY) ? 1 : 0.5}
                 onMouseEnter={handleMinusMouseEnter}
                 onMouseLeave={handleMinusMouseLeave}
                 scaleX={isMinusPressed ? 0.9 : 1}
@@ -990,7 +1013,8 @@ const TableCircleContent: React.FC<{
                 ]
               : ["top-left", "top-right", "bottom-left", "bottom-right"]
           }
-          rotateEnabled
+          resizeEnabled={!hasLinkedTables}
+          rotateEnabled={!hasLinkedTables}
           rotationSnaps={ROTATION_SNAPS}
           rotationSnapTolerance={23}
           borderStroke={COLORS.tableStroke}

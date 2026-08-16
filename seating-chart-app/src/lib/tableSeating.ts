@@ -3,7 +3,9 @@
 // both need the exact same "which chairIndex is on which side" answer, so
 // there's exactly one place that computes it.
 
-export type TableSide = "top" | "right" | "bottom" | "left";
+import type { Table, TableEdge } from "../types/seatingChart";
+
+export type TableSide = TableEdge;
 
 export interface ChairPosition {
   x: number;
@@ -28,6 +30,7 @@ export const computeRectangleChairPositions = (
   capacity: number,
   chairRadius: number,
   padding: number,
+  excludedSides: ReadonlySet<TableSide> = new Set(),
 ): ChairPosition[] => {
   const halfW = width / 2;
   const halfH = height / 2;
@@ -36,12 +39,13 @@ export const computeRectangleChairPositions = (
   const usableHorizontal = Math.max(width - cornerMargin * 2, chairRadius);
   const usableVertical = Math.max(height - cornerMargin * 2, chairRadius);
 
-  const sides: { key: TableSide; length: number }[] = [
+  const allSides: { key: TableSide; length: number }[] = [
     { key: "top", length: usableHorizontal },
     { key: "right", length: usableVertical },
     { key: "bottom", length: usableHorizontal },
     { key: "left", length: usableVertical },
   ];
+  const sides = allSides.filter((side) => !excludedSides.has(side.key));
   const totalLength = sides.reduce((sum, s) => sum + s.length, 0) || 1;
 
   // Largest-remainder allocation: proportional seat counts per side that
@@ -124,3 +128,42 @@ export const computeOpposingSidesChairPositions = (
 // top, going clockwise).
 export const roundTableChairAngle = (index: number, capacity: number): number =>
   (index * (2 * Math.PI)) / capacity - Math.PI / 2;
+
+export const computeTableChairPositions = (table: Table): ChairPosition[] => {
+  const excludedSides = new Set(
+    Object.keys(table.linkedEdges ?? {}) as TableSide[],
+  );
+
+  if (table.shape === "rectangle") {
+    const width = table.width ?? table.radius * 2;
+    const height = table.height ?? table.radius * 2;
+    return table.seatingStyle === "opposing"
+      ? computeOpposingSidesChairPositions(
+          width,
+          height,
+          excludedSides.has("top") ? 0 : table.topSeats ?? Math.ceil(table.capacity / 2),
+          excludedSides.has("bottom") ? 0 : table.bottomSeats ?? Math.floor(table.capacity / 2),
+          CHAIR_RADIUS,
+          CHAIR_PADDING,
+        )
+      : computeRectangleChairPositions(
+          width,
+          height,
+          table.capacity,
+          CHAIR_RADIUS,
+          CHAIR_PADDING,
+          excludedSides,
+        );
+  }
+
+  const distance = table.radius + CHAIR_RADIUS + CHAIR_PADDING;
+  return Array.from({ length: table.capacity }, (_, index) => {
+    const angle = roundTableChairAngle(index, table.capacity);
+    return {
+      x: distance * Math.cos(angle),
+      y: distance * Math.sin(angle),
+      angle,
+      side: "top" as const,
+    };
+  });
+};
