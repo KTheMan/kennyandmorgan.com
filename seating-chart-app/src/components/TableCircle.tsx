@@ -35,6 +35,8 @@ import {
 } from "@/lib/seatRemoval";
 import { getLinkedTableComponent } from "@/lib/tableLinks";
 import { getSelectedTableUnits } from "@/lib/tableAlignment";
+import { findDuplicateTablePosition } from "@/lib/tablePlacement";
+import type { VenueElement } from "../types/seatingChart";
 
 interface TableCircleProps {
   shapeAtom: PrimitiveAtom<Shape>;
@@ -497,13 +499,20 @@ const TableCircleContent: React.FC<{
   // unlocked, even if the original is locked, so it's immediately usable.
   const handleDuplicateTable = () => {
     if (!editMode) return;
-    const offset = 40;
+    const currentShapes = store.get(baseShapesAtom);
+    const tables = currentShapes.filter(
+      (item): item is Table => item.type === "table",
+    );
+    const venue = currentShapes.find(
+      (item): item is VenueElement =>
+        item.type === "venue" && item.title === "Venue Space",
+    );
+    const duplicatePosition = findDuplicateTablePosition(shape, tables, venue);
     const newTable: Table = {
       ...shape,
       id: `table-${Date.now()}-${nanoid(4)}`,
       number: store.get(tableCounterAtom),
-      x: snapToGrid(shape.x + offset),
-      y: snapToGrid(shape.y + offset),
+      ...duplicatePosition,
       locked: false,
       linkedEdges: undefined,
       linkedSeatingMerged: false,
@@ -1049,11 +1058,13 @@ const TableCircleContent: React.FC<{
           }
           resizeEnabled={!hasLinkedTables}
           rotateEnabled={!hasLinkedTables}
+          rotateAnchorOffset={80}
           rotationSnaps={ROTATION_SNAPS}
           rotationSnapTolerance={23}
           borderStroke={COLORS.tableStroke}
           anchorFill={COLORS.tableFill}
           anchorStroke={COLORS.tableStroke}
+          anchorSize={14}
           anchorCornerRadius={5}
         />
       )}

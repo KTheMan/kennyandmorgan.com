@@ -14,10 +14,18 @@ export default defineConfig({
         ignoreHTTPSErrors: true,
         trace: 'on-first-retry'
     },
-    webServer: {
-        command: 'npx http-server . -p 4173 -c-1',
-        port: 4173,
-        reuseExistingServer: !process.env.CI,
-        timeout: 120_000
-    }
+    webServer: [
+        {
+            command: 'npx http-server . -p 4173 -c-1',
+            port: 4173,
+            reuseExistingServer: !process.env.CI,
+            timeout: 120_000
+        },
+        {
+            command: 'npm --prefix seating-chart-app run dev -- --host 127.0.0.1 --port 45174',
+            port: 45174,
+            reuseExistingServer: !process.env.CI,
+            timeout: 120_000
+        }
+    ]
 });
