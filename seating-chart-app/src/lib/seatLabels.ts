@@ -3,9 +3,13 @@ import {
   CHAIR_RADIUS,
   computeTableChairPositions,
 } from "./tableSeating";
+import {
+  SEAT_CALLOUT_FONT_PX,
+  SEAT_CALLOUT_PADDING_PX,
+  SEAT_CALLOUT_POINTER_PX,
+  type SeatCalloutPointerDirection,
+} from "./seatCallout";
 
-const LABEL_FONT_PX = 11;
-const LABEL_HEIGHT_PX = 15;
 const LABEL_GAP_PX = 4;
 const COLLISION_PADDING_PX = 2;
 
@@ -35,7 +39,9 @@ export interface PlannedSeatLabel extends Box {
   tableId: string;
   chairIndex: number;
   text: string;
-  fontSize: number;
+  anchorX: number;
+  anchorY: number;
+  pointerDirection: SeatCalloutPointerDirection;
 }
 
 const rotatePoint = (point: Point, radians: number): Point => ({
@@ -57,49 +63,64 @@ export const getGuestLabelVariants = (fullName: string): string[] => {
   return [...new Set([normalized, short, initials])];
 };
 
-// Work Sans at 11px is close to six pixels per ordinary character. The
-// small per-character adjustment is accurate enough for collision planning
-// without constructing hundreds of temporary Konva.Text nodes on every zoom.
+// This is intentionally slightly generous. The rendered callout lets Konva
+// auto-size the text (so names can never be clipped); this estimate is used
+// only to reserve enough collision space before drawing it.
 const estimateTextWidthPx = (text: string): number =>
   Math.ceil(
     [...text].reduce((width, character) => {
-      if (character === " ") return width + 3.2;
-      if (/[ilI.,'’]/.test(character)) return width + 3.1;
-      if (/[MW@]/.test(character)) return width + 8.4;
-      if (/[A-Z]/.test(character)) return width + 6.8;
-      return width + 5.6;
-    }, 4),
+      if (character === " ") return width + 3.5;
+      if (/[ilI.,'’]/.test(character)) return width + 3.4;
+      if (/[MW@]/.test(character)) return width + 9.2;
+      if (/[A-Z]/.test(character)) return width + 7.4;
+      return width + 6.1;
+    }, 6),
   );
+
+const getPointerDirection = (outward: Point): SeatCalloutPointerDirection => {
+  const inwardX = -outward.x;
+  const inwardY = -outward.y;
+  return Math.abs(inwardY) >= Math.abs(inwardX)
+    ? inwardY > 0
+      ? "down"
+      : "up"
+    : inwardX > 0
+      ? "right"
+      : "left";
+};
 
 const buildLabelBox = (
   candidate: SeatCandidate,
   text: string,
   scale: number,
 ): Box => {
-  const width = estimateTextWidthPx(text) / scale;
-  const height = LABEL_HEIGHT_PX / scale;
+  const width =
+    (estimateTextWidthPx(text) + SEAT_CALLOUT_PADDING_PX * 2) / scale;
+  const height =
+    (SEAT_CALLOUT_FONT_PX + SEAT_CALLOUT_PADDING_PX * 2) / scale;
   const gap = LABEL_GAP_PX / scale;
-  const seatRadius = CHAIR_RADIUS;
-  const horizontal = Math.abs(candidate.outward.x) >= Math.abs(candidate.outward.y);
+  const pointerSize = SEAT_CALLOUT_POINTER_PX / scale;
+  const anchorX = candidate.chair.x + candidate.outward.x * (CHAIR_RADIUS + gap);
+  const anchorY = candidate.chair.y + candidate.outward.y * (CHAIR_RADIUS + gap);
+  const pointerDirection = getPointerDirection(candidate.outward);
 
-  if (horizontal) {
-    const rightFacing = candidate.outward.x >= 0;
+  if (pointerDirection === "left") {
+    return { x: anchorX + pointerSize, y: anchorY - height / 2, width, height };
+  }
+  if (pointerDirection === "right") {
     return {
-      x: rightFacing
-        ? candidate.chair.x + seatRadius + gap
-        : candidate.chair.x - seatRadius - gap - width,
-      y: candidate.chair.y - height / 2,
+      x: anchorX - width - pointerSize,
+      y: anchorY - height / 2,
       width,
       height,
     };
   }
-
-  const downFacing = candidate.outward.y >= 0;
+  if (pointerDirection === "up") {
+    return { x: anchorX - width / 2, y: anchorY + pointerSize, width, height };
+  }
   return {
-    x: candidate.chair.x - width / 2,
-    y: downFacing
-      ? candidate.chair.y + seatRadius + gap
-      : candidate.chair.y - seatRadius - gap - height,
+    x: anchorX - width / 2,
+    y: anchorY - height - pointerSize,
     width,
     height,
   };
@@ -248,6 +269,12 @@ export const planSeatLabels = (
     tableId: candidate.tableId,
     chairIndex: candidate.chairIndex,
     text,
-    fontSize: LABEL_FONT_PX / scale,
+    anchorX:
+      candidate.chair.x +
+      candidate.outward.x * (CHAIR_RADIUS + LABEL_GAP_PX / scale),
+    anchorY:
+      candidate.chair.y +
+      candidate.outward.y * (CHAIR_RADIUS + LABEL_GAP_PX / scale),
+    pointerDirection: getPointerDirection(candidate.outward),
   }));
 };

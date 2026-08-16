@@ -39,7 +39,10 @@ const BackgroundImageShapeContent: React.FC<{
       trRef.current.nodes([shapeRef.current]);
       trRef.current.getLayer()?.batchDraw();
     }
-  }, [isSelected]);
+  // A newly imported image is selected before its browser image has decoded.
+  // Re-run when that image becomes available so the Transformer attaches to
+  // the newly mounted Konva node instead of remaining empty.
+  }, [htmlImage, isSelected]);
 
   // Like the venue space shape, this only listens for pointer events while
   // already selected — otherwise, being a large shape that can cover the

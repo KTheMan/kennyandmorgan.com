@@ -1,5 +1,4 @@
 import React from "react";
-import { Label, Tag, Text } from "react-konva";
 import Konva from "konva";
 import { useAtomValue } from "jotai";
 import {
@@ -9,12 +8,8 @@ import {
   isDraggingAtom,
 } from "@/lib/atoms";
 import { CHAIR_RADIUS } from "@/lib/tableSeating";
-
-// The tooltip chip's fill/text colors are the same in both themes (a dark
-// chip reads fine on either background) — see the comment that used to sit
-// next to these in ChairCircle.tsx, before the tooltip moved here.
-const TOOLTIP_FILL = "#1E2218"; // --ink
-const TOOLTIP_TEXT = "#FAF8F0"; // --bg
+import { SeatNameCallout } from "./SeatNameCallout";
+import { SEAT_CALLOUT_POINTER_PX } from "@/lib/seatCallout";
 
 interface SeatTooltipLayerProps {
   // Live Konva.Group node for every rendered chair (occupied or empty),
@@ -92,50 +87,22 @@ export const SeatTooltipLayer: React.FC<SeatTooltipLayerProps> = ({
         ? "right"
         : "left";
 
-  // Inverse-scale everything so the tooltip stays a constant apparent size
-  // on screen regardless of canvas zoom.
+  // Keep the placement offset screen-stable; SeatNameCallout applies the
+  // same inverse scaling to the visual itself.
   const ttScale = currentStageScale !== 0 ? 1 / currentStageScale : 1;
-  const fontSize = 12 * ttScale;
-  const padding = 6 * ttScale;
-  const pointerSize = 8 * ttScale;
-  const cornerRadius = 4 * ttScale;
-  const shadowBlur = 6 * ttScale;
+  const pointerSize = SEAT_CALLOUT_POINTER_PX * ttScale;
   // Clears the chair's own radius, plus a little breathing room, before
   // the tag body starts — same distance ChairCircle always used, just now
   // applied along the seat's real outward direction instead of always up.
   const offsetDistance = (CHAIR_RADIUS + pointerSize + 5) * ttScale * 0.85;
 
   return (
-    <Label
+    <SeatNameCallout
       x={anchor.x + outwardX * offsetDistance}
       y={anchor.y + outwardY * offsetDistance}
-      opacity={0.9}
-      perfectDrawEnabled={false}
-      listening={false}
-    >
-      <Tag
-        fill={TOOLTIP_FILL}
-        pointerDirection={pointerDirection}
-        pointerWidth={pointerSize}
-        pointerHeight={pointerSize}
-        lineJoin="round"
-        shadowColor={TOOLTIP_FILL}
-        shadowBlur={shadowBlur}
-        shadowOffsetX={1 * ttScale}
-        shadowOffsetY={1 * ttScale}
-        shadowOpacity={0.3}
-        cornerRadius={cornerRadius}
-      />
-      <Text
-        text={guestName}
-        fontFamily="'Work Sans', sans-serif"
-        fontSize={fontSize}
-        padding={padding}
-        fill={TOOLTIP_TEXT}
-        fontStyle="bold"
-        align="center"
-        verticalAlign="middle"
-      />
-    </Label>
+      text={guestName}
+      pointerDirection={pointerDirection}
+      stageScale={currentStageScale}
+    />
   );
 };
