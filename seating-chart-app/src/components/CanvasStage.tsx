@@ -35,6 +35,8 @@ import {
 import { ChairCircle } from "./ChairCircle"; // Assuming ChairCircle exports the group ref or similar
 import { CanvasTipsOverlay } from "./CanvasTipsOverlay"; // <-- ADD THIS IMPORT
 import { SeatTooltipLayer } from "./SeatTooltipLayer";
+import { useToast } from "@/components/ui/use-toast";
+import { BackgroundImageShape } from "./BackgroundImageShape";
 
 // Define props if needed later
 interface CanvasStageProps {
@@ -89,6 +91,23 @@ const VenueElementRenderer: React.FC<{
   );
 };
 
+// Background-image filter component — rendered in its own layer, first,
+// so it always sits behind the venue space, other venue elements, and
+// tables regardless of where in `shapes` it happens to be.
+const BackgroundImageRenderer: React.FC<{
+  shapeAtom: PrimitiveAtom<Shape>;
+}> = ({ shapeAtom }) => {
+  const shape = useAtomValue(shapeAtom);
+
+  if (shape.type !== "backgroundImage") {
+    return null;
+  }
+
+  return (
+    <BackgroundImageShape key={`background-${shape.id}`} shapeAtom={shapeAtom} />
+  );
+};
+
 export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null); // Ref for the container div
@@ -105,6 +124,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   const guests = useAtomValue(guestsAtom);
   const [initialFitDone, setInitialFitDone] = useState(false);
   const isVenueLocked = useAtomValue(venueSpaceLockedAtom); // Get venue lock state
+  const { toast } = useToast();
 
   const setBaseShapes = useSetAtom(baseShapesAtom); // Get setter for base shapes
 
@@ -196,6 +216,30 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
         minY = Math.min(minY, top);
         maxX = Math.max(maxX, right);
         maxY = Math.max(maxY, bottom);
+      } else if (shape.type === "backgroundImage") {
+        // Anchored at its top-left corner (x, y) and rotated around that
+        // same point (Konva's default pivot for a node with no offset) —
+        // unlike tables, which rotate around their center — so the AABB
+        // comes from rotating all four corners directly rather than the
+        // simpler half-width/half-height formula above.
+        const w = shape.naturalWidth * shape.scale;
+        const h = shape.naturalHeight * shape.scale;
+        const rotationRad = ((shape.rotation ?? 0) * Math.PI) / 180;
+        const cos = Math.cos(rotationRad);
+        const sin = Math.sin(rotationRad);
+        [
+          { x: 0, y: 0 },
+          { x: w, y: 0 },
+          { x: 0, y: h },
+          { x: w, y: h },
+        ].forEach((corner) => {
+          const cx = shape.x + corner.x * cos - corner.y * sin;
+          const cy = shape.y + corner.x * sin + corner.y * cos;
+          minX = Math.min(minX, cx);
+          minY = Math.min(minY, cy);
+          maxX = Math.max(maxX, cx);
+          maxY = Math.max(maxY, cy);
+        });
       }
     });
 
@@ -292,7 +336,19 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
       } else if (e.key === "Delete" && selectedShapeId) {
         // Delete the selected shape when Delete key is pressed. A
         // table's position lock (Table.locked) only blocks dragging, so
-        // it doesn't guard deletion here.
+        // it doesn't guard deletion here — but a locked background image
+        // (BackgroundImage.locked) still blocks it, same as it blocks
+        // drag/resize/rotate.
+        const selectedShape = baseShapes.find((s) => s.id === selectedShapeId);
+        if (selectedShape?.type === "backgroundImage" && selectedShape.locked) {
+          toast({
+            title: "Background Locked",
+            description: "Unlock the background image before deleting it.",
+            variant: "destructive",
+          });
+          e.preventDefault();
+          return;
+        }
         setBaseShapes((prevShapes) =>
           prevShapes.filter((shape) => shape.id !== selectedShapeId),
         );
@@ -458,6 +514,17 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
             zIndex: 10,
           }}
         >
+          {/* Background image layer — always painted first/behind
+              everything else, regardless of shapes array order. */}
+          <Layer name="background-image-layer">
+            {shapeAtoms.map((shapeAtom) => (
+              <BackgroundImageRenderer
+                key={`background-filter-${shapeAtom.toString()}`}
+                shapeAtom={shapeAtom}
+              />
+            ))}
+          </Layer>
+
           {/* First layer: Venue elements (background) */}
           <Layer name="venue-layer">
             {/* Render venue space shapes */}

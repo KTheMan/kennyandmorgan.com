@@ -20,8 +20,11 @@ import {
   ChevronDown,
   Circle,
   RectangleHorizontal,
+  ImagePlus,
+  Image as ImageIcon,
+  Trash2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/ThemeProvider";
 import {
@@ -33,17 +36,20 @@ import {
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAtom, useAtomValue } from "jotai";
 import { eventTitleAtom, editModeAtom } from "@/lib/atoms";
 import { useToast } from "@/components/ui/use-toast";
 import { setEditPin as setVenueEditPin, setViewPin as setVenueViewPin } from "@/lib/api/venues";
 import { tryVerifyAdminSession } from "@/lib/adminAuth";
+import type { BackgroundImage } from "@/types/seatingChart";
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
@@ -98,6 +104,12 @@ interface HeaderProps {
   saveStatus: SaveStatus;
   onToggleMobileSidebar: () => void;
   isMobileSidebarOpen: boolean;
+  backgroundImage: BackgroundImage | null;
+  onUploadBackgroundImage: (file: File) => void;
+  onSelectBackgroundImage: () => void;
+  onToggleBackgroundLock: () => void;
+  onSetBackgroundOpacity: (opacity: number) => void;
+  onRemoveBackgroundImage: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -121,10 +133,28 @@ export const Header: React.FC<HeaderProps> = ({
   saveStatus,
   onToggleMobileSidebar,
   isMobileSidebarOpen,
+  backgroundImage,
+  onUploadBackgroundImage,
+  onSelectBackgroundImage,
+  onToggleBackgroundLock,
+  onSetBackgroundOpacity,
+  onRemoveBackgroundImage,
 }) => {
   const [eventTitle, setEventTitle] = useAtom(eventTitleAtom);
   const editMode = useAtomValue(editModeAtom);
   const { toast } = useToast();
+  const backgroundFileInputRef = useRef<HTMLInputElement>(null);
+  // Live drag position for the opacity slider — the atom (and thus the
+  // full multi-MB venue payload, both the localStorage cache and the
+  // debounced server save) only gets updated once the user releases the
+  // slider, not on every intermediate tick.
+  const [opacityDraft, setOpacityDraft] = useState<number | null>(null);
+
+  const handleBackgroundFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (file) onUploadBackgroundImage(file);
+  };
 
   const [pinEntry, setPinEntry] = useState("");
   const [isPinSubmitting, setIsPinSubmitting] = useState(false);
@@ -425,6 +455,136 @@ export const Header: React.FC<HeaderProps> = ({
               </>
             )}
           </TooltipProvider>
+
+          {/* Background floorplan image — deliberately available even
+              before a Venue Space exists, since uploading the real
+              floorplan first is a natural way to trace the venue space
+              boundary on top of it. */}
+          <input
+            ref={backgroundFileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleBackgroundFileChange}
+            disabled={!editMode}
+          />
+          {!backgroundImage ? (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => backgroundFileInputRef.current?.click()}
+                    disabled={!editMode}
+                    className="shadow-sm"
+                  >
+                    <ImagePlus className="mr-2" size={16} strokeWidth={1.5} />
+                    Add Background Image
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="bg-card text-card-foreground border-border">
+                  <p>
+                    Upload a photo or scan of the real floorplan to trace
+                    tables over. JPEG, PNG, WebP, GIF, SVG, BMP, and AVIF
+                    all work.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!editMode}
+                  className="shadow-sm"
+                >
+                  <ImageIcon className="mr-2" size={16} strokeWidth={1.5} />
+                  Background
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-72 bg-card text-card-foreground border-border"
+                align="start"
+              >
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Background Image</span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={onSelectBackgroundImage}
+                      disabled={!editMode}
+                    >
+                      Edit Placement
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Opacity</span>
+                      <span className="tabular-nums">
+                        {Math.round(opacityDraft ?? backgroundImage.opacity * 100)}%
+                      </span>
+                    </div>
+                    <Slider
+                      value={[opacityDraft ?? backgroundImage.opacity * 100]}
+                      min={5}
+                      max={100}
+                      step={5}
+                      disabled={!editMode}
+                      onValueChange={([value]) => setOpacityDraft(value)}
+                      onValueCommit={([value]) => {
+                        onSetBackgroundOpacity(value / 100);
+                        setOpacityDraft(null);
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={onToggleBackgroundLock}
+                      disabled={!editMode}
+                      className="flex-1"
+                    >
+                      {backgroundImage.locked ? (
+                        <>
+                          <Unlock className="mr-2" size={14} strokeWidth={1.5} />
+                          Unlock
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="mr-2" size={14} strokeWidth={1.5} />
+                          Lock
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => backgroundFileInputRef.current?.click()}
+                      disabled={!editMode}
+                      className="flex-1"
+                    >
+                      <ImagePlus className="mr-2" size={14} strokeWidth={1.5} />
+                      Replace
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={onRemoveBackgroundImage}
+                      disabled={!editMode}
+                      aria-label="Remove background image"
+                    >
+                      <Trash2 size={14} strokeWidth={1.5} />
+                    </Button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
 
         {/* Item 3: Middle section - Event Title */}

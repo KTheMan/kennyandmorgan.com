@@ -1,10 +1,10 @@
 import { atom } from "jotai";
 import { splitAtom } from "jotai/utils";
-import { Table, VenueElement, Guest } from "../types/seatingChart";
+import { Table, VenueElement, Guest, BackgroundImage } from "../types/seatingChart";
 import type { VenueData } from "@shared/types/venue";
 
 // Define Shape union type and export it
-export type Shape = VenueElement | Table;
+export type Shape = VenueElement | Table | BackgroundImage;
 
 // --- Standard Atoms (No Longer Persisted Automatically) ---
 

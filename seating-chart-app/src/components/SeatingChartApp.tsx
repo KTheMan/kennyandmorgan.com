@@ -17,7 +17,9 @@ import {
   groupDropPreviewAtom,
 } from "@/lib/atoms";
 import { findTableUnderPoint, computeGroupSeatPlan, type StagePoint } from "@/lib/groupSeating";
-import { Guest, Table, VenueElement } from "../types/seatingChart";
+import { Guest, Table, VenueElement, BackgroundImage } from "../types/seatingChart";
+import { processBackgroundImageFile } from "@/lib/backgroundImageProcessing";
+import { snapToGrid } from "@/lib/gridSnap";
 import { GuestAssignmentModal } from "./GuestAssignmentModal";
 import { RenameElementModal } from "./RenameElementModal";
 import { TableSeatingModal } from "./TableSeatingModal";
@@ -814,6 +816,129 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     });
   };
 
+  // The one background-image shape, if any — a singleton by convention
+  // (uploading a new one replaces it rather than adding a second).
+  const backgroundImageShape = useMemo(
+    () => baseShapesValue.find((s): s is BackgroundImage => s.type === "backgroundImage"),
+    [baseShapesValue],
+  );
+
+  const handleUploadBackgroundImage = async (file: File) => {
+    if (!editMode) {
+      toast({
+        title: "View-Only Mode",
+        description: "Cannot add a background image while in view-only mode.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (
+      backgroundImageShape &&
+      !window.confirm(
+        "Replace the current background image with this one? This can't be undone.",
+      )
+    ) {
+      return;
+    }
+
+    let processed;
+    try {
+      processed = await processBackgroundImageFile(file);
+    } catch (error) {
+      toast({
+        title: "Couldn't Use That Image",
+        description: error instanceof Error ? error.message : "Try a different file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Default placement: fit inside the venue space if one exists (so it
+    // doesn't land absurdly tiny or huge relative to everything else),
+    // otherwise a reasonable fixed size near the top-left of the canvas.
+    const venueSpace = baseShapesValue.find(
+      (s): s is VenueElement => s.type === "venue" && s.title === "Venue Space",
+    );
+    let scale: number;
+    let x: number;
+    let y: number;
+    if (venueSpace) {
+      scale = Math.min(
+        venueSpace.width / processed.naturalWidth,
+        venueSpace.height / processed.naturalHeight,
+      );
+      x = venueSpace.x + (venueSpace.width - processed.naturalWidth * scale) / 2;
+      y = venueSpace.y + (venueSpace.height - processed.naturalHeight * scale) / 2;
+    } else {
+      const targetLongEdge = 600;
+      const longEdge = Math.max(processed.naturalWidth, processed.naturalHeight);
+      scale = targetLongEdge / longEdge;
+      x = 100;
+      y = 100;
+    }
+
+    const newShape: BackgroundImage = {
+      type: "backgroundImage",
+      id: backgroundImageShape?.id ?? `background-${Date.now()}-${nanoid(4)}`,
+      dataUrl: processed.dataUrl,
+      naturalWidth: processed.naturalWidth,
+      naturalHeight: processed.naturalHeight,
+      x: snapToGrid(x),
+      y: snapToGrid(y),
+      scale,
+      rotation: 0,
+      opacity: 1,
+      locked: false,
+    };
+
+    setBaseShapes((prevShapes) =>
+      backgroundImageShape
+        ? prevShapes.map((s) => (s.id === backgroundImageShape.id ? newShape : s))
+        : [newShape, ...prevShapes],
+    );
+    setSelectedShapeId(newShape.id);
+
+    toast({
+      title: backgroundImageShape ? "Background Image Replaced" : "Background Image Added",
+      description: processed.wasDownscaled
+        ? "It's selected — drag/resize into place. It was automatically shrunk to keep the chart fast to load."
+        : "It's selected — drag to reposition, or use a corner handle to resize (aspect ratio locked).",
+    });
+  };
+
+  const handleSelectBackgroundImage = () => {
+    if (backgroundImageShape) {
+      setSelectedShapeId(backgroundImageShape.id);
+    }
+  };
+
+  const handleToggleBackgroundLock = () => {
+    if (!editMode || !backgroundImageShape) return;
+    const nextLocked = !backgroundImageShape.locked;
+    setBaseShapes((prev) =>
+      prev.map((s) => (s.id === backgroundImageShape.id ? { ...s, locked: nextLocked } : s)),
+    );
+    if (nextLocked && selectedShapeIdValue === backgroundImageShape.id) {
+      setSelectedShapeId(null);
+    }
+  };
+
+  const handleSetBackgroundOpacity = (opacity: number) => {
+    if (!editMode || !backgroundImageShape) return;
+    setBaseShapes((prev) =>
+      prev.map((s) => (s.id === backgroundImageShape.id ? { ...s, opacity } : s)),
+    );
+  };
+
+  const handleRemoveBackgroundImage = () => {
+    if (!editMode || !backgroundImageShape) return;
+    if (!window.confirm("Remove the background image? This can't be undone.")) return;
+    setBaseShapes((prev) => prev.filter((s) => s.id !== backgroundImageShape.id));
+    if (selectedShapeIdValue === backgroundImageShape.id) {
+      setSelectedShapeId(null);
+    }
+  };
+
   const showAddVenueSpaceRequiredToast = () => {
     toast({
       title: "Action Unavailable",
@@ -855,6 +980,12 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         saveStatus={saveStatus}
         onToggleMobileSidebar={() => setIsSheetOpen((prev) => !prev)}
         isMobileSidebarOpen={isSheetOpen}
+        backgroundImage={backgroundImageShape ?? null}
+        onUploadBackgroundImage={handleUploadBackgroundImage}
+        onSelectBackgroundImage={handleSelectBackgroundImage}
+        onToggleBackgroundLock={handleToggleBackgroundLock}
+        onSetBackgroundOpacity={handleSetBackgroundOpacity}
+        onRemoveBackgroundImage={handleRemoveBackgroundImage}
       />
       <DndContext
         sensors={sensors}
