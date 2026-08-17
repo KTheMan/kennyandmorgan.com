@@ -5,7 +5,13 @@ import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-const ToastProvider = ToastPrimitives.Provider;
+const ToastProvider = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Provider>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Provider>
+>(({ duration = 4000, ...props }, ref) => (
+  <ToastPrimitives.Provider ref={ref} duration={duration} {...props} />
+));
+ToastProvider.displayName = ToastPrimitives.Provider.displayName;
 
 const ToastViewport = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Viewport>,
@@ -14,7 +20,7 @@ const ToastViewport = React.forwardRef<
   <ToastPrimitives.Viewport
     ref={ref}
     className={cn(
-      "fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:left-0 sm:right-auto lg:bottom-0 lg:top-auto lg:max-w-[22rem] lg:flex-col 2xl:max-w-sm",
+      "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-2 right-2 top-auto z-[100] flex max-h-[calc(100dvh-5rem)] flex-col gap-2 sm:left-4 sm:right-auto sm:w-[22rem] lg:max-w-[22rem] 2xl:max-w-sm",
       className,
     )}
     {...props}
@@ -42,11 +48,16 @@ const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
     VariantProps<typeof toastVariants>
->(({ className, variant, ...props }, ref) => {
+>(({ className, variant, duration, ...props }, ref) => {
   return (
     <ToastPrimitives.Root
       ref={ref}
-      className={cn(toastVariants({ variant }), className)}
+      className={cn(
+        toastVariants({ variant }),
+        "p-4 pr-9 sm:p-6 sm:pr-8",
+        className,
+      )}
+      duration={duration ?? (variant === "destructive" ? 8000 : undefined)}
       {...props}
     />
   );
@@ -79,9 +90,10 @@ const ToastClose = React.forwardRef<
       className,
     )}
     toast-close=""
+    aria-label="Dismiss notification"
     {...props}
   >
-    <X className="h-4 w-4" />
+    <X className="h-4 w-4" aria-hidden="true" />
   </ToastPrimitives.Close>
 ));
 ToastClose.displayName = ToastPrimitives.Close.displayName;

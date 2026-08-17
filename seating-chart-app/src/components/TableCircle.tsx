@@ -800,7 +800,10 @@ const TableCircleContent: React.FC<{
             table's own bottom edge (see BUTTON_RADIUS/controlsRowY math
             above), so it always sits inside the shape instead of
             spilling past it. */}
-        <Group x={0} y={0} visible={isTableHovered || isTransformTarget}>
+        {/* Table commands now live in the labeled DOM inspector. Keeping the
+            canvas focused on direct manipulation prevents tiny transient
+            buttons from competing with seats and transform handles. */}
+        <Group x={0} y={0} visible={false} listening={false}>
           {/* Minus/Plus total-capacity buttons — hidden for rectangle
               tables in "opposing" seating style, where the top/bottom
               counts (set independently via the settings button below)

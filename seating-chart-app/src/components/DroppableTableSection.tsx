@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useId, useMemo } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { Guest } from "../types/seatingChart";
 import { Separator } from "@/components/ui/separator";
@@ -6,7 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DraggableGuestListItem } from "./DraggableGuestListItem";
 import { DraggableGroupHeader } from "./DraggableGroupHeader";
-import { Users, Coffee, PlusCircle, Lock, Unlock } from "lucide-react";
+import {
+  Users,
+  Coffee,
+  PlusCircle,
+  Lock,
+  Unlock,
+  ChevronDown,
+  LocateFixed,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type GuestListEntry =
@@ -57,6 +65,9 @@ interface GroupData {
   tableCapacity?: number;
   seatingLocked?: boolean;
   guests: Guest[];
+  // Search narrows the rendered guests but the capacity badge should retain
+  // the table's true occupancy rather than reading, for example, 1/10.
+  totalGuestCount?: number;
 }
 
 interface DroppableTableSectionProps {
@@ -82,6 +93,12 @@ interface DroppableTableSectionProps {
   // which can't be locked.
   isSeatingLocked?: boolean;
   onToggleSeatingLock?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  collapseDisabled?: boolean;
+  onSelectTable?: (tableId: string) => void;
+  onSelectGuest?: (guest: Guest) => void;
+  showGuestJumpControls?: boolean;
 }
 
 export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
@@ -101,13 +118,20 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
   onToggleInput,
   isSeatingLocked = false,
   onToggleSeatingLock,
+  isCollapsed = false,
+  onToggleCollapsed,
+  collapseDisabled = false,
+  onSelectTable,
+  onSelectGuest,
+  showGuestJumpControls = false,
 }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: tableId,
     disabled: isSeatingLocked,
   });
   const totalSeats = groupData.tableCapacity || 0;
-  const occupiedSeats = groupData.guests.length;
+  const occupiedSeats = groupData.totalGuestCount ?? groupData.guests.length;
+  const contentId = useId();
 
   // Only cluster by party in Unassigned — once seated, guest order
   // reflects actual chair position and shouldn't be reshuffled by party.
@@ -133,42 +157,84 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
       onMouseEnter={() => onTableMouseEnter(tableId)}
       onMouseLeave={onTableMouseLeave}
     >
-      {/* Header */}
-      <div className="mb-2.5 flex min-w-0 items-center justify-between gap-2">
-        <h3 className="flex min-w-0 items-center font-medium text-sidebar-primary">
-          {groupData.tableNumber !== null ? (
-            <>
-              <span className="inline-flex items-center justify-center bg-sidebar-primary/10 text-sidebar-primary w-7 h-7 rounded-full mr-2 text-sm shadow-sm">
-                {groupData.tableNumber}
+      {/* The whole title/capacity row toggles the group, leaving the lock as
+          a separate control. The section itself remains a drop target while
+          collapsed, so compacting the list doesn't compromise drag-and-drop. */}
+      <div className={`${isCollapsed ? "mb-0" : "mb-2.5"} flex min-w-0 items-center gap-1.5`}>
+        <h3 className="min-w-0 flex-1">
+          <button
+            type="button"
+            className="group flex w-full min-w-0 items-center justify-between gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+            onClick={() => {
+              if (!collapseDisabled) onToggleCollapsed?.();
+            }}
+            onFocus={() => onTableMouseEnter(tableId)}
+            onBlur={onTableMouseLeave}
+            aria-expanded={!isCollapsed}
+            aria-controls={contentId}
+            aria-disabled={collapseDisabled}
+            title={collapseDisabled ? "Search results stay expanded" : undefined}
+          >
+          <span className="flex min-w-0 items-center font-medium text-sidebar-primary">
+            {groupData.tableNumber !== null ? (
+              <>
+                <span className="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sidebar-primary/10 text-sm text-sidebar-primary shadow-sm">
+                  {groupData.tableNumber}
+                </span>
+                <span className="truncate">
+                  {groupData.tableLabel ?? `Table ${groupData.tableNumber}`}
+                </span>
+              </>
+            ) : (
+              <span className="flex min-w-0 items-center text-sidebar-foreground/80">
+                <Coffee size={16} className="mr-1.5 shrink-0" strokeWidth={1.5} />
+                <span className="truncate">Unassigned Guests</span>
               </span>
-              <span className="truncate">
-                {groupData.tableLabel ?? `Table ${groupData.tableNumber}`}
-              </span>
-            </>
-          ) : (
-            <span className="flex min-w-0 items-center text-sidebar-foreground/80">
-              <Coffee size={16} className="mr-1.5 shrink-0" strokeWidth={1.5} />
-              <span className="truncate">Unassigned Guests</span>
-            </span>
-          )}
-        </h3>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {isUnassigned ? (
-            <Badge
-              variant="outline"
-              className="text-xs bg-sidebar-accent/10 text-sidebar-foreground/80 shadow-sm border-sidebar-border/40"
-            >
-              {occupiedSeats}
-            </Badge>
-          ) : (
-            <>
+            )}
+          </span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {isUnassigned ? (
               <Badge
                 variant="outline"
-                className="text-xs bg-sidebar-accent/10 text-sidebar-foreground/80 shadow-sm border-sidebar-border/40 px-2"
+                className="border-sidebar-border/40 bg-sidebar-accent/10 text-xs text-sidebar-foreground/80 shadow-sm"
+              >
+                {occupiedSeats}
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="border-sidebar-border/40 bg-sidebar-accent/10 px-2 text-xs text-sidebar-foreground/80 shadow-sm"
               >
                 <Users size={12} className="mr-1.5" strokeWidth={1.5} />
                 {occupiedSeats}/{totalSeats}
               </Badge>
+            )}
+            <ChevronDown
+              size={16}
+              aria-hidden="true"
+              className={`shrink-0 text-sidebar-foreground/55 transition-transform duration-200 ${
+                isCollapsed ? "-rotate-90" : "rotate-0"
+              }`}
+            />
+          </div>
+          </button>
+        </h3>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {!isUnassigned && onSelectTable && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 shrink-0 rounded-full text-sidebar-foreground/50 hover:bg-sidebar-accent/20 hover:text-sidebar-foreground"
+              onClick={() => onSelectTable(tableId)}
+              aria-label={`Show ${groupData.tableLabel ?? `Table ${groupData.tableNumber}`} on chart`}
+              title="Show table on chart"
+            >
+              <LocateFixed size={14} strokeWidth={1.75} aria-hidden="true" />
+            </Button>
+          )}
+          {!isUnassigned && (
+            <>
               {/* Seating lock — freezes this table's guest assignments
                   (add/remove/rearrange, both here and by dragging seat
                   nodes on the canvas). Independent of the table's own
@@ -206,69 +272,103 @@ export const DroppableTableSection: React.FC<DroppableTableSectionProps> = ({
           )}
         </div>
       </div>
-      <Separator className="mb-3 bg-sidebar-accent/20" />
 
-      {/* Guest List */}
-      <ul className="min-w-0 space-y-1">
-        {listEntries.map((entry) =>
-          entry.kind === "header" ? (
-            <DraggableGroupHeader
-              key={entry.key}
-              groupId={entry.groupId}
-              guests={entry.guests}
-              label={entry.label}
-            />
-          ) : (
-            <DraggableGuestListItem
-              key={entry.key}
-              guest={entry.guest}
-              onMouseEnter={onGuestMouseEnter}
-              onMouseLeave={onGuestMouseLeave}
-              onRemove={onGuestRemove}
-              disabled={isSeatingLocked}
-            />
-          ),
-        )}
-      </ul>
+      {!isCollapsed && (
+        <div id={contentId}>
+          <Separator className="mb-3 bg-sidebar-accent/20" />
 
-      {/* Add Guest Input / Button */}
-      {isUnassigned ? (
-        <div className="mt-3 min-w-0 text-center">
-          {isInputVisible ? (
-            <Input
-              type="text"
-              placeholder="Add Unassigned Guest..."
-              className="h-8 text-sm bg-sidebar-accent/20 border-sidebar-border/30 focus:border-primary/50 focus:bg-sidebar-accent/40 placeholder:text-sidebar-foreground/50"
-              value={newGuestName || ""}
-              onChange={(e) => onNewGuestNameChange(tableId, e.target.value)}
-              onKeyDown={(e) => onNewGuestSubmit(e, tableId)}
-              autoFocus
-            />
+          {/* Guest List */}
+          {listEntries.length > 0 ? (
+            <ul className="min-w-0 space-y-1">
+              {listEntries.map((entry) =>
+                entry.kind === "header" ? (
+                  <DraggableGroupHeader
+                    key={entry.key}
+                    groupId={entry.groupId}
+                    guests={entry.guests}
+                    label={entry.label}
+                  />
+                ) : (
+                  <DraggableGuestListItem
+                    key={entry.key}
+                    guest={entry.guest}
+                    onMouseEnter={onGuestMouseEnter}
+                    onMouseLeave={onGuestMouseLeave}
+                    onRemove={onGuestRemove}
+                    disabled={isSeatingLocked}
+                  />
+                ),
+              )}
+            </ul>
           ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full text-sidebar-foreground/80 border-sidebar-border/50 hover:bg-sidebar-accent/30 hover:text-sidebar-foreground"
-              onClick={onToggleInput}
-            >
-              <PlusCircle size={16} className="mr-2" />
-              Add Unassigned Guest
-            </Button>
+            <p className="py-1 text-sm text-sidebar-foreground/55">
+              No guests at this table.
+            </p>
+          )}
+
+          {showGuestJumpControls && onSelectGuest && groupData.guests.length > 0 && (
+            <div className="mt-2 space-y-1 border-t border-sidebar-border/25 pt-2">
+              {groupData.guests.map((guest) => (
+                <Button
+                  key={`show-${guest.id}`}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-full min-w-0 justify-start px-2 text-xs font-medium text-sidebar-primary hover:bg-sidebar-accent/25 hover:text-sidebar-primary"
+                  onClick={() => onSelectGuest(guest)}
+                >
+                  <LocateFixed
+                    size={13}
+                    className="mr-2 shrink-0"
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
+                  <span className="truncate">Show {guest.fullName} on chart</span>
+                </Button>
+              ))}
+            </div>
+          )}
+
+          {/* Add Guest Input / Button */}
+          {isUnassigned ? (
+            <div className="mt-3 min-w-0 text-center">
+              {isInputVisible ? (
+                <Input
+                  type="text"
+                  placeholder="Add Unassigned Guest..."
+                  className="h-8 bg-sidebar-accent/20 text-sm placeholder:text-sidebar-foreground/50 focus:border-primary/50 focus:bg-sidebar-accent/40"
+                  value={newGuestName || ""}
+                  onChange={(e) => onNewGuestNameChange(tableId, e.target.value)}
+                  onKeyDown={(e) => onNewGuestSubmit(e, tableId)}
+                  autoFocus
+                />
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-sidebar-border/50 text-sidebar-foreground/80 hover:bg-sidebar-accent/30 hover:text-sidebar-foreground"
+                  onClick={onToggleInput}
+                >
+                  <PlusCircle size={16} className="mr-2" />
+                  Add Unassigned Guest
+                </Button>
+              )}
+            </div>
+          ) : (
+            !isSeatingLocked && occupiedSeats < totalSeats && (
+              <div className="relative mt-2 min-w-0 pl-3 pr-1">
+                <Input
+                  type="text"
+                  placeholder="Add Guest..."
+                  className="h-8 bg-sidebar-accent/20 pr-2 text-sm placeholder:text-sidebar-foreground/50 focus:border-primary/50 focus:bg-sidebar-accent/40"
+                  value={newGuestName || ""}
+                  onChange={(e) => onNewGuestNameChange(tableId, e.target.value)}
+                  onKeyDown={(e) => onNewGuestSubmit(e, tableId)}
+                />
+              </div>
+            )
           )}
         </div>
-      ) : (
-        !isSeatingLocked && occupiedSeats < totalSeats && (
-          <div className="relative mt-2 min-w-0 pl-3 pr-1">
-            <Input
-              type="text"
-              placeholder="Add Guest..."
-              className="h-8 text-sm bg-sidebar-accent/20 border-sidebar-border/30 focus:border-primary/50 focus:bg-sidebar-accent/40 placeholder:text-sidebar-foreground/50 pr-2"
-              value={newGuestName || ""}
-              onChange={(e) => onNewGuestNameChange(tableId, e.target.value)}
-              onKeyDown={(e) => onNewGuestSubmit(e, tableId)}
-            />
-          </div>
-        )
       )}
     </div>
   );

@@ -66,6 +66,9 @@ interface HeaderProps {
   onViewPinChanged: () => void;
   onBackToManager: () => void;
   totalGuests: number;
+  assignedGuests: number;
+  unassignedGuests: number;
+  openSeats: number;
   onReset: () => void;
   onAddTable: (shape?: "round" | "rectangle") => void;
   onAddVenueElement: () => void;
@@ -76,6 +79,7 @@ interface HeaderProps {
   saveStatus: SaveStatus;
   onToggleMobileSidebar: () => void;
   isMobileSidebarOpen: boolean;
+  showMobileSidebarToggle?: boolean;
   backgroundImage: BackgroundImage | null;
   onUploadBackgroundImage: (file: File) => void;
   onSelectBackgroundImage: () => void;
@@ -94,6 +98,9 @@ export const Header: React.FC<HeaderProps> = ({
   onViewPinChanged,
   onBackToManager,
   totalGuests,
+  assignedGuests,
+  unassignedGuests,
+  openSeats,
   onReset,
   onAddTable,
   onAddVenueElement,
@@ -104,6 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
   saveStatus,
   onToggleMobileSidebar,
   isMobileSidebarOpen,
+  showMobileSidebarToggle = true,
   backgroundImage,
   onUploadBackgroundImage,
   onSelectBackgroundImage,
@@ -270,15 +278,17 @@ export const Header: React.FC<HeaderProps> = ({
       <TooltipProvider delayDuration={300}>
         <div className="relative z-10 flex min-w-0 flex-col gap-2.5">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={onToggleMobileSidebar}
-              className="h-9 w-9 shrink-0 border-accent/30 bg-accent/5 shadow-sm hover:border-accent/50 hover:bg-accent/15 lg:hidden"
-              aria-label={isMobileSidebarOpen ? "Close guest sidebar" : "Open guest sidebar"}
-            >
-              {isMobileSidebarOpen ? <X size={18} /> : <Menu size={18} />}
-            </Button>
+            {showMobileSidebarToggle && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={onToggleMobileSidebar}
+                className="h-9 w-9 shrink-0 border-accent/30 bg-accent/5 shadow-sm hover:border-accent/50 hover:bg-accent/15 lg:hidden"
+                aria-label={isMobileSidebarOpen ? "Close guest sidebar" : "Open guest sidebar"}
+              >
+                {isMobileSidebarOpen ? <X size={18} /> : <Menu size={18} />}
+              </Button>
+            )}
 
             <div className="flex shrink-0 items-center gap-2 text-card-foreground">
               <Armchair className="hidden text-primary/80 sm:block" size={22} strokeWidth={1.5} />
@@ -328,9 +338,20 @@ export const Header: React.FC<HeaderProps> = ({
                 </TooltipContent>
               </Tooltip>
 
-              <div className="hidden h-9 items-center rounded-md border border-border/30 bg-card/80 px-3 text-sm font-medium text-foreground/90 shadow-sm md:flex">
+              <div
+                className="hidden h-9 items-center rounded-md border border-border/30 bg-card/80 px-3 text-sm font-medium text-foreground/90 shadow-sm md:flex"
+                role="status"
+                aria-label={`${totalGuests} guests total, ${assignedGuests} seated, ${unassignedGuests} unassigned, ${openSeats} open seats`}
+              >
                 <Users size={16} className="mr-1.5 text-primary/80" strokeWidth={1.5} />
-                {totalGuests} {totalGuests === 1 ? "Guest" : "Guests"}
+                <span className="tabular-nums">{assignedGuests}</span>
+                <span className="ml-1 text-muted-foreground">seated</span>
+                <span className="mx-1.5 text-border">·</span>
+                <span className="tabular-nums">{unassignedGuests}</span>
+                <span className="ml-1 text-muted-foreground">unassigned</span>
+                <span className="mx-1.5 hidden text-border xl:inline">·</span>
+                <span className="hidden tabular-nums xl:inline">{openSeats}</span>
+                <span className="ml-1 hidden text-muted-foreground xl:inline">open seats</span>
               </div>
 
               {!isAdmin && (

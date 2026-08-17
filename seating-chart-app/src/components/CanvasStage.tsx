@@ -18,6 +18,8 @@ import {
   guestsAtom,
   stageScaleAtom,
   venueSpaceLockedAtom,
+  editModeAtom,
+  tableFocusRequestAtom,
 } from "../lib/atoms";
 import { PrimitiveAtom } from "jotai"; // Import atom types
 import { RESET } from "jotai/utils"; // Import RESET
@@ -129,6 +131,8 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   const [isMouseDownOnStage, setIsMouseDownOnStage] = useState(false);
   const [initialFitDone, setInitialFitDone] = useState(false);
   const isVenueLocked = useAtomValue(venueSpaceLockedAtom); // Get venue lock state
+  const editMode = useAtomValue(editModeAtom);
+  const tableFocusRequest = useAtomValue(tableFocusRequestAtom);
   const { toast } = useToast();
 
   const setBaseShapes = useSetAtom(baseShapesAtom); // Get setter for base shapes
@@ -138,6 +142,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   // seat registers here, occupied or not, so SeatTooltipLayer can look up
   // any hovered chair's live on-canvas position/rotation.
   const chairRefs = useRef<Record<string, Konva.Group>>({});
+  const handledTableFocusRequestId = useRef<number | null>(null);
 
   // Callback to register/unregister chair refs
   const registerChairRef = useCallback(
@@ -299,6 +304,59 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
     }
   }, [baseShapes, initialFitDone, fitContentToView]);
 
+  // Sidebar "Show on chart" actions must do more than select a table: they
+  // bring its linked table component into the usable viewport. On mobile the
+  // inspector overlays the lower half of the canvas, so focus lands in the
+  // upper visible region instead of underneath that panel.
+  useEffect(() => {
+    if (
+      !tableFocusRequest ||
+      !initialFitDone ||
+      stageSize.width <= 0 ||
+      stageSize.height <= 0
+    ) return;
+    if (handledTableFocusRequestId.current === tableFocusRequest.requestId) return;
+
+    const requestedTable = baseShapes.find(
+      (shape): shape is Table =>
+        shape.type === "table" && shape.id === tableFocusRequest.tableId,
+    );
+    if (!requestedTable) return;
+
+    const selectedTables = baseShapes.filter(
+      (shape): shape is Table =>
+        shape.type === "table" && selectedTableIds.has(shape.id),
+    );
+    const focusTables = selectedTables.some((table) => table.id === requestedTable.id)
+      ? selectedTables
+      : [requestedTable];
+    const focusCenter = focusTables.reduce(
+      (center, table) => ({ x: center.x + table.x, y: center.y + table.y }),
+      { x: 0, y: 0 },
+    );
+    focusCenter.x /= focusTables.length;
+    focusCenter.y /= focusTables.length;
+
+    const isMobileViewport = window.matchMedia("(max-width: 1023px)").matches;
+    const targetViewportPoint = {
+      x: stageSize.width / 2,
+      y: stageSize.height * (isMobileViewport ? 0.27 : 0.5),
+    };
+    setStagePos({
+      x: targetViewportPoint.x - focusCenter.x * stageInternalScale,
+      y: targetViewportPoint.y - focusCenter.y * stageInternalScale,
+    });
+    handledTableFocusRequestId.current = tableFocusRequest.requestId;
+  }, [
+    baseShapes,
+    initialFitDone,
+    selectedTableIds,
+    stageInternalScale,
+    stageSize.height,
+    stageSize.width,
+    tableFocusRequest,
+  ]);
+
   // Measure the canvas container without changing the user's viewport.
   // This effect intentionally has no shape/fit dependencies: recreating it
   // after every table mutation used to call fitContentToView again, which
@@ -308,11 +366,22 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
     const updateSize = () => {
       if (containerElement) {
         const { clientWidth, clientHeight } = containerElement;
-        setStageSize((current) =>
-          current.width === clientWidth && current.height === clientHeight
-            ? current
-            : { width: clientWidth, height: clientHeight },
-        );
+        setStageSize((current) => {
+          if (current.width === clientWidth && current.height === clientHeight) {
+            return current;
+          }
+          // Opening the semantic inspector changes the canvas viewport but
+          // should not shift the chart's world-space center or reset zoom.
+          // Translate by half the size delta so the same chart point remains
+          // centered in the newly available area.
+          if (current.width > 0 && current.height > 0) {
+            setStagePos((position) => ({
+              x: position.x + (clientWidth - current.width) / 2,
+              y: position.y + (clientHeight - current.height) / 2,
+            }));
+          }
+          return { width: clientWidth, height: clientHeight };
+        });
       }
     };
 
@@ -340,10 +409,18 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
   // Effect to listen for key presses (Alt and Delete)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      const isEditingText = Boolean(
+        target?.closest(
+          "input, textarea, select, [contenteditable='true'], [role='textbox']",
+        ),
+      );
       if (e.key === "Alt") {
         setIsAltPressed(true);
         e.preventDefault(); // Prevent browser menu focus
       } else if (
+        editMode &&
+        !isEditingText &&
         e.key === "Delete" &&
         (selectedShapeId || selectedTableIds.size > 0)
       ) {
@@ -380,19 +457,22 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
                   : [];
               }),
             );
-          if (restorations.length > 0) {
-            setGuests((prev) =>
-              restorations.reduce(
-                (current, restoration) =>
-                  restoreGuestsAfterSeatInsertions(
-                    current,
-                    restoration.tableId,
-                    restoration.indexes,
-                  ),
-                prev,
-              ),
+          setGuests((prev) => {
+            const restored = restorations.reduce(
+              (current, restoration) =>
+                restoreGuestsAfterSeatInsertions(
+                  current,
+                  restoration.tableId,
+                  restoration.indexes,
+                ),
+              prev,
             );
-          }
+            return restored.map((guest) =>
+              idsToDelete.has(guest.tableId)
+                ? { ...guest, tableId: "", chairIndex: null }
+                : guest,
+            );
+          });
         }
         setBaseShapes((prevShapes) =>
           prevShapes
@@ -446,6 +526,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
     };
   }, [
     baseShapes,
+    editMode,
     fitContentToView,
     selectedShapeId,
     selectedTableIds,
@@ -561,6 +642,10 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
     <div
       ref={containerRef}
       className="relative rounded-lg overflow-hidden border border-border/40 shadow-md h-full"
+      data-canvas-stage
+      data-stage-position-x={stagePos.x}
+      data-stage-position-y={stagePos.y}
+      data-stage-scale={stageInternalScale}
     >
       {/* Canvas background with texture */}
       <div className="absolute inset-0 bg-background texture-paper-light texture-paper-dark opacity-90 pointer-events-none"></div>

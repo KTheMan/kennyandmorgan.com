@@ -12,6 +12,7 @@ import {
 
 const LABEL_GAP_PX = 4;
 const COLLISION_PADDING_PX = 2;
+const OVERVIEW_LABEL_THRESHOLD = 0.72;
 
 interface Point {
   x: number;
@@ -56,11 +57,11 @@ export const getGuestLabelVariants = (fullName: string): string[] => {
   const first = parts[0];
   const last = parts[parts.length - 1];
   const short = parts.length > 1 ? `${first[0].toUpperCase()}. ${last}` : first;
-  const initials =
-    parts.length > 1
-      ? `${first[0]}${last[0]}`.toUpperCase()
-      : first[0].toUpperCase();
-  return [...new Set([normalized, short, initials])];
+  // Never fall back to initials: with a large guest list, repeated two-letter
+  // labels are visually indistinguishable. If a collision-safe name cannot
+  // fit, the overview keeps the occupancy marker and reveals the full name on
+  // hover/search instead.
+  return [...new Set([normalized, short])];
 };
 
 // This is intentionally slightly generous. The rendered callout lets Konva
@@ -191,6 +192,7 @@ export const planSeatLabels = (
   stageScale: number,
 ): PlannedSeatLabel[] => {
   const scale = Math.max(stageScale, 0.05);
+  if (scale < OVERVIEW_LABEL_THRESHOLD) return [];
   const guestsBySeat = new Map(
     guests
       .filter((guest) => guest.tableId && typeof guest.chairIndex === "number")
@@ -222,6 +224,13 @@ export const planSeatLabels = (
     });
 
   const padding = COLLISION_PADDING_PX / scale;
+  const fallbackLabelCounts = new Map<string, number>();
+  candidates.forEach((candidate) => {
+    const fallback = candidate.variants[candidate.variants.length - 1];
+    if (fallback) {
+      fallbackLabelCounts.set(fallback, (fallbackLabelCounts.get(fallback) ?? 0) + 1);
+    }
+  });
   const isClearOfFixedGeometry = (box: Box, candidate: SeatCandidate) =>
     !tables.some((table) => boxIntersectsTable(box, table, padding)) &&
     !chairs.some(
@@ -239,12 +248,12 @@ export const planSeatLabels = (
     box: Box;
   }> = [];
   candidates.forEach((candidate) => {
-    const initials = candidate.variants[candidate.variants.length - 1];
-    if (!initials) return;
-    const box = buildLabelBox(candidate, initials, scale);
+    const fallback = candidate.variants[candidate.variants.length - 1];
+    if (!fallback || fallbackLabelCounts.get(fallback) !== 1) return;
+    const box = buildLabelBox(candidate, fallback, scale);
     if (!isClearOfFixedGeometry(box, candidate)) return;
     if (accepted.some((label) => boxesIntersect(box, label.box, padding))) return;
-    accepted.push({ candidate, text: initials, box });
+    accepted.push({ candidate, text: fallback, box });
   });
 
   accepted.forEach((label, labelIndex) => {

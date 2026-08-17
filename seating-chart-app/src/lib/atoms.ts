@@ -50,6 +50,14 @@ export const isPanningAtom = atom<boolean>(false);
 // Atom to store the stage scale
 export const stageScaleAtom = atom<number>(1);
 
+// One-shot request used by sidebar search results to bring a table into the
+// visible canvas viewport. The monotonically increasing requestId means the
+// same table can be focused again after the user pans away.
+export const tableFocusRequestAtom = atom<{
+  tableId: string;
+  requestId: number;
+} | null>(null);
+
 // Atom to track if the venue space shape is locked
 export const venueSpaceLockedAtom = atom<boolean>(false);
 

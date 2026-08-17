@@ -13,28 +13,25 @@ import {
   venueSpaceLockedAtom,
   selectedShapeIdAtom,
   selectedTableIdsAtom,
+  tableSeatingModalStateAtom,
+  hoveredGuestIdAtom,
   eventTitleAtom,
   editModeAtom,
   groupDropPreviewAtom,
+  tableFocusRequestAtom,
 } from "@/lib/atoms";
 import { findTableUnderPoint, computeGroupSeatPlan, type StagePoint } from "@/lib/groupSeating";
 import { Guest, Table, VenueElement, BackgroundImage } from "../types/seatingChart";
 import { processBackgroundImageFile } from "@/lib/backgroundImageProcessing";
 import { snapToGrid } from "@/lib/gridSnap";
-import { getMergedSeatingMembers } from "@/lib/tableLinks";
 import { GuestAssignmentModal } from "./GuestAssignmentModal";
 import { RenameElementModal } from "./RenameElementModal";
 import { TableSeatingModal } from "./TableSeatingModal";
+import { TableInspector } from "./TableInspector";
 import { SortedCanvasStageAdapter } from "./SortedCanvasStageAdapter";
 import { useVenuePersistence, DEFAULT_VENUE_DATA, type VenueCredentials } from "@/hooks/useVenuePersistence";
 import type { VenueAccess } from "@/components/VenueGate";
 import { nanoid } from "nanoid";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import {
   DndContext,
   DragOverlay,
@@ -46,7 +43,17 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { UserCircle, UsersRound } from "lucide-react";
+import { LayoutGrid, UserCircle, UsersRound } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { findDuplicateTablePosition } from "@/lib/tablePlacement";
+import { compactGuestsAfterSeatRemoval, findSeatToRemove } from "@/lib/seatRemoval";
+import {
+  getMergedSeatingMembers,
+  getLinkedTableComponent,
+  restoreGuestsAfterSeatInsertions,
+  restoredCapacityAfterUnlink,
+  TABLE_EDGES,
+} from "@/lib/tableLinks";
 
 // The one droppable id for "anywhere on the canvas" — landing here means
 // resolving the exact chair from the drop point via Konva's own hit
@@ -58,6 +65,15 @@ const CANVAS_DROP_ZONE_ID = "canvas-drop-zone";
 // counting as "hovering that table" for a group drop — wide enough to
 // cover the ring of chairs sitting just outside the table edge.
 const GROUP_DROP_HIT_MARGIN = 40;
+const MIN_TABLE_CAPACITY = 6;
+const MAX_TABLE_CAPACITY = 12;
+
+const nextAvailableTableNumber = (preferred: number, tables: Table[]) => {
+  const usedNumbers = new Set(tables.map((table) => table.number));
+  let candidate = Math.max(1, preferred);
+  while (usedNumbers.has(candidate)) candidate += 1;
+  return candidate;
+};
 
 // dnd-kit's default auto-scroller considers every scrollable ancestor,
 // including the page and canvas shell. A sidebar drag should only ever
@@ -141,14 +157,8 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
   );
   const editMode = useAtomValue(editModeAtom);
 
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
-
-  useEffect(() => {
-    if (isDesktop && isSheetOpen) {
-      setIsSheetOpen(false);
-    }
-  }, [isDesktop, isSheetOpen]);
+  const [mobileTask, setMobileTask] = useState<"guests" | "layout">("guests");
 
   const saveStatus: SaveStatus = useMemo(() => {
     if (isSaving) return "saving";
@@ -167,7 +177,10 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
   const [isVenueLocked, setIsVenueLocked] = useAtom(venueSpaceLockedAtom);
   const [selectedShapeIdValue, setSelectedShapeId] =
     useAtom(selectedShapeIdAtom);
-  const setSelectedTableIds = useSetAtom(selectedTableIdsAtom);
+  const [selectedTableIds, setSelectedTableIds] = useAtom(selectedTableIdsAtom);
+  const setTableSeatingModalState = useSetAtom(tableSeatingModalStateAtom);
+  const setHoveredGuestId = useSetAtom(hoveredGuestIdAtom);
+  const setTableFocusRequest = useSetAtom(tableFocusRequestAtom);
   const [eventTitle] = useAtom(eventTitleAtom);
 
   const venueSpaceExists = useMemo(
@@ -180,6 +193,30 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
   const tablesValue = useMemo(
     () => baseShapesValue.filter((shape): shape is Table => shape.type === "table"),
     [baseShapesValue],
+  );
+  const assignedGuestCount = useMemo(
+    () => guestsValue.filter((guest) => Boolean(guest.tableId)).length,
+    [guestsValue],
+  );
+  const unassignedGuestCount = totalGuests - assignedGuestCount;
+  const openSeatCount = Math.max(
+    0,
+    tablesValue.reduce((total, table) => total + table.capacity, 0) - assignedGuestCount,
+  );
+  const selectedTable = useMemo(() => {
+    if (!selectedShapeIdValue) return null;
+    const shape = baseShapesValue.find(
+      (candidate): candidate is Table =>
+        candidate.type === "table" && candidate.id === selectedShapeIdValue,
+    );
+    return shape ?? null;
+  }, [baseShapesValue, selectedShapeIdValue]);
+  const selectedTableOccupiedSeats = useMemo(
+    () =>
+      selectedTable
+        ? guestsValue.filter((guest) => guest.tableId === selectedTable.id).length
+        : 0,
+    [guestsValue, selectedTable],
   );
   const occupiedChairIndexesByTable = useMemo(() => {
     const occupiedByTable = new Map<string, Set<number>>();
@@ -781,7 +818,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
       });
       return;
     }
-    const currentTableCounter = tableCounterValue;
+    const currentTableCounter = nextAvailableTableNumber(tableCounterValue, tablesValue);
     const newTable: Table =
       shape === "rectangle"
         ? {
@@ -807,7 +844,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
             capacity: 8,
           };
     setBaseShapes((prevShapes) => [...prevShapes, newTable]);
-    setTableCounter((prev) => prev + 1);
+    setTableCounter(currentTableCounter + 1);
 
     toast({
       title: "Table Added",
@@ -1055,6 +1092,258 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     }
   };
 
+  const handleClearTableSelection = useCallback(() => {
+    setSelectedTableIds(new Set());
+    setSelectedShapeId(null);
+  }, [setSelectedShapeId, setSelectedTableIds]);
+
+  const handleOpenSelectedTableLayout = useCallback(() => {
+    if (!selectedTable || selectedTable.shape !== "rectangle") return;
+    setTableSeatingModalState({ isOpen: true, tableId: selectedTable.id });
+  }, [selectedTable, setTableSeatingModalState]);
+
+  const handleRenameSelectedTable = useCallback(() => {
+    if (!selectedTable || !editMode) return;
+    const nextValue = window.prompt(
+      "Enter a table number",
+      String(selectedTable.number),
+    );
+    if (nextValue === null) return;
+    const nextNumber = Number.parseInt(nextValue.trim(), 10);
+    if (!Number.isInteger(nextNumber) || nextNumber < 1) {
+      toast({
+        title: "Invalid Table Number",
+        description: "Use a whole number greater than zero.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (
+      tablesValue.some(
+        (table) => table.id !== selectedTable.id && table.number === nextNumber,
+      )
+    ) {
+      toast({
+        title: "Table Number In Use",
+        description: `Table ${nextNumber} already exists.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    setBaseShapes((previous) =>
+      previous.map((shape) =>
+        shape.type === "table" && shape.id === selectedTable.id
+          ? { ...shape, number: nextNumber }
+          : shape,
+      ),
+    );
+    setTableCounter((current) => Math.max(current, nextNumber + 1));
+  }, [editMode, selectedTable, setBaseShapes, setTableCounter, tablesValue, toast]);
+
+  const handleSelectedTableCapacityChange = useCallback(
+    (change: -1 | 1) => {
+      if (!selectedTable || !editMode) return;
+      if (
+        selectedTable.shape === "rectangle" &&
+        selectedTable.seatingStyle === "opposing"
+      ) {
+        handleOpenSelectedTableLayout();
+        return;
+      }
+      if (change < 0) {
+        if (selectedTable.capacity <= MIN_TABLE_CAPACITY) return;
+        const removedChairIndex = findSeatToRemove(
+          guestsValue,
+          selectedTable.id,
+          0,
+          selectedTable.capacity,
+        );
+        if (removedChairIndex === null) {
+          toast({
+            title: "Cannot Reduce Capacity",
+            description: "Every seat is occupied. Remove a guest first.",
+            variant: "destructive",
+          });
+          return;
+        }
+        setGuestsValue((previous) =>
+          compactGuestsAfterSeatRemoval(
+            previous,
+            selectedTable.id,
+            removedChairIndex,
+          ),
+        );
+      }
+      setBaseShapes((previous) =>
+        previous.map((shape) =>
+          shape.type === "table" && shape.id === selectedTable.id
+            ? {
+                ...shape,
+                capacity: Math.max(
+                  MIN_TABLE_CAPACITY,
+                  Math.min(MAX_TABLE_CAPACITY, shape.capacity + change),
+                ),
+              }
+            : shape,
+        ),
+      );
+    },
+    [
+      editMode,
+      guestsValue,
+      handleOpenSelectedTableLayout,
+      selectedTable,
+      setBaseShapes,
+      setGuestsValue,
+      toast,
+    ],
+  );
+
+  const handleDuplicateSelectedTable = useCallback(() => {
+    if (!selectedTable || !editMode) return;
+    const venue = baseShapesValue.find(
+      (shape): shape is VenueElement =>
+        shape.type === "venue" && shape.title === "Venue Space",
+    );
+    const position = findDuplicateTablePosition(selectedTable, tablesValue, venue);
+    const duplicateNumber = nextAvailableTableNumber(tableCounterValue, tablesValue);
+    const duplicate: Table = {
+      ...selectedTable,
+      id: `table-${Date.now()}-${nanoid(4)}`,
+      number: duplicateNumber,
+      ...position,
+      locked: false,
+      seatingLocked: false,
+      linkedEdges: undefined,
+      linkedSeatingMerged: false,
+    };
+    setBaseShapes((previous) => [...previous, duplicate]);
+    setTableCounter(duplicateNumber + 1);
+    setSelectedTableIds(new Set([duplicate.id]));
+    setSelectedShapeId(duplicate.id);
+  }, [
+    baseShapesValue,
+    editMode,
+    selectedTable,
+    setBaseShapes,
+    setSelectedShapeId,
+    setSelectedTableIds,
+    setTableCounter,
+    tableCounterValue,
+    tablesValue,
+  ]);
+
+  const handleToggleSelectedTableLock = useCallback(() => {
+    if (!selectedTable || !editMode) return;
+    const linkedTables = getLinkedTableComponent(tablesValue, selectedTable.id);
+    const linkedIds = new Set(linkedTables.map((table) => table.id));
+    const nextLocked = !linkedTables.some((table) => table.locked === true);
+    setBaseShapes((previous) =>
+      previous.map((shape) =>
+        shape.type === "table" && linkedIds.has(shape.id)
+          ? { ...shape, locked: nextLocked }
+          : shape,
+      ),
+    );
+  }, [editMode, selectedTable, setBaseShapes, tablesValue]);
+
+  const handleDeleteSelectedTable = useCallback(() => {
+    if (!selectedTable || !editMode) return;
+    const idsToDelete =
+      selectedTableIds.size > 0
+        ? new Set(selectedTableIds)
+        : new Set([selectedTable.id]);
+    const tableLabel =
+      idsToDelete.size === 1 ? `Table ${selectedTable.number}` : `${idsToDelete.size} linked tables`;
+    if (!window.confirm(`Delete ${tableLabel}? Assigned guests will move to Unassigned.`)) {
+      return;
+    }
+
+    const restorations = tablesValue
+      .filter((table) => !idsToDelete.has(table.id))
+      .flatMap((table) =>
+        TABLE_EDGES.flatMap((edge) => {
+          const link = table.linkedEdges?.[edge];
+          return link && idsToDelete.has(link.tableId)
+            ? [{ tableId: table.id, indexes: link.removedSeatIndexes ?? [] }]
+            : [];
+        }),
+      );
+    setGuestsValue((previous) => {
+      const restored = restorations.reduce(
+        (current, restoration) =>
+          restoreGuestsAfterSeatInsertions(
+            current,
+            restoration.tableId,
+            restoration.indexes,
+          ),
+        previous,
+      );
+      return restored.map((guest) =>
+        idsToDelete.has(guest.tableId)
+          ? { ...guest, tableId: "", chairIndex: null }
+          : guest,
+      );
+    });
+    setBaseShapes((previous) =>
+      previous
+        .filter((shape) => !idsToDelete.has(shape.id))
+        .map((shape) => {
+          if (shape.type !== "table") return shape;
+          const linkedEdge = TABLE_EDGES.find((edge) => {
+            const linkedId = shape.linkedEdges?.[edge]?.tableId;
+            return linkedId ? idsToDelete.has(linkedId) : false;
+          });
+          if (!linkedEdge) return shape;
+          const linkedEdges = { ...shape.linkedEdges };
+          delete linkedEdges[linkedEdge];
+          return {
+            ...shape,
+            ...restoredCapacityAfterUnlink(shape, linkedEdge),
+            linkedEdges,
+            linkedSeatingMerged: false,
+          };
+        }),
+    );
+    handleClearTableSelection();
+  }, [
+    editMode,
+    handleClearTableSelection,
+    selectedTable,
+    selectedTableIds,
+    setBaseShapes,
+    setGuestsValue,
+    tablesValue,
+  ]);
+
+  const handleFocusTableFromSidebar = useCallback(
+    (tableId: string) => {
+      const table = tablesValue.find((candidate) => candidate.id === tableId);
+      if (!table) return;
+      const componentIds = new Set(
+        getLinkedTableComponent(tablesValue, table.id).map((member) => member.id),
+      );
+      setSelectedTableIds(componentIds);
+      setSelectedShapeId(table.id);
+      setMobileTask("layout");
+      setTableFocusRequest((current) => ({
+        tableId: table.id,
+        requestId: (current?.requestId ?? 0) + 1,
+      }));
+    },
+    [setSelectedShapeId, setSelectedTableIds, setTableFocusRequest, tablesValue],
+  );
+
+  const handleFocusGuestFromSidebar = useCallback(
+    (guest: Guest) => {
+      if (!guest.tableId) return;
+      setHoveredGuestId(guest.id);
+      handleFocusTableFromSidebar(guest.tableId);
+      window.setTimeout(() => setHoveredGuestId(null), 2500);
+    },
+    [handleFocusTableFromSidebar, setHoveredGuestId],
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -1075,6 +1364,9 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         onViewPinChanged={onViewPinChanged}
         onBackToManager={onBackToManager}
         totalGuests={totalGuests}
+        assignedGuests={assignedGuestCount}
+        unassignedGuests={unassignedGuestCount}
+        openSeats={openSeatCount}
         onReset={handleReset}
         onAddTable={handleAddTable}
         onAddVenueElement={handleAddVenueElement}
@@ -1083,8 +1375,9 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         isVenueSpaceLocked={isVenueLocked}
         onToggleVenueLock={handleToggleVenueLock}
         saveStatus={saveStatus}
-        onToggleMobileSidebar={() => setIsSheetOpen((prev) => !prev)}
-        isMobileSidebarOpen={isSheetOpen}
+        onToggleMobileSidebar={() => setMobileTask((current) => current === "guests" ? "layout" : "guests")}
+        isMobileSidebarOpen={mobileTask === "guests"}
+        showMobileSidebarToggle={false}
         backgroundImage={backgroundImageShape ?? null}
         onUploadBackgroundImage={handleUploadBackgroundImage}
         onSelectBackgroundImage={handleSelectBackgroundImage}
@@ -1104,34 +1397,53 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
           threshold: { x: 0.15, y: 0.12 },
         }}
       >
-        <div className="flex flex-1 overflow-hidden">
-          {isDesktop ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {!isDesktop && (
+            <div
+              className="grid grid-cols-2 gap-1 border-b border-border/50 bg-card/95 p-2"
+              role="tablist"
+              aria-label="Planner task"
+              data-mobile-task-switcher
+            >
+              <Button
+                type="button"
+                role="tab"
+                aria-selected={mobileTask === "guests"}
+                variant={mobileTask === "guests" ? "default" : "ghost"}
+                className="h-10"
+                onClick={() => setMobileTask("guests")}
+              >
+                <UsersRound className="mr-2 h-4 w-4" aria-hidden="true" />
+                Guests
+              </Button>
+              <Button
+                type="button"
+                role="tab"
+                aria-selected={mobileTask === "layout"}
+                variant={mobileTask === "layout" ? "default" : "ghost"}
+                className="h-10"
+                onClick={() => setMobileTask("layout")}
+              >
+                <LayoutGrid className="mr-2 h-4 w-4" aria-hidden="true" />
+                Layout
+              </Button>
+            </div>
+          )}
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+          {(isDesktop || mobileTask === "guests") && (
             <Sidebar
               guests={guestsValue}
               tables={tablesValue}
               isAdmin={isAdmin}
+              isInSheet={!isDesktop}
               flashErrorTableId={flashErrorTableId}
+              onSelectTable={handleFocusTableFromSidebar}
+              onSelectGuest={handleFocusGuestFromSidebar}
             />
-          ) : (
-            <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-              <SheetContent
-                side="left"
-                className="w-72 overflow-hidden p-0 sm:w-80"
-              >
-                <SheetHeader className="p-5 pb-2 sr-only">
-                  <SheetTitle>Guest List and Tables</SheetTitle>
-                </SheetHeader>
-                <Sidebar
-                  guests={guestsValue}
-                  tables={tablesValue}
-                  isAdmin={isAdmin}
-                  isInSheet={true}
-                  flashErrorTableId={flashErrorTableId}
-                />
-              </SheetContent>
-            </Sheet>
           )}
-          <div className="min-w-0 flex-1 flex flex-col p-4 md:p-5 border-l border-border/40 bg-background/50">
+          {(isDesktop || mobileTask === "layout") && (
+          <div className="relative flex min-w-0 flex-1 overflow-hidden border-l border-border/40 bg-background/50">
+            <div className="min-w-0 flex-1 flex flex-col p-3 md:p-5">
             <div
               ref={setCanvasRefs}
               className={`flex-1 relative rounded-lg border shadow-md overflow-hidden transition-colors ${
@@ -1139,10 +1451,41 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
                   ? "border-primary ring-2 ring-primary/40"
                   : "border-border/40"
               }`}
-              tabIndex={1}
+              tabIndex={0}
+              role="region"
+              aria-label="Interactive seating layout. Select a table to open its labeled controls."
             >
               <SortedCanvasStageAdapter shapeAtoms={shapeAtoms} />
             </div>
+            </div>
+            {selectedTable && editMode && (
+              <div
+                className={isDesktop
+                  ? "w-80 shrink-0 overflow-y-auto border-l border-border/50 bg-card/70 p-3"
+                  : "absolute inset-x-3 bottom-3 z-30 max-h-[48%] overflow-y-auto"
+                }
+              >
+                <TableInspector
+                  table={selectedTable}
+                  occupiedSeats={selectedTableOccupiedSeats}
+                  onClearSelection={handleClearTableSelection}
+                  onOpenSeatingLayout={handleOpenSelectedTableLayout}
+                  onRename={handleRenameSelectedTable}
+                  onDecreaseCapacity={() => handleSelectedTableCapacityChange(-1)}
+                  onIncreaseCapacity={() => handleSelectedTableCapacityChange(1)}
+                  canDecreaseCapacity={
+                    selectedTable.capacity > MIN_TABLE_CAPACITY &&
+                    selectedTableOccupiedSeats < selectedTable.capacity
+                  }
+                  canIncreaseCapacity={selectedTable.capacity < MAX_TABLE_CAPACITY}
+                  onDuplicate={handleDuplicateSelectedTable}
+                  onTogglePositionLock={handleToggleSelectedTableLock}
+                  onDelete={handleDeleteSelectedTable}
+                />
+              </div>
+            )}
+          </div>
+          )}
           </div>
         </div>
 

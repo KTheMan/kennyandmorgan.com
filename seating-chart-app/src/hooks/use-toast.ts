@@ -3,7 +3,9 @@ import * as React from "react";
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 
 const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 1000000;
+// Radix controls how long an open toast is announced and displayed. Once it
+// closes, retain it only long enough for the exit animation to finish.
+const TOAST_REMOVE_DELAY = 1000;
 
 type ToasterToast = ToastProps & {
   id: string;

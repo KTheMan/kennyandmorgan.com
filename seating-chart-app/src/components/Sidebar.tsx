@@ -24,6 +24,8 @@ import {
   Info,
   Table2 as TableIcon,
   RefreshCw,
+  Search,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -54,7 +56,18 @@ interface SidebarProps {
   // state lives in SeatingChartApp — this is just the one piece Sidebar
   // still needs to render the "table is full" flash.
   flashErrorTableId: string | null;
+  onSelectTable?: (tableId: string) => void;
+  onSelectGuest?: (guest: Guest) => void;
 }
+
+type SidebarFilter = "all" | "unassigned" | "open" | "locked";
+
+const SIDEBAR_FILTERS: Array<{ id: SidebarFilter; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "unassigned", label: "Unassigned" },
+  { id: "open", label: "Open seats" },
+  { id: "locked", label: "Locked" },
+];
 
 export const Sidebar: React.FC<SidebarProps> = ({
   guests,
@@ -62,6 +75,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isAdmin,
   isInSheet,
   flashErrorTableId,
+  onSelectTable,
+  onSelectGuest,
 }) => {
   const store = useStore();
   const setHoveredGuestId = useSetAtom(hoveredGuestIdAtom);
@@ -75,6 +90,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isSyncingGuests, setIsSyncingGuests] = useState(false);
   const { toast } = useToast();
   const [showUnassignedInput, setShowUnassignedInput] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState<SidebarFilter>("all");
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(
+    {},
+  );
 
   const scrollAreaRootRef = useRef<HTMLDivElement>(null);
   const scrollContentWrapperRef = useRef<HTMLDivElement>(null);
@@ -202,6 +222,70 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const totalGuestCount = guests.length;
   const assignedGuestCount = guests.filter((g) => g.tableId).length;
+  const unassignedGuestCount = totalGuestCount - assignedGuestCount;
+  const totalSeatCount = tables.reduce((sum, table) => sum + table.capacity, 0);
+  const openSeatCount = Math.max(0, totalSeatCount - assignedGuestCount);
+
+  const filteredGuestGroups = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+
+    return Object.entries(groupedGuests).flatMap(([tableId, groupData]) => {
+      const isUnassigned = groupData.tableNumber === null;
+      const matchesFilter =
+        activeFilter === "all" ||
+        (activeFilter === "unassigned" && isUnassigned) ||
+        (activeFilter === "open" &&
+          !isUnassigned &&
+          groupData.guests.length < (groupData.tableCapacity ?? 0)) ||
+        (activeFilter === "locked" && groupData.seatingLocked === true);
+
+      if (!matchesFilter) return [];
+      if (!query) {
+        return [{ tableId, groupData, matchType: "none" as const }];
+      }
+
+      const tableSearchText = [
+        groupData.tableLabel,
+        groupData.tableNumber === null
+          ? "unassigned guests"
+          : `table ${groupData.tableNumber}`,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase();
+
+      if (tableSearchText.includes(query)) {
+        return [{ tableId, groupData, matchType: "table" as const }];
+      }
+
+      const matchingGuests = groupData.guests.filter((guest) =>
+        guest.fullName.toLocaleLowerCase().includes(query),
+      );
+      if (matchingGuests.length === 0) return [];
+
+      return [
+        {
+          tableId,
+          groupData: {
+            ...groupData,
+            guests: matchingGuests,
+            totalGuestCount: groupData.guests.length,
+          },
+          matchType: "guest" as const,
+        },
+      ];
+    });
+  }, [activeFilter, groupedGuests, searchQuery]);
+
+  const toggleGroupCollapsed = useCallback(
+    (tableId: string, isUnassigned: boolean) => {
+      setCollapsedGroups((current) => ({
+        ...current,
+        [tableId]: !(current[tableId] ?? !isUnassigned),
+      }));
+    },
+    [],
+  );
 
   const findNextAvailableSeat = (
     currentGuests: Guest[],
@@ -443,7 +527,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <div className={sidebarRootClasses} data-seating-sidebar>
       <div className="absolute inset-0 texture-elegant opacity-90 pointer-events-none"></div>
       <div
-        className={`relative z-10 border-b border-sidebar-border/50 bg-sidebar-accent/5 p-4 shadow-sm ${isInSheet ? "pr-12" : ""}`}
+        className={`relative z-20 border-b border-sidebar-border/50 bg-sidebar p-4 shadow-sm ${isInSheet ? "pr-12" : ""}`}
       >
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-medium text-sidebar-foreground">
@@ -456,6 +540,71 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <TableIcon size={14} className="mr-1.5" strokeWidth={1.5} />
             {tables.length} Table{tables.length === 1 ? "" : "s"}
           </Badge>
+        </div>
+        {isInSheet && <p className="mt-2 text-sm text-sidebar-foreground/65" aria-live="polite">
+          <span className="font-medium text-sidebar-foreground">
+            {assignedGuestCount} seated
+          </span>
+          <span aria-hidden="true"> · </span>
+          {unassignedGuestCount} unassigned
+          <span aria-hidden="true"> · </span>
+          {openSeatCount} open seat{openSeatCount === 1 ? "" : "s"}
+        </p>}
+
+        <div className="relative mt-3">
+          <Search
+            size={16}
+            strokeWidth={1.75}
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sidebar-foreground/50"
+          />
+          <Input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Find a guest or table…"
+            aria-label="Find a guest or table"
+            className="h-9 border-sidebar-border/50 bg-sidebar-accent/10 pl-9 pr-9 text-sm text-sidebar-foreground placeholder:text-sidebar-foreground/45 focus-visible:ring-sidebar-ring"
+          />
+          {searchQuery && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search"
+              className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-sidebar-foreground/55 hover:bg-sidebar-accent/20 hover:text-sidebar-foreground"
+            >
+              <X size={14} aria-hidden="true" />
+            </Button>
+          )}
+        </div>
+
+        <div
+          className="mt-2 grid grid-cols-4 gap-1"
+          role="group"
+          aria-label="Filter guest list"
+        >
+          {SIDEBAR_FILTERS.map((filter) => {
+            const isActive = activeFilter === filter.id;
+            return (
+              <Button
+                key={filter.id}
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-pressed={isActive}
+                onClick={() => setActiveFilter(filter.id)}
+                className={`h-8 min-w-0 px-1 text-[11px] font-medium sm:text-xs ${
+                  isActive
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm hover:bg-sidebar-primary/90 hover:text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground/65 hover:bg-sidebar-accent/20 hover:text-sidebar-foreground"
+                }`}
+              >
+                <span className="truncate">{filter.label}</span>
+              </Button>
+            );
+          })}
         </div>
         {isAdmin && (
           <Button
@@ -492,6 +641,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </p>
           </div>
         </div>
+      ) : filteredGuestGroups.length === 0 ? (
+        <div className="relative z-10 flex flex-1 items-center justify-center px-6 text-center text-sidebar-foreground/65">
+          <div>
+            <Search
+              size={30}
+              className="mx-auto mb-3 text-sidebar-primary/45"
+              strokeWidth={1.5}
+              aria-hidden="true"
+            />
+            <p className="font-medium text-sidebar-foreground">No matches found</p>
+            <p className="mt-1 text-sm leading-relaxed">
+              Try another guest or table name, or change the filter.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3 border-sidebar-border/50"
+              onClick={() => {
+                setSearchQuery("");
+                setActiveFilter("all");
+              }}
+            >
+              Clear search and filters
+            </Button>
+          </div>
+        </div>
       ) : (
         <ScrollArea
           ref={scrollAreaRootRef}
@@ -501,8 +677,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ref={scrollContentWrapperRef}
             className="w-full min-w-0 max-w-full space-y-3 p-4"
           >
-            {Object.entries(groupedGuests).map(([tableId, groupData]) => {
+            {filteredGuestGroups.map(({ tableId, groupData, matchType }) => {
               const isUnassigned = groupData.tableNumber === null;
+              const isSearching = searchQuery.trim().length > 0;
+              const isCollapsed = isSearching
+                ? false
+                : (collapsedGroups[tableId] ?? !isUnassigned);
               return (
                 <DroppableTableSection
                   key={tableId}
@@ -534,6 +714,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       ? undefined
                       : () => handleToggleSeatingLock(tableId)
                   }
+                  isCollapsed={isCollapsed}
+                  collapseDisabled={isSearching}
+                  onToggleCollapsed={() =>
+                    toggleGroupCollapsed(tableId, isUnassigned)
+                  }
+                  onSelectTable={onSelectTable}
+                  onSelectGuest={onSelectGuest}
+                  showGuestJumpControls={matchType === "guest" && !isUnassigned}
                 />
               );
             })}
