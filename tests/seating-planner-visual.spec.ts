@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { findDuplicateTablePosition } from "../seating-chart-app/src/lib/tablePlacement";
+import { planSeatLabels } from "../seating-chart-app/src/lib/seatLabels";
 
 const APP_URL = "http://127.0.0.1:45174/?v=opposing-100-regression";
 const MOCK_SUPABASE_URL = "http://mock-supabase.test";
@@ -143,18 +144,21 @@ function buildVenueData(): VenueData {
   };
 }
 
-async function installMockApi(page: Page) {
+async function installMockApi(page: Page, options: { admin?: boolean } = {}) {
   let venueData = buildVenueData();
+  const isAdmin = options.admin !== false;
 
-  await page.addInitScript(() => {
-    window.localStorage.setItem("km_access_token", "visual-regression-admin");
+  await page.addInitScript(({ admin }) => {
+    if (admin) {
+      window.localStorage.setItem("km_access_token", "visual-regression-admin");
+    }
     window.localStorage.setItem("seating-chart.canvas-tips-dismissed", "true");
     let seed = 42;
     Math.random = () => {
       seed = (seed * 1_664_525 + 1_013_904_223) >>> 0;
       return seed / 4_294_967_296;
     };
-  });
+  }, { admin: isAdmin });
 
   await page.route("**/site.config.json", async (route) => {
     await route.fulfill({
@@ -168,7 +172,7 @@ async function installMockApi(page: Page) {
   await page.route(`${MOCK_SUPABASE_URL}/rest/v1/rpc/get_access_session`, async (route) => {
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({ accessLevel: "admin" }),
+      body: JSON.stringify({ accessLevel: isAdmin ? "admin" : "none" }),
     });
   });
 
@@ -225,13 +229,24 @@ async function installMockApi(page: Page) {
   };
 }
 
-async function openPlanner(page: Page, options: { hideToasts?: boolean } = {}) {
-  const state = await installMockApi(page);
+async function openPlanner(
+  page: Page,
+  options: { hideToasts?: boolean; expectCanvas?: boolean; admin?: boolean } = {},
+) {
+  const state = await installMockApi(page, { admin: options.admin });
   await page.goto(APP_URL, { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Seating Chart" })).toBeVisible();
-  await expect(page.getByText("100 Guests", { exact: true })).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1280) < 1024) {
+    await expect(page.getByText("96 seated", { exact: true }).first()).toBeVisible();
+  } else {
+    await expect(
+      page.getByRole("status", { name: /100 guests total, 96 seated, 4 unassigned, 4 open seats/i }),
+    ).toBeVisible();
+  }
   await expect(page.getByText("10 Tables", { exact: true })).toBeVisible();
-  await expect(page.locator(".konvajs-content")).toBeVisible();
+  if (options.expectCanvas !== false) {
+    await expect(page.locator(".konvajs-content")).toBeVisible();
+  }
   const toastRule = options.hideToasts === false
     ? ""
     : "[data-radix-toast-viewport], [data-sonner-toaster] { display: none !important; }";
@@ -377,19 +392,36 @@ test.describe("duplicate table placement geometry", () => {
   });
 });
 
+test.describe("progressive seat labels", () => {
+  test("removes ambiguous initials from the fitted overview", () => {
+    const venueData = buildVenueData();
+    const tables = venueData.shapes.filter(
+      (shape): shape is TableShape => shape.type === "table",
+    );
+
+    expect(planSeatLabels(tables, venueData.guests, 0.59)).toEqual([]);
+
+    const detailed = planSeatLabels(tables, venueData.guests, 1.25);
+    expect(detailed.length).toBeGreaterThan(0);
+    expect(detailed.every((label) => !/^[A-Z]{1,2}$/.test(label.text))).toBe(true);
+    expect(new Set(detailed.map((label) => label.text)).size).toBe(detailed.length);
+  });
+});
+
 function canvasShell(page: Page): Locator {
-  return page.locator('div[tabindex="1"]').first();
+  return page.getByRole("region", { name: /Interactive seating layout/i });
 }
 
 async function worldToPage(page: Page, x: number, y: number) {
-  const box = await canvasShell(page).boundingBox();
+  const stage = page.locator("[data-canvas-stage]");
+  const box = await stage.boundingBox();
   if (!box) throw new Error("Canvas did not have a bounding box");
-
-  // CanvasStage fits the 1400x840 venue with 50 world-pixel padding.
-  const scale = Math.min(box.width / 1500, box.height / 940, 1);
+  const positionX = Number(await stage.getAttribute("data-stage-position-x"));
+  const positionY = Number(await stage.getAttribute("data-stage-position-y"));
+  const scale = Number(await stage.getAttribute("data-stage-scale"));
   return {
-    x: box.x + box.width / 2 + (x - 700) * scale,
-    y: box.y + box.height / 2 + (y - 420) * scale,
+    x: box.x + positionX + x * scale,
+    y: box.y + positionY + y * scale,
     scale,
   };
 }
@@ -453,49 +485,143 @@ test.describe("Seating planner — 100 guest opposing-rectangle visual regressio
     await page.getByLabel("Hide canvas tips").click();
   });
 
+  test("keeps view-only help limited to navigation and seat interpretation", async ({ page }) => {
+    const state = await openPlanner(page, { admin: false });
+    await expect(page.getByText("View only", { exact: true })).toBeVisible();
+
+    await page.getByLabel("Show canvas tips").click();
+    const tips = page.getByRole("region", { name: "Canvas tips" });
+    await expect(tips).toContainText("Alt + Mouse");
+    await expect(tips).toContainText("Scroll");
+    await expect(tips).not.toContainText("multi-select");
+    await expect(tips).not.toContainText("rename elements");
+    await expect(tips).not.toContainText("Delete");
+
+    await page.getByRole("searchbox", { name: "Find a guest or table" }).fill("Guest 055");
+    await page.getByRole("button", { name: "Show Guest 055 on chart" }).click();
+    await page.keyboard.press("Delete");
+    await page.waitForTimeout(800);
+    expect(state.current().shapes.filter((shape) => shape.type === "table")).toHaveLength(10);
+  });
+
+  test("searches, filters, collapses, and jumps from guests to labeled table controls", async ({ page }) => {
+    const state = await openPlanner(page);
+
+    const search = page.getByRole("searchbox", { name: "Find a guest or table" });
+    await search.fill("Guest 055");
+    const jumpToGuest = page.getByRole("button", { name: "Show Guest 055 on chart" });
+    await expect(jumpToGuest).toBeVisible();
+    await jumpToGuest.click();
+
+    const inspector = page.locator("[data-table-inspector]");
+    await expect(inspector.getByRole("heading", { name: "Table 6" })).toBeVisible();
+    await expect(inspector.getByRole("button", { name: "Duplicate table" })).toBeVisible();
+    await expect(inspector.getByRole("button", { name: "Lock position" })).toBeVisible();
+    await expect(inspector.getByRole("button", { name: "Delete table" })).toBeVisible();
+    await expect.poll(async () => {
+      const point = await worldToPage(page, 160, 605);
+      const box = await canvasShell(page).boundingBox();
+      if (!box) return false;
+      return (
+        point.x >= box.x + box.width * 0.3 &&
+        point.x <= box.x + box.width * 0.7 &&
+        point.y >= box.y + box.height * 0.3 &&
+        point.y <= box.y + box.height * 0.7
+      );
+    }).toBe(true);
+
+    await search.focus();
+    await page.keyboard.press("Delete");
+    await page.waitForTimeout(800);
+    expect(state.current().shapes.filter((shape) => shape.type === "table")).toHaveLength(10);
+
+    page.once("dialog", (dialog) => dialog.accept("11"));
+    await inspector.getByRole("button", { name: "Rename table" }).click();
+    await expect(inspector.getByRole("heading", { name: "Table 11" })).toBeVisible();
+    page.once("dialog", (dialog) => dialog.accept("6"));
+    await inspector.getByRole("button", { name: "Rename table" }).click();
+    await expect(inspector.getByRole("heading", { name: "Table 6" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Clear search" }).click();
+    await page.getByRole("button", { name: "Open seats", pressed: false }).click();
+    await expect(page.getByText("Table 1", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Table 2", { exact: true })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "All", pressed: false }).click();
+    const tableOneToggle = page.getByRole("button", { name: /Table 1.*6\/10/i }).first();
+    await expect(tableOneToggle).toHaveAttribute("aria-expanded", "false");
+    await tableOneToggle.click();
+    await expect(tableOneToggle).toHaveAttribute("aria-expanded", "true");
+
+    await expect(page).toHaveScreenshot("14-search-filter-table-inspector.png", {
+      animations: "disabled",
+      maxDiffPixelRatio: 0.01,
+    });
+
+    await search.fill("Guest 097");
+    await expect(page.getByRole("button", { name: "Show Guest 097 on chart" })).toHaveCount(0);
+
+    // Renaming into the next generated number must advance allocation so a
+    // later duplicate cannot silently create two tables with one label.
+    page.once("dialog", (dialog) => dialog.accept("11"));
+    await inspector.getByRole("button", { name: "Rename table" }).click();
+    await inspector.getByRole("button", { name: "Duplicate table" }).click();
+    await expect.poll(() => {
+      const numbers = state.current().shapes
+        .filter((shape): shape is TableShape => shape.type === "table" && "number" in shape)
+        .map((table) => table.number);
+      return {
+        hasTwelve: numbers.includes(12),
+        unique: new Set(numbers).size === numbers.length,
+      };
+    }).toEqual({ hasTwelve: true, unique: true });
+  });
+
   test("edits opposing-side counts and guards occupied seats", async ({ page }) => {
     const state = await openPlanner(page);
     await clickWorld(page, 160, 230);
+
+    const inspector = page.locator("[data-table-inspector]");
+    await expect(inspector.getByRole("heading", { name: "Table 1" })).toBeVisible();
+    await expect(inspector.getByText("6 of 10 seats filled")).toBeVisible();
 
     await expect(canvasShell(page)).toHaveScreenshot("03-selected-opposing-table-tools.png", {
       animations: "disabled",
       maxDiffPixelRatio: 0.01,
     });
 
-    // Opposing tables show settings, duplicate, and position-lock controls.
-    await clickWorld(page, 160 - 28, 230 + 25);
+    // Opposing tables expose labeled settings, duplicate, and position-lock controls.
+    await inspector.getByRole("button", { name: "Seating layout" }).click();
     const dialog = page.getByRole("dialog", { name: "Table 1 Seating Layout" });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Opposing Sides Only" })).toHaveClass(/bg-primary/);
+    await expect(dialog.getByRole("button", { name: "Opposing Sides Only" })).toHaveAttribute("aria-pressed", "true");
+    await expect(dialog.getByRole("button", { name: "All Sides" })).toHaveAttribute("aria-pressed", "false");
     await expect(dialog.getByText("10 seats total")).toBeVisible();
     await expect(dialog).toHaveScreenshot("04-opposing-seat-layout-modal.png", {
       animations: "disabled",
       maxDiffPixelRatio: 0.01,
     });
 
-    const topSide = dialog.getByText("Top side").locator("..");
-    await topSide.getByRole("button").first().click();
+    await dialog.getByRole("button", { name: "Decrease seats on top side" }).click();
     await expect(dialog.getByText("10 seats total")).toBeVisible();
-    await topSide.getByRole("button").last().click();
+    await dialog.getByRole("button", { name: "Increase seats on top side" }).click();
     await expect(dialog.getByText("11 seats total")).toBeVisible();
 
-    const bottomSide = dialog.getByText("Bottom side").locator("..");
-    await bottomSide.getByRole("button").first().click();
+    await dialog.getByRole("button", { name: "Decrease seats on bottom side" }).click();
     await expect(dialog.getByText("10 seats total")).toBeVisible();
 
     await dialog.getByRole("button", { name: "All Sides" }).click();
     await expect(dialog).toContainText("four sides");
     await dialog.getByRole("button", { name: "Done" }).click();
-    await clickWorld(page, 160 - 28, 230 + 25);
-    await clickWorld(page, 160 - 56, 230 + 25);
-    await clickWorld(page, 160, 230 + 25);
+    await inspector.getByRole("button", { name: "Seating layout" }).click();
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: "Opposing Sides Only" }).click();
     await dialog.getByRole("button", { name: "Link touching edge" }).click();
     await dialog.getByRole("button", { name: "Done" }).click();
 
-    // Duplicate, lock/unlock, and resize remain available from the canvas.
-    await clickWorld(page, 160, 230 + 25);
+    // Duplicate, lock/unlock, and resize remain available through the
+    // inspector plus direct-manipulation handles.
+    await inspector.getByRole("button", { name: "Duplicate table" }).click();
     await expect(page.getByText("11 Tables", { exact: true })).toBeVisible();
     await expect.poll(
       () => state.current().shapes.filter((shape) => shape.type === "table").length,
@@ -526,10 +652,14 @@ test.describe("Seating planner — 100 guest opposing-rectangle visual regressio
     const lockTable = getLockTable();
     if (!lockTable) throw new Error("Table 8 disappeared");
 
-    await clickWorld(page, lockTable.x, lockTable.y);
-    await clickWorld(page, lockTable.x + 28, lockTable.y + 25);
+    const sidebarSearch = page.getByRole("searchbox", { name: "Find a guest or table" });
+    await sidebarSearch.fill("Table 8");
+    await page.getByRole("button", { name: "Show Table 8 on chart" }).click();
+    await expect(inspector.getByRole("heading", { name: "Table 8" })).toBeVisible();
+    await page.getByRole("button", { name: "Clear search" }).click();
+    await inspector.getByRole("button", { name: "Lock position" }).click();
     await expect.poll(() => getLockTable()?.locked, { timeout: 6_000 }).toBe(true);
-    await clickWorld(page, lockTable.x + 28, lockTable.y + 25);
+    await inspector.getByRole("button", { name: "Unlock position" }).click();
     await expect.poll(() => getLockTable()?.locked, { timeout: 6_000 }).toBe(false);
 
     await clickWorld(page, lockTable.x, lockTable.y);
@@ -553,12 +683,22 @@ test.describe("Seating planner — 100 guest opposing-rectangle visual regressio
       { x: resizedTable.x, y: rotationHandleY },
       { x: resizedTable.x + 170, y: resizedTable.y },
     );
-    await expect.poll(() => getLockTable()?.rotation, { timeout: 6_000 }).toBe(90);
+    await expect.poll(
+      () => Math.round(getLockTable()?.rotation ?? 0),
+      { timeout: 6_000 },
+    ).toBe(90);
 
     await expect(canvasShell(page)).toHaveScreenshot("05-duplicated-resized-rotated-table.png", {
       animations: "disabled",
       maxDiffPixelRatio: 0.015,
     });
+
+    await sidebarSearch.fill("Table 11");
+    await page.getByRole("button", { name: "Show Table 11 on chart" }).click();
+    page.once("dialog", (dialog) => dialog.accept());
+    await inspector.getByRole("button", { name: "Delete table" }).click();
+    await expect(page.getByText("10 Tables", { exact: true })).toBeVisible();
+    await expect(inspector).toHaveCount(0);
   });
 
   test("multi-selects tables and exercises every alignment action", async ({ page }) => {
@@ -602,7 +742,8 @@ test.describe("Seating planner — 100 guest opposing-rectangle visual regressio
     await openPlanner(page);
     await dragWorld(page, { x: 430, y: 250 }, { x: 360, y: 230 });
     await clickWorld(page, 160, 230);
-    await clickWorld(page, 160 - 28, 230 + 25);
+    const inspector = page.locator("[data-table-inspector]");
+    await inspector.getByRole("button", { name: "Seating layout" }).click();
 
     const dialog = page.getByRole("dialog", { name: "Table 1 Seating Layout" });
     await dialog.getByRole("button", { name: "Link touching edge" }).click();
@@ -616,8 +757,7 @@ test.describe("Seating planner — 100 guest opposing-rectangle visual regressio
       maxDiffPixelRatio: 0.01,
     });
 
-    await clickWorld(page, 160, 230);
-    await clickWorld(page, 160 - 28, 230 + 25);
+    await inspector.getByRole("button", { name: "Seating layout" }).click();
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: /Unlink/ }).click();
     await expect(dialog.getByText(/edge.*Table 2/i)).toHaveCount(0);
@@ -638,13 +778,13 @@ test.describe("Seating planner — 100 guest opposing-rectangle visual regressio
     });
     await assignmentDialog.getByLabel("Full Name").fill("Regression Guest");
     await assignmentDialog.getByRole("button", { name: "Save Guest" }).click();
-    await expect(page.getByText("101 Guests", { exact: true })).toBeVisible();
+    await expect(page.getByRole("status", { name: /101 guests total/i })).toBeVisible();
 
     await clickWorld(page, 160 + 70.4, 230 + 58);
     const editDialog = page.getByRole("dialog", { name: "Edit Guest" });
     await editDialog.getByLabel("Full Name").fill("Regression Guest Renamed");
     await editDialog.getByRole("button", { name: "Remove Guest" }).click();
-    await expect(page.getByText("100 Guests", { exact: true })).toBeVisible();
+    await expect(page.getByRole("status", { name: /100 guests total/i })).toBeVisible();
 
     // Drag the four-person unassigned party onto Table 1's four empty seats.
     const partyHandle = page.getByRole("button", { name: /Drag Guest 097's Party \(4\)/ });
@@ -660,7 +800,7 @@ test.describe("Seating planner — 100 guest opposing-rectangle visual regressio
 
     await page.getByRole("button", { name: "Sync Accepted Guests" }).click();
     await expect(page.getByText("Guest List Synced")).toHaveCount(1);
-    await expect(page.getByText("100 Guests", { exact: true })).toBeVisible();
+    await expect(page.getByRole("status", { name: /100 guests total/i })).toBeVisible();
 
     await expect(page).toHaveScreenshot("09-seating-locked-after-party-drop.png", {
       animations: "disabled",
@@ -671,7 +811,7 @@ test.describe("Seating planner — 100 guest opposing-rectangle visual regressio
   test("keeps editing notifications outside the desktop canvas", async ({ page }) => {
     await openPlanner(page, { hideToasts: false });
     await page.getByRole("button", { name: "Sync Accepted Guests" }).click();
-    await expect(page.getByText("Guest List Synced")).toBeVisible();
+    await expect(page.getByText("Guest List Synced", { exact: true })).toBeVisible();
 
     const toastBox = await page
       .getByText("Guest List Synced")
@@ -821,5 +961,60 @@ test.describe("Seating planner — 100 guest opposing-rectangle visual regressio
     await page.getByRole("menuitem", { name: "Reset chart" }).click();
     await expect(page.getByRole("button", { name: "Draw Event Space" })).toBeVisible();
     await expect(page.getByText("0 Tables", { exact: true })).toBeVisible();
+  });
+});
+
+test.describe("Seating planner — mobile task workflow", () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    colorScheme: "light",
+  });
+
+  test("uses a guest-first task switcher and opens semantic layout controls", async ({ page }) => {
+    await openPlanner(page, { hideToasts: false, expectCanvas: false });
+
+    const guestsTab = page.getByRole("tab", { name: "Guests" });
+    const layoutTab = page.getByRole("tab", { name: "Layout" });
+    await expect(guestsTab).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(".konvajs-content")).toHaveCount(0);
+
+    await page.getByRole("searchbox", { name: "Find a guest or table" }).fill("Guest 055");
+    await page.getByRole("button", { name: "Show Guest 055 on chart" }).click();
+
+    await expect(layoutTab).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(".konvajs-content")).toBeVisible();
+    const inspector = page.locator("[data-table-inspector]");
+    await expect(inspector.getByRole("heading", { name: "Table 6" })).toBeVisible();
+    await expect(inspector.getByRole("button", { name: "Seating layout" })).toBeVisible();
+    await expect.poll(async () => {
+      const point = await worldToPage(page, 160, 605);
+      const stageBox = await page.locator("[data-canvas-stage]").boundingBox();
+      const inspectorBox = await inspector.boundingBox();
+      if (!stageBox || !inspectorBox) return false;
+      return (
+        point.x >= stageBox.x + 60 &&
+        point.x <= stageBox.x + stageBox.width - 60 &&
+        point.y >= stageBox.y + 50 &&
+        point.y <= inspectorBox.y - 50
+      );
+    }).toBe(true);
+
+    await expect(page).toHaveScreenshot("15-mobile-layout-task-inspector.png", {
+      animations: "disabled",
+      maxDiffPixelRatio: 0.01,
+    });
+
+    await guestsTab.click();
+    await page.getByRole("button", { name: "Sync Accepted Guests" }).click();
+    const toast = page
+      .getByText("Guest List Synced", { exact: true })
+      .locator("xpath=ancestor::*[@data-state='open'][1]");
+    await expect(toast).toBeVisible();
+    const toastBox = await toast.boundingBox();
+    const switcherBox = await page.locator("[data-mobile-task-switcher]").boundingBox();
+    if (!toastBox || !switcherBox) throw new Error("Mobile toast or task switcher was not measurable");
+    expect(toastBox.y).toBeGreaterThanOrEqual(switcherBox.y + switcherBox.height);
+    await expect(page.getByRole("button", { name: "Dismiss notification" })).toBeVisible();
+    await expect(toast).toBeHidden({ timeout: 6_000 });
   });
 });

@@ -1,42 +1,17 @@
-import { CircleHelp, Info, X as CloseIcon } from "lucide-react";
+import { ChevronRight, CircleHelp, Info, X as CloseIcon } from "lucide-react";
 import { useState } from "react";
-
-const DISMISSED_STORAGE_KEY = "seating-chart.canvas-tips-dismissed";
-
-const getInitialVisibility = () => {
-  if (typeof window === "undefined") {
-    return true;
-  }
-
-  try {
-    return window.localStorage.getItem(DISMISSED_STORAGE_KEY) !== "true";
-  } catch {
-    return true;
-  }
-};
+import { useAtomValue } from "jotai";
+import { editModeAtom } from "@/lib/atoms";
 
 export const CanvasTipsOverlay: React.FC = () => {
-  const [isVisible, setIsVisible] = useState(getInitialVisibility);
-
-  const updateVisibility = (visible: boolean) => {
-    setIsVisible(visible);
-
-    try {
-      if (visible) {
-        window.localStorage.removeItem(DISMISSED_STORAGE_KEY);
-      } else {
-        window.localStorage.setItem(DISMISSED_STORAGE_KEY, "true");
-      }
-    } catch {
-      // Storage can be unavailable in privacy modes; the in-memory state still works.
-    }
-  };
+  const [isVisible, setIsVisible] = useState(false);
+  const isEditing = useAtomValue(editModeAtom);
 
   if (!isVisible) {
     return (
       <button
         type="button"
-        onClick={() => updateVisibility(true)}
+        onClick={() => setIsVisible(true)}
         className="absolute bottom-3 left-3 z-20 inline-flex min-h-10 items-center gap-2 rounded-full border border-border/60 bg-card/90 px-3 py-2 text-xs font-medium text-foreground shadow-md backdrop-blur-sm transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:bottom-4 sm:left-4"
         aria-label="Show canvas tips"
         aria-expanded="false"
@@ -55,7 +30,7 @@ export const CanvasTipsOverlay: React.FC = () => {
     >
       <button
         type="button"
-        onClick={() => updateVisibility(false)}
+        onClick={() => setIsVisible(false)}
         className="absolute right-1.5 top-1.5 rounded-full p-1 text-muted-foreground/70 transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="Hide canvas tips"
       >
@@ -72,9 +47,7 @@ export const CanvasTipsOverlay: React.FC = () => {
       </h3>
       <div className="space-y-2">
         <p className="flex items-center text-xs leading-relaxed">
-          <span className="mr-1.5 text-xs font-semibold text-primary opacity-80">
-            ➤
-          </span>{" "}
+          <ChevronRight className="mr-1.5 h-3.5 w-3.5 shrink-0 text-primary/80" aria-hidden="true" />{" "}
           Use{" "}
           <kbd className="mx-1 rounded bg-muted/80 px-1.5 py-0.5 text-xs shadow-sm">
             Alt + Mouse
@@ -82,40 +55,36 @@ export const CanvasTipsOverlay: React.FC = () => {
           to pan
         </p>
         <p className="flex items-center text-xs leading-relaxed">
-          <span className="mr-1.5 text-xs font-semibold text-primary opacity-80">
-            ➤
-          </span>{" "}
+          <ChevronRight className="mr-1.5 h-3.5 w-3.5 shrink-0 text-primary/80" aria-hidden="true" />{" "}
           <kbd className="mx-1 rounded bg-muted/80 px-1.5 py-0.5 text-xs shadow-sm">
             Scroll
           </kbd>{" "}
           to zoom in/out
         </p>
-        <p className="flex items-center text-xs leading-relaxed">
-          <span className="mr-1.5 text-xs font-semibold text-primary opacity-80">
-            ➤
-          </span>{" "}
-          Hold{" "}
-          <kbd className="mx-1 rounded bg-muted/80 px-1.5 py-0.5 text-xs shadow-sm">
-            Ctrl / Cmd
-          </kbd>{" "}
-          and click tables to multi-select
-        </p>
-        <p className="flex items-center text-xs leading-relaxed">
-          <span className="mr-1.5 text-xs font-semibold text-primary opacity-80">
-            ➤
-          </span>{" "}
-          Double-click text to rename elements
-        </p>
-        <p className="mt-1 flex items-center border-t border-border/30 pt-1 text-xs leading-relaxed">
-          <span className="mr-1.5 text-xs font-semibold text-destructive opacity-90">
-            ➤
-          </span>{" "}
-          Press{" "}
-          <kbd className="mx-1 rounded bg-muted/80 px-1.5 py-0.5 text-xs shadow-sm">
-            Delete
-          </kbd>{" "}
-          to remove selected element
-        </p>
+        {isEditing && (
+          <>
+            <p className="flex items-center text-xs leading-relaxed">
+              <ChevronRight className="mr-1.5 h-3.5 w-3.5 shrink-0 text-primary/80" aria-hidden="true" />{" "}
+              Hold{" "}
+              <kbd className="mx-1 rounded bg-muted/80 px-1.5 py-0.5 text-xs shadow-sm">
+                Ctrl / Cmd
+              </kbd>{" "}
+              and click tables to multi-select
+            </p>
+            <p className="flex items-center text-xs leading-relaxed">
+              <ChevronRight className="mr-1.5 h-3.5 w-3.5 shrink-0 text-primary/80" aria-hidden="true" />{" "}
+              Double-click text to rename elements
+            </p>
+            <p className="mt-1 flex items-center border-t border-border/30 pt-1 text-xs leading-relaxed">
+              <ChevronRight className="mr-1.5 h-3.5 w-3.5 shrink-0 text-destructive/90" aria-hidden="true" />{" "}
+              Press{" "}
+              <kbd className="mx-1 rounded bg-muted/80 px-1.5 py-0.5 text-xs shadow-sm">
+                Delete
+              </kbd>{" "}
+              to remove selected element
+            </p>
+          </>
+        )}
       </div>
       <div className="mt-2 border-t border-border/30 pt-2">
         <h4 className="text-xs font-semibold text-foreground/80 mb-1.5">

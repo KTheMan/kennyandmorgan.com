@@ -15,7 +15,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Minus, Plus, LayoutGrid, Rows3, Link2, Unlink2 } from "lucide-react";
+import { Check, Minus, Plus, LayoutGrid, Rows3, Link2, Unlink2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -325,20 +325,24 @@ export const TableSeatingModal: React.FC = () => {
             <Button
               type="button"
               variant={!isOpposing ? "default" : "outline"}
-              className="h-auto flex-col gap-1.5 py-3"
+              className="relative h-auto flex-col gap-1.5 py-3 focus-visible:ring-offset-1"
               onClick={() => handleStyleChange("all")}
               disabled={linkedTables.length > 1}
+              aria-pressed={!isOpposing}
             >
+              {!isOpposing && <Check className="absolute right-2 top-2 h-3.5 w-3.5" aria-hidden="true" />}
               <LayoutGrid size={18} strokeWidth={1.5} />
               <span className="text-sm font-medium">All Sides</span>
             </Button>
             <Button
               type="button"
               variant={isOpposing ? "default" : "outline"}
-              className="h-auto flex-col gap-1.5 py-3"
+              className="relative h-auto flex-col gap-1.5 py-3 focus-visible:ring-offset-1"
               onClick={() => handleStyleChange("opposing")}
               disabled={linkedTables.length > 1}
+              aria-pressed={isOpposing}
             >
+              {isOpposing && <Check className="absolute right-2 top-2 h-3.5 w-3.5" aria-hidden="true" />}
               <Rows3 size={18} strokeWidth={1.5} />
               <span className="text-sm font-medium">Opposing Sides Only</span>
             </Button>
@@ -452,8 +456,9 @@ const SideStepper: React.FC<{
         className="h-7 w-7"
         onClick={onDecrease}
         disabled={disableDecrease}
+        aria-label={`Decrease seats on ${label.toLowerCase()}`}
       >
-        <Minus size={14} />
+        <Minus size={14} aria-hidden="true" />
       </Button>
       <span className="w-6 text-center text-sm font-semibold tabular-nums">
         {value}
@@ -465,8 +470,9 @@ const SideStepper: React.FC<{
         className="h-7 w-7"
         onClick={onIncrease}
         disabled={disableIncrease}
+        aria-label={`Increase seats on ${label.toLowerCase()}`}
       >
-        <Plus size={14} />
+        <Plus size={14} aria-hidden="true" />
       </Button>
     </div>
   </div>
