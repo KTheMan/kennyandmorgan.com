@@ -19,6 +19,8 @@ import {
   editModeAtom,
   groupDropPreviewAtom,
   tableFocusRequestAtom,
+  venueVersionsAtom,
+  venueVersionBackgroundAssetsAtom,
 } from "@/lib/atoms";
 import { findTableUnderPoint, computeGroupSeatPlan, type StagePoint } from "@/lib/groupSeating";
 import { Guest, Table, VenueElement, BackgroundImage } from "../types/seatingChart";
@@ -28,6 +30,7 @@ import { GuestAssignmentModal } from "./GuestAssignmentModal";
 import { RenameElementModal } from "./RenameElementModal";
 import { TableSeatingModal } from "./TableSeatingModal";
 import { TableInspector } from "./TableInspector";
+import { ChartVersionsDialog } from "./ChartVersionsDialog";
 import { SortedCanvasStageAdapter } from "./SortedCanvasStageAdapter";
 import { useVenuePersistence, DEFAULT_VENUE_DATA, type VenueCredentials } from "@/hooks/useVenuePersistence";
 import type { VenueAccess } from "@/components/VenueGate";
@@ -54,6 +57,16 @@ import {
   restoredCapacityAfterUnlink,
   TABLE_EDGES,
 } from "@/lib/tableLinks";
+import { useVenueHistory } from "@/hooks/useVenueHistory";
+import type { VenueVersion } from "@shared/types/venue";
+import {
+  createVersionSnapshot,
+  hydrateVersionSnapshot,
+  MAX_SAVED_VERSIONS,
+  pruneVersionAssets,
+  versionAssetSaveError,
+  versionSaveError,
+} from "@/lib/venueVersions";
 
 // The one droppable id for "anywhere on the canvas" — landing here means
 // resolving the exact chair from the drop point via Konva's own hit
@@ -150,7 +163,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     setEditMode(canEdit);
   }, [canEdit, setEditMode]);
 
-  const { isLoading, isSaving, serverError, updateError, loadIssue } = useVenuePersistence(
+  const { isLoading, isSaving, serverError, updateError, loadIssue, loadRevision } = useVenuePersistence(
     slug,
     credentials,
     canEdit,
@@ -182,6 +195,15 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
   const setHoveredGuestId = useSetAtom(hoveredGuestIdAtom);
   const setTableFocusRequest = useSetAtom(tableFocusRequestAtom);
   const [eventTitle] = useAtom(eventTitleAtom);
+  const [versions, setVersions] = useAtom(venueVersionsAtom);
+  const [versionBackgroundAssets, setVersionBackgroundAssets] = useAtom(venueVersionBackgroundAssetsAtom);
+  const [versionsOpen, setVersionsOpen] = useState(false);
+  const [deletedVersion, setDeletedVersion] = useState<{
+    version: VenueVersion;
+    originalIndex: number;
+    assets: Record<string, string>;
+  } | null>(null);
+  const venueHistory = useVenueHistory(slug, loadRevision);
 
   const venueSpaceExists = useMemo(
     () =>
@@ -1344,6 +1366,96 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     [handleFocusTableFromSidebar, setHoveredGuestId],
   );
 
+  const handleSaveVersion = useCallback((name: string) => {
+    const normalizedName = name.trim();
+    const saveError = versionSaveError(normalizedName, versions);
+    if (saveError) {
+      toast({
+        title: versions.length >= MAX_SAVED_VERSIONS ? "Version Limit Reached" : "Version Name Already Used",
+        description: saveError,
+        variant: "destructive",
+      });
+      return false;
+    }
+    const serialized = createVersionSnapshot(venueHistory.currentSnapshot, versionBackgroundAssets);
+    const assetSaveError = versionAssetSaveError(serialized.assets);
+    if (assetSaveError) {
+      toast({
+        title: "Version Storage Full",
+        description: assetSaveError,
+        variant: "destructive",
+      });
+      return false;
+    }
+    const version: VenueVersion = {
+      id: `version-${Date.now()}-${nanoid(5)}`,
+      name: normalizedName,
+      createdAt: new Date().toISOString(),
+      data: structuredClone(serialized.data),
+    };
+    setVersionBackgroundAssets(serialized.assets);
+    setVersions((current) => [version, ...current]);
+    toast({
+      title: "Version Saved",
+      description: `${normalizedName} now preserves this configuration.`,
+    });
+    return true;
+  }, [setVersionBackgroundAssets, setVersions, toast, venueHistory.currentSnapshot, versionBackgroundAssets, versions]);
+
+  const handleRestoreVersion = useCallback((version: VenueVersion) => {
+    if (!editMode) return;
+    if (!window.confirm(`Restore “${version.name}”? Your current layout remains available with Undo.`)) return;
+    try {
+      venueHistory.restoreSnapshot(hydrateVersionSnapshot(version.data, versionBackgroundAssets));
+    } catch (error) {
+      toast({
+        title: "Couldn't Restore Version",
+        description: error instanceof Error ? error.message : "The saved configuration is incomplete.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setVersionsOpen(false);
+    toast({
+      title: "Version Restored",
+      description: `${version.name} is now the active configuration. You can undo this restore.`,
+    });
+  }, [editMode, toast, venueHistory, versionBackgroundAssets]);
+
+  const handleDeleteVersion = useCallback((version: VenueVersion) => {
+    if (!editMode) return;
+    if (!window.confirm(`Delete saved version “${version.name}”?`)) return;
+    const originalIndex = versions.findIndex((candidate) => candidate.id === version.id);
+    const removedAssetIds = version.data.shapes.flatMap((shape) =>
+      shape.type === "backgroundImage" && shape.versionAssetId ? [shape.versionAssetId] : [],
+    );
+    const removedAssets = Object.fromEntries(
+      removedAssetIds.flatMap((assetId) =>
+        versionBackgroundAssets[assetId] ? [[assetId, versionBackgroundAssets[assetId]]] : [],
+      ),
+    );
+    const nextVersions = versions.filter((candidate) => candidate.id !== version.id);
+    setVersions(nextVersions);
+    setVersionBackgroundAssets(pruneVersionAssets(nextVersions, versionBackgroundAssets));
+    setDeletedVersion({ version, originalIndex, assets: removedAssets });
+    toast({
+      title: "Version Deleted",
+      description: `${version.name} was removed. Undo is available in Saved versions.`,
+    });
+  }, [editMode, setVersionBackgroundAssets, setVersions, toast, versionBackgroundAssets, versions]);
+
+  const handleUndoDeleteVersion = useCallback(() => {
+    if (!deletedVersion) return;
+    setVersions((current) => {
+      if (current.some((candidate) => candidate.id === deletedVersion.version.id)) return current;
+      const restored = [...current];
+      restored.splice(Math.max(0, deletedVersion.originalIndex), 0, deletedVersion.version);
+      return restored;
+    });
+    setVersionBackgroundAssets((current) => ({ ...current, ...deletedVersion.assets }));
+    setDeletedVersion(null);
+  }, [deletedVersion, setVersionBackgroundAssets, setVersions]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -1384,6 +1496,14 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         onToggleBackgroundLock={handleToggleBackgroundLock}
         onSetBackgroundOpacity={handleSetBackgroundOpacity}
         onRemoveBackgroundImage={handleRemoveBackgroundImage}
+        canUndo={venueHistory.canUndo}
+        canRedo={venueHistory.canRedo}
+        undoDepth={venueHistory.undoDepth}
+        redoDepth={venueHistory.redoDepth}
+        onUndo={venueHistory.undo}
+        onRedo={venueHistory.redo}
+        onOpenVersions={() => setVersionsOpen(true)}
+        versionCount={versions.length}
       />
       <DndContext
         sensors={sensors}
@@ -1507,6 +1627,18 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
           ) : null}
         </DragOverlay>
       </DndContext>
+      <ChartVersionsDialog
+        open={versionsOpen}
+        onOpenChange={setVersionsOpen}
+        versions={versions}
+        canEdit={editMode}
+        historyLimit={venueHistory.historyLimit}
+        onSaveVersion={handleSaveVersion}
+        onRestoreVersion={handleRestoreVersion}
+        onDeleteVersion={handleDeleteVersion}
+        deletedVersionName={deletedVersion?.version.name}
+        onUndoDeleteVersion={handleUndoDeleteVersion}
+      />
       <GuestAssignmentModal />
       <RenameElementModal />
       <TableSeatingModal />

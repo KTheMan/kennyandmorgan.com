@@ -2,6 +2,7 @@ import { atom } from "jotai";
 import { splitAtom } from "jotai/utils";
 import { Table, VenueElement, Guest, BackgroundImage } from "../types/seatingChart";
 import type { VenueData } from "@shared/types/venue";
+import type { VenueVersion } from "@shared/types/venue";
 
 // Define Shape union type and export it
 export type Shape = VenueElement | Table | BackgroundImage;
@@ -57,6 +58,12 @@ export const tableFocusRequestAtom = atom<{
   tableId: string;
   requestId: number;
 } | null>(null);
+
+// Persistent, user-named chart milestones. These are intentionally separate
+// from the live editing state so restoring one never erases the other saved
+// configurations.
+export const venueVersionsAtom = atom<VenueVersion[]>([]);
+export const venueVersionBackgroundAssetsAtom = atom<Record<string, string>>({});
 
 // Atom to track if the venue space shape is locked
 export const venueSpaceLockedAtom = atom<boolean>(false);
@@ -146,6 +153,8 @@ export const venueDataAtom = atom<VenueData>(
     guests: get(guestsAtom),
     eventTitle: get(eventTitleAtom),
     tableCounter: get(tableCounterAtom),
+    versions: get(venueVersionsAtom),
+    versionBackgroundAssets: get(venueVersionBackgroundAssetsAtom),
   }),
 );
 

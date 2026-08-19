@@ -8,6 +8,8 @@ import {
   guestsAtom,
   eventTitleAtom,
   tableCounterAtom,
+  venueVersionsAtom,
+  venueVersionBackgroundAssetsAtom,
 } from "@/lib/atoms";
 import { useVenueQuery, useSaveVenueMutation } from "./useVenueApi";
 import type { VenueData } from "@shared/types/venue";
@@ -17,6 +19,8 @@ export const DEFAULT_VENUE_DATA: VenueData = {
   guests: [],
   eventTitle: "New Event",
   tableCounter: 1,
+  versions: [],
+  versionBackgroundAssets: {},
 };
 
 // A localStorage warm-load cache (per slug) so the canvas isn't blank
@@ -62,6 +66,8 @@ export const useVenuePersistence = (
   const setGuests = useSetAtom(guestsAtom);
   const setEventTitle = useSetAtom(eventTitleAtom);
   const setTableCounter = useSetAtom(tableCounterAtom);
+  const setVersions = useSetAtom(venueVersionsAtom);
+  const setVersionBackgroundAssets = useSetAtom(venueVersionBackgroundAssetsAtom);
 
   const {
     data: serverData,
@@ -79,6 +85,7 @@ export const useVenuePersistence = (
   const isInitialLoadComplete = useRef(false);
   const loadedSlugRef = useRef<string | null>(null);
   const [loadIssue, setLoadIssue] = useState<Error | null>(null);
+  const [loadRevision, setLoadRevision] = useState(0);
 
   // --- Warm-load from localStorage immediately when the slug changes. ---
   useEffect(() => {
@@ -91,8 +98,11 @@ export const useVenuePersistence = (
       setGuests(cached.guests ?? []);
       setEventTitle(cached.eventTitle ?? DEFAULT_VENUE_DATA.eventTitle);
       setTableCounter(cached.tableCounter ?? 1);
+      setVersions(cached.versions ?? []);
+      setVersionBackgroundAssets(cached.versionBackgroundAssets ?? {});
+      setLoadRevision((revision) => revision + 1);
     }
-  }, [slug, setShapes, setGuests, setEventTitle, setTableCounter]);
+  }, [slug, setShapes, setGuests, setEventTitle, setTableCounter, setVersions, setVersionBackgroundAssets]);
 
   // --- Once the server responds, it becomes the source of truth. ---
   // (VenueGate never renders this hook's owner, SeatingChartApp, unless
@@ -137,9 +147,12 @@ export const useVenuePersistence = (
     setGuests(venueData.guests ?? []);
     setEventTitle(venueData.eventTitle ?? DEFAULT_VENUE_DATA.eventTitle);
     setTableCounter(venueData.tableCounter ?? 1);
+    setVersions(venueData.versions ?? []);
+    setVersionBackgroundAssets(venueData.versionBackgroundAssets ?? {});
     cache.set(slug, venueData);
     isInitialLoadComplete.current = true;
     loadedSlugRef.current = slug;
+    setLoadRevision((revision) => revision + 1);
   }, [
     slug,
     serverData,
@@ -148,6 +161,8 @@ export const useVenuePersistence = (
     setGuests,
     setEventTitle,
     setTableCounter,
+    setVersions,
+    setVersionBackgroundAssets,
   ]);
 
   // --- Debounced save-back to the worker on every change. Skipped
@@ -182,5 +197,6 @@ export const useVenuePersistence = (
     serverError,
     updateError,
     loadIssue,
+    loadRevision,
   };
 };

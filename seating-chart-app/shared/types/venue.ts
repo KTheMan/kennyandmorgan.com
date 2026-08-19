@@ -9,8 +9,35 @@ export interface VenueData {
   guests: Guest[];
   eventTitle: string;
   tableCounter: number;
+  versions?: VenueVersion[];
+  versionBackgroundAssets?: Record<string, string>;
   // Add other relevant state properties managed by atoms if needed
   // e.g., venueSpaceLocked?: boolean;
+}
+
+/** A chart configuration without the surrounding saved-version collection. */
+export type VenueSnapshotData = Omit<VenueData, "versions" | "versionBackgroundAssets">;
+
+export type VenueVersionBackgroundImage = Omit<BackgroundImage, "dataUrl"> & {
+  // New snapshots reference the venue-level deduplicated asset pool. dataUrl
+  // remains optional only for backwards compatibility with early snapshots.
+  versionAssetId?: string;
+  dataUrl?: string;
+};
+
+export interface VenueVersionSnapshotData {
+  shapes: Array<VenueElement | Table | VenueVersionBackgroundImage>;
+  guests: Guest[];
+  eventTitle: string;
+  tableCounter: number;
+}
+
+/** A user-named, persistent milestone stored alongside the live chart. */
+export interface VenueVersion {
+  id: string;
+  name: string;
+  createdAt: string;
+  data: VenueVersionSnapshotData;
 }
 
 /**

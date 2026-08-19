@@ -1,6 +1,15 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { findDuplicateTablePosition } from "../seating-chart-app/src/lib/tablePlacement";
 import { planSeatLabels } from "../seating-chart-app/src/lib/seatLabels";
+import {
+  createVersionSnapshot,
+  hydrateVersionSnapshot,
+  MAX_SAVED_VERSIONS,
+  MAX_VERSION_BACKGROUND_ASSET_BYTES,
+  versionAssetSaveError,
+  versionBackgroundAssetBytes,
+  versionSaveError,
+} from "../seating-chart-app/src/lib/venueVersions";
 
 const APP_URL = "http://127.0.0.1:45174/?v=opposing-100-regression";
 const MOCK_SUPABASE_URL = "http://mock-supabase.test";
@@ -58,6 +67,13 @@ type VenueData = {
   guests: Guest[];
   eventTitle: string;
   tableCounter: number;
+  versions?: Array<{
+    id: string;
+    name: string;
+    createdAt: string;
+    data: Omit<VenueData, "versions">;
+  }>;
+  versionBackgroundAssets?: Record<string, string>;
 };
 
 const TABLE_POSITIONS = [
@@ -408,6 +424,102 @@ test.describe("progressive seat labels", () => {
   });
 });
 
+test.describe("named version serialization", () => {
+  test("deduplicates large background assets across many milestones", () => {
+    const venue = buildVenueData();
+    const dataUrl = `data:image/webp;base64,${"a".repeat(2 * 1024 * 1024)}`;
+    const snapshot = {
+      ...venue,
+      shapes: [
+        ...venue.shapes,
+        {
+          type: "backgroundImage" as const,
+          id: "background-large",
+          dataUrl,
+          naturalWidth: 2000,
+          naturalHeight: 1200,
+          x: 0,
+          y: 0,
+          scale: 1,
+          opacity: 1,
+        },
+      ],
+    };
+    const first = createVersionSnapshot(snapshot, {});
+    const second = createVersionSnapshot(snapshot, first.assets);
+    const versions = Array.from({ length: MAX_SAVED_VERSIONS }, (_, index) => ({
+      id: `version-${index}`,
+      name: `v${index + 1}`,
+      createdAt: "2026-08-18T18:00:00.000Z",
+      data: index % 2 ? first.data : second.data,
+    }));
+    const serialized = JSON.stringify({ ...snapshot, versions, versionBackgroundAssets: second.assets });
+    expect(serialized.split(dataUrl).length - 1).toBe(2); // live chart + one shared milestone asset
+    expect(serialized.length).toBeLessThan(dataUrl.length * 2.2);
+    expect(hydrateVersionSnapshot(first.data, second.assets).shapes.at(-1)).toMatchObject({ dataUrl });
+  });
+
+  test("rejects duplicate names and a twenty-sixth milestone", () => {
+    const venue = buildVenueData();
+    const versions = Array.from({ length: MAX_SAVED_VERSIONS }, (_, index) => ({
+      id: `version-${index}`,
+      name: `v${index + 1}`,
+      createdAt: "2026-08-18T18:00:00.000Z",
+      data: venue,
+    }));
+    expect(versionSaveError("V1", versions)).toMatch(/already in use/i);
+    expect(versionSaveError("Final", versions)).toMatch(/25 saved versions/i);
+  });
+
+  test("caps aggregate storage for distinct milestone backgrounds", () => {
+    const venue = buildVenueData();
+    let assets: Record<string, string> = {};
+
+    for (let index = 0; index < 5; index += 1) {
+      const result = createVersionSnapshot({
+        ...venue,
+        shapes: [
+          ...venue.shapes,
+          {
+            type: "backgroundImage" as const,
+            id: `background-${index}`,
+            dataUrl: `data:image/webp;base64,${String(index).repeat(2 * 1024 * 1024)}`,
+            naturalWidth: 2000,
+            naturalHeight: 1200,
+            x: 0,
+            y: 0,
+            scale: 1,
+            opacity: 1,
+          },
+        ],
+      }, assets);
+      assets = result.assets;
+      expect(versionAssetSaveError(assets)).toBeNull();
+    }
+
+    expect(versionBackgroundAssetBytes(assets)).toBeLessThan(MAX_VERSION_BACKGROUND_ASSET_BYTES);
+    const overLimit = createVersionSnapshot({
+      ...venue,
+      shapes: [
+        ...venue.shapes,
+        {
+          type: "backgroundImage" as const,
+          id: "background-over-limit",
+          dataUrl: `data:image/webp;base64,${"z".repeat(2 * 1024 * 1024)}`,
+          naturalWidth: 2000,
+          naturalHeight: 1200,
+          x: 0,
+          y: 0,
+          scale: 1,
+          opacity: 1,
+        },
+      ],
+    }, assets);
+    expect(versionBackgroundAssetBytes(overLimit.assets)).toBeGreaterThan(MAX_VERSION_BACKGROUND_ASSET_BYTES);
+    expect(versionAssetSaveError(overLimit.assets)).toMatch(/delete a saved version/i);
+  });
+});
+
 function canvasShell(page: Page): Locator {
   return page.getByRole("region", { name: /Interactive seating layout/i });
 }
@@ -575,6 +687,88 @@ test.describe("Seating planner — 100 guest opposing-rectangle visual regressio
         unique: new Set(numbers).size === numbers.length,
       };
     }).toEqual({ hasTwelve: true, unique: true });
+  });
+
+  test("undoes destructive edits and restores persistent named versions", async ({ page }) => {
+    const state = await openPlanner(page, { hideToasts: false });
+    const undo = page.getByRole("button", { name: /Undo last change/i });
+    const redo = page.getByRole("button", { name: /Redo last change/i });
+    await expect(undo).toBeDisabled();
+    await expect(redo).toBeDisabled();
+
+    await page.getByRole("button", { name: /^Saved versions/ }).click();
+    const versionsDialog = page.getByRole("dialog", { name: "Saved versions" });
+    await expect(versionsDialog).toBeVisible();
+    await versionsDialog.getByLabel("Version name").fill("v1 · Original layout");
+    await versionsDialog.getByRole("button", { name: "Save version" }).click();
+    await expect(versionsDialog.getByText("v1 · Original layout", { exact: true })).toBeVisible();
+    await versionsDialog.getByLabel("Version name").fill("V1 · Original layout");
+    await expect(versionsDialog.getByText("A saved version already uses this name.", { exact: true })).toBeVisible();
+    await expect(versionsDialog.getByRole("button", { name: "Save version" })).toBeDisabled();
+    await expect(versionsDialog.getByText("1 saved", { exact: true })).toBeVisible();
+    await expect(versionsDialog).toHaveScreenshot("16-saved-versions-milestone.png", {
+      animations: "disabled",
+      maxDiffPixelRatio: 0.01,
+      mask: [versionsDialog.locator("[data-version-created-at]")],
+      maskColor: "#eeece5",
+    });
+    await versionsDialog.getByRole("button", { name: "Close" }).first().click();
+
+    // A keyboard deletion is immediately reversible, and redo remains
+    // available until the next new edit.
+    await clickWorld(page, 160, 230);
+    await page.keyboard.press("Delete");
+    await expect(page.getByText("9 Tables", { exact: true })).toBeVisible();
+    await expect(undo).toBeEnabled();
+    await undo.click();
+    await expect(page.getByText("10 Tables", { exact: true })).toBeVisible();
+    await expect(redo).toBeEnabled();
+    await redo.click();
+    await expect(page.getByText("9 Tables", { exact: true })).toBeVisible();
+    await page.keyboard.press("Control+z");
+    await expect(page.getByText("10 Tables", { exact: true })).toBeVisible();
+
+    // Make a distinguishable live configuration, restore v1, then prove the
+    // restore itself can be undone without touching the saved milestone.
+    await page.getByRole("button", { name: "Add Table" }).click();
+    await page.getByRole("menuitem", { name: "Rectangular Table" }).click();
+    await expect(page.getByText("11 Tables", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: /^Saved versions/ }).click();
+    page.once("dialog", (dialog) => dialog.accept());
+    await versionsDialog.getByRole("button", { name: "Restore v1 · Original layout" }).click();
+    await expect(page.getByText("10 Tables", { exact: true })).toBeVisible();
+    await expect(undo).toBeEnabled();
+    await undo.click();
+    await expect(page.getByText("11 Tables", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: /^Saved versions/ }).click();
+    page.once("dialog", (dialog) => dialog.accept());
+    await versionsDialog.getByRole("button", { name: "Delete v1 · Original layout" }).click();
+    await expect(versionsDialog.getByText("0 saved", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Undo deleting v1 · Original layout" }).click();
+    await expect(versionsDialog.getByText("v1 · Original layout", { exact: true })).toBeVisible();
+
+    // Named configurations travel with the venue's normal persisted payload.
+    await expect.poll(() => state.current().versions?.map((version) => version.name), {
+      timeout: 6_000,
+    }).toEqual(["v1 · Original layout"]);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("button", { name: /Saved versions, 1 saved/i })).toBeVisible();
+  });
+
+  test("bounds in-session history to the latest 30 settled edits", async ({ page }) => {
+    await openPlanner(page);
+    const title = page.getByLabel("Event Title").first();
+    for (let revision = 1; revision <= 31; revision += 1) {
+      await title.fill(`History revision ${revision}`);
+      await page.waitForTimeout(275);
+    }
+
+    const undo = page.getByRole("button", { name: /Undo last change/i });
+    await expect(undo).toHaveAttribute("aria-label", "Undo last change, 30 available");
+    for (let count = 0; count < 30; count += 1) await undo.click();
+    await expect(title).toHaveValue("History revision 1");
+    await expect(undo).toBeDisabled();
   });
 
   test("edits opposing-side counts and guards occupied seats", async ({ page }) => {

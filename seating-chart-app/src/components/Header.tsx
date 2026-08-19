@@ -24,6 +24,9 @@ import {
   Image as ImageIcon,
   Trash2,
   MoreHorizontal,
+  Undo2,
+  Redo2,
+  History,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -86,6 +89,14 @@ interface HeaderProps {
   onToggleBackgroundLock: () => void;
   onSetBackgroundOpacity: (opacity: number) => void;
   onRemoveBackgroundImage: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  undoDepth: number;
+  redoDepth: number;
+  onUndo: () => void;
+  onRedo: () => void;
+  onOpenVersions: () => void;
+  versionCount: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -118,6 +129,14 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleBackgroundLock,
   onSetBackgroundOpacity,
   onRemoveBackgroundImage,
+  canUndo,
+  canRedo,
+  undoDepth,
+  redoDepth,
+  onUndo,
+  onRedo,
+  onOpenVersions,
+  versionCount,
 }) => {
   const [eventTitle, setEventTitle] = useAtom(eventTitleAtom);
   const editMode = useAtomValue(editModeAtom);
@@ -338,6 +357,60 @@ export const Header: React.FC<HeaderProps> = ({
                 </TooltipContent>
               </Tooltip>
 
+              {editMode && (
+                <div className="flex items-center rounded-md border border-border/30 bg-card/70 shadow-sm" role="group" aria-label="Edit history">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-r-none"
+                        onClick={onUndo}
+                        disabled={!canUndo}
+                        aria-label={`Undo last change${undoDepth ? `, ${undoDepth} available` : ""}`}
+                      >
+                        <Undo2 size={16} aria-hidden="true" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Undo · Ctrl+Z</TooltipContent>
+                  </Tooltip>
+                  <span className="h-5 w-px bg-border/60" aria-hidden="true" />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-l-none"
+                        onClick={onRedo}
+                        disabled={!canRedo}
+                        aria-label={`Redo last change${redoDepth ? `, ${redoDepth} available` : ""}`}
+                      >
+                        <Redo2 size={16} aria-hidden="true" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Redo · Ctrl+Shift+Z</TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 border-accent/30 bg-accent/5 shadow-sm hover:border-accent/50 hover:bg-accent/15"
+                    onClick={onOpenVersions}
+                    aria-label={`Saved versions${versionCount ? `, ${versionCount} saved` : ""}`}
+                  >
+                    <History size={17} aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Saved versions</TooltipContent>
+              </Tooltip>
+
               <div
                 className="hidden h-9 items-center rounded-md border border-border/30 bg-card/80 px-3 text-sm font-medium text-foreground/90 shadow-sm md:flex"
                 role="status"
@@ -436,6 +509,10 @@ export const Header: React.FC<HeaderProps> = ({
                   <DropdownMenuItem onSelect={() => setTheme(theme === "dark" ? "light" : "dark")}>
                     {theme === "dark" ? <Sun size={15} className="mr-2" /> : <Moon size={15} className="mr-2" />}
                     Use {theme === "dark" ? "light" : "dark"} theme
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onOpenVersions}>
+                    <History size={15} className="mr-2" />
+                    Saved versions{versionCount ? ` (${versionCount})` : ""}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={isAdmin ? onBackToManager : () => { window.location.href = "../index.html"; }}
