@@ -46,6 +46,12 @@ interface SidebarGuestGroup {
   guests: Guest[];
 }
 
+interface FilteredSidebarGuestGroup {
+  tableId: string;
+  groupData: SidebarGuestGroup;
+  matchType: "none" | "table" | "guest";
+}
+
 interface SidebarProps {
   guests: Guest[];
   tables: Table[];
@@ -229,7 +235,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const filteredGuestGroups = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase();
 
-    return Object.entries(groupedGuests).flatMap(([tableId, groupData]) => {
+    return Object.entries(groupedGuests).flatMap<FilteredSidebarGuestGroup>(([tableId, groupData]) => {
       const isUnassigned = groupData.tableNumber === null;
       const matchesFilter =
         activeFilter === "all" ||
@@ -401,8 +407,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // The connector: pulls "accepted" RSVPs and their parties from the
   // wedding site and drops any not already on the canvas into
-  // "Unassigned". Guests already imported (matched by weddingGuestId) are
-  // left untouched so re-syncing never disturbs seating you've already done.
+  // "Unassigned". Guests already imported (matched by weddingGuestId) keep
+  // their local seat assignment while their RSVP details are refreshed.
   // Admin-only — re-verified here rather than trusting a passed-down
   // token, since this is the one action that reaches into the real
   // guest/RSVP list rather than just this chart's own data.
@@ -424,11 +430,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       );
 
       const newGuests: Guest[] = [];
+      const acceptedGuestsById = new Map<string, Guest>();
       for (const party of parties) {
         for (const acceptedGuest of party.guests) {
-          if (existingIds.has(acceptedGuest.weddingGuestId)) continue;
-
-          newGuests.push({
+          acceptedGuestsById.set(acceptedGuest.weddingGuestId, {
             id: `wg-${acceptedGuest.weddingGuestId}`,
             fullName: acceptedGuest.fullName,
             tableId: "",
@@ -441,12 +446,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
             mealChoice: acceptedGuest.mealChoice,
             dietaryNotes: acceptedGuest.dietaryNotes,
           });
+          if (existingIds.has(acceptedGuest.weddingGuestId)) continue;
+          newGuests.push(acceptedGuestsById.get(acceptedGuest.weddingGuestId)!);
         }
       }
 
-      if (newGuests.length > 0) {
-        setGlobalGuests((prev) => [...prev, ...newGuests]);
-      }
+      setGlobalGuests((prev) => {
+        const currentIds = new Set(
+          prev.map((guest) => guest.weddingGuestId).filter(Boolean),
+        );
+        const refreshed = prev.map((guest) => {
+          if (!guest.weddingGuestId) return guest;
+          const acceptedGuest = acceptedGuestsById.get(guest.weddingGuestId);
+          if (!acceptedGuest) return guest;
+          return {
+            ...guest,
+            fullName: acceptedGuest.fullName,
+            groupId: acceptedGuest.groupId,
+            isPrimary: acceptedGuest.isPrimary,
+            isPlusOne: acceptedGuest.isPlusOne,
+            isChild: acceptedGuest.isChild,
+            mealChoice: acceptedGuest.mealChoice,
+            dietaryNotes: acceptedGuest.dietaryNotes,
+          };
+        });
+        return [
+          ...refreshed,
+          ...newGuests.filter((guest) => !currentIds.has(guest.weddingGuestId)),
+        ];
+      });
 
       const totalAccepted = parties.reduce((sum, p) => sum + p.guests.length, 0);
       toast({

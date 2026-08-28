@@ -67,6 +67,7 @@ import {
   versionAssetSaveError,
   versionSaveError,
 } from "@/lib/venueVersions";
+import { downloadSeatingSpreadsheet } from "@/lib/seatingSpreadsheet";
 
 // The one droppable id for "anywhere on the canvas" — landing here means
 // resolving the exact chair from the drop point via Konva's own hit
@@ -1456,6 +1457,14 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
     setDeletedVersion(null);
   }, [deletedVersion, setVersionBackgroundAssets, setVersions]);
 
+  const handleExportSpreadsheet = useCallback(() => {
+    downloadSeatingSpreadsheet(tablesValue, guestsValue);
+    toast({
+      title: "Spreadsheet Downloaded",
+      description: `Exported ${assignedGuestCount} seated guest${assignedGuestCount === 1 ? "" : "s"}, sorted by table and seat.`,
+    });
+  }, [assignedGuestCount, guestsValue, tablesValue, toast]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -1504,6 +1513,7 @@ export const SeatingChartApp: React.FC<SeatingChartAppProps> = ({
         onRedo={venueHistory.redo}
         onOpenVersions={() => setVersionsOpen(true)}
         versionCount={versions.length}
+        onExportSpreadsheet={handleExportSpreadsheet}
       />
       <DndContext
         sensors={sensors}

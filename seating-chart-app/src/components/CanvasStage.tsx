@@ -22,7 +22,6 @@ import {
   tableFocusRequestAtom,
 } from "../lib/atoms";
 import { PrimitiveAtom } from "jotai"; // Import atom types
-import { RESET } from "jotai/utils"; // Import RESET
 import { ElementRect } from "./ElementRect"; // Import ElementRect
 import { TableCircle } from "./TableCircle"; // Import TableCircle
 import { Shape } from "../lib/atoms"; // Correct path
@@ -497,7 +496,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
             }),
         );
         setSelectedTableIds(new Set());
-        setSelectedShapeId(RESET);
+        setSelectedShapeId(null);
         e.preventDefault();
       } else if (e.key === "0" && (e.ctrlKey || e.metaKey)) {
         // Ctrl+0 (or Cmd+0 on Mac) to fit content to view
@@ -606,7 +605,7 @@ export const CanvasStage: React.FC<CanvasStageProps> = ({ shapeAtoms }) => {
     }
 
     // Original logic for when venue space is LOCKED:
-    setSelectedShapeId(RESET);
+    setSelectedShapeId(null);
     setSelectedTableIds(new Set());
 
     if (isAltPressed) {

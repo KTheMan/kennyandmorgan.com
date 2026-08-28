@@ -52,7 +52,7 @@ export const computeRectangleChairPositions = (
   // always sum to exactly `capacity`.
   const raw = sides.map((s) => (s.length / totalLength) * capacity);
   const counts = raw.map((n) => Math.floor(n));
-  let remaining = capacity - counts.reduce((a, b) => a + b, 0);
+  const remaining = capacity - counts.reduce((a, b) => a + b, 0);
   const byRemainder = raw
     .map((n, i) => ({ i, frac: n - counts[i] }))
     .sort((a, b) => b.frac - a.frac);

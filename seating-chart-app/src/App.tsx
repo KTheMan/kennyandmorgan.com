@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ErrorBoundary } from "react-error-boundary";
+import { ErrorBoundary, type FallbackProps } from "react-error-boundary";
 import { AdminGate } from "@/components/AdminGate";
 import { VenueManager } from "@/components/VenueManager";
 import { VenueGate } from "@/components/VenueGate";
@@ -11,7 +11,9 @@ import { ThemeProvider } from "./components/ThemeProvider";
 
 const queryClient = new QueryClient();
 
-function ErrorFallback({ error }: { error: Error }) {
+function ErrorFallback({ error }: FallbackProps) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+
   return (
     <div className="flex flex-col items-center justify-center h-screen bg-background text-foreground p-8">
       <div className="max-w-md text-center">
@@ -20,7 +22,7 @@ function ErrorFallback({ error }: { error: Error }) {
           The app encountered an error. Your work is saved automatically.
         </p>
         <p className="text-sm text-muted-foreground mb-6 font-mono bg-muted p-3 rounded">
-          {error.message}
+          {errorMessage}
         </p>
         <button
           onClick={() => window.location.reload()}

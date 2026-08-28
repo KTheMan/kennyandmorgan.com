@@ -1,4 +1,4 @@
-import { atom } from "jotai";
+import { atom, type PrimitiveAtom } from "jotai";
 import { splitAtom } from "jotai/utils";
 import { Table, VenueElement, Guest, BackgroundImage } from "../types/seatingChart";
 import type { VenueData } from "@shared/types/venue";
@@ -17,18 +17,18 @@ export { baseShapesAtom };
 export const shapeAtomsAtom = splitAtom(baseShapesAtom);
 
 // Atom to store the currently selected shape ID
-export const selectedShapeIdAtom = atom<string | null>(null);
+export const selectedShapeIdAtom = atom(null) as PrimitiveAtom<string | null>;
 
 // Table-only multi-selection. Kept separate from selectedShapeIdAtom so
 // existing single-shape editing (venue elements, background, transformer)
 // stays intact while Ctrl/Cmd-click can build a table selection set.
-export const selectedTableIdsAtom = atom<Set<string>>(new Set());
+export const selectedTableIdsAtom = atom<Set<string>>(new Set<string>());
 
 // Atom to store the currently hovered guest ID
-export const hoveredGuestIdAtom = atom<string | null>(null);
+export const hoveredGuestIdAtom = atom(null) as PrimitiveAtom<string | null>;
 
 // Atom to store the currently hovered table ID
-export const hoveredTableIdAtom = atom<string | null>(null);
+export const hoveredTableIdAtom = atom(null) as PrimitiveAtom<string | null>;
 
 // Atom to store which seat (table + chair index) is currently under direct
 // pointer hover — separate from hoveredGuestIdAtom, which also lights up
@@ -37,10 +37,10 @@ export const hoveredTableIdAtom = atom<string | null>(null);
 // (see SeatTooltipLayer) reads this to know which chair's name tag to
 // draw; it's rendered in its own Layer, above every table, specifically so
 // a neighboring table can never paint over it.
-export const hoveredSeatAtom = atom<{
+export const hoveredSeatAtom = atom(null) as PrimitiveAtom<{
   tableId: string;
   chairIndex: number;
-} | null>(null);
+} | null>;
 
 // Atom to store the dragging state
 export const isDraggingAtom = atom<boolean>(false);
@@ -54,10 +54,10 @@ export const stageScaleAtom = atom<number>(1);
 // One-shot request used by sidebar search results to bring a table into the
 // visible canvas viewport. The monotonically increasing requestId means the
 // same table can be focused again after the user pans away.
-export const tableFocusRequestAtom = atom<{
+export const tableFocusRequestAtom = atom(null) as PrimitiveAtom<{
   tableId: string;
   requestId: number;
-} | null>(null);
+} | null>;
 
 // Persistent, user-named chart milestones. These are intentionally separate
 // from the live editing state so restoring one never erases the other saved
@@ -138,10 +138,10 @@ export const tableSeatingModalStateAtom = atom<{
 // Purely transient UI state, not persisted; cleared as soon as the drag
 // ends or moves off that table. Single-guest drags don't use this — only
 // group drags get the "show where each seat would go" preview.
-export const groupDropPreviewAtom = atom<{
+export const groupDropPreviewAtom = atom(null) as PrimitiveAtom<{
   tableId: string;
   chairIndexes: number[];
-} | null>(null);
+} | null>;
 
 // --- Derived Atoms ---
 

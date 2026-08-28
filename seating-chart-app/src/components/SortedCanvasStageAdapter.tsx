@@ -32,6 +32,7 @@ export const SortedCanvasStageAdapter: React.FC<
       const typeB = itemB.value.type;
 
       const orderPriority: Record<Shape["type"], number> = {
+        backgroundImage: 0, // Rendered behind venue elements and tables
         venue: 1, // Rendered first
         table: 2, // Rendered second (on top of venue)
       };

@@ -39,6 +39,8 @@ export const DraggableGuestListItem: React.FC<DraggableGuestListItemProps> = ({
   );
   const isHighlighted = useAtomValue(isHighlightedAtom);
   const canDrag = editMode && !disabled;
+  const foodChoice = guest.mealChoice?.trim();
+  const dietaryNotes = guest.dietaryNotes?.trim();
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: guest.id,
@@ -80,29 +82,49 @@ export const DraggableGuestListItem: React.FC<DraggableGuestListItemProps> = ({
       )}
       <UserCircle
         size={18}
-        className={`transition-colors duration-200 ${
+        className={`shrink-0 self-start mt-0.5 transition-colors duration-200 ${
           isHighlighted
             ? "text-sidebar-primary"
             : "text-sidebar-foreground/70 group-hover:text-sidebar-primary"
         }`}
         strokeWidth={1.5}
       />
-      <span
-        className={`ml-2 min-w-0 flex-1 truncate font-medium ${
-          isHighlighted ? "text-sidebar-primary" : "text-sidebar-foreground"
-        }`}
-        title={guest.fullName}
-      >
-        {guest.fullName}
-        {guest.isChild && (
-          <span className="ml-1.5 text-xs font-normal text-sidebar-foreground/50">(child)</span>
+      <div className="ml-2 min-w-0 flex-1">
+        <div className="flex min-w-0 items-start gap-2">
+          <span
+            className={`min-w-0 flex-1 truncate font-medium ${
+              isHighlighted ? "text-sidebar-primary" : "text-sidebar-foreground"
+            }`}
+            title={guest.fullName}
+          >
+            {guest.fullName}
+            {guest.isChild && (
+              <span className="ml-1.5 text-xs font-normal text-sidebar-foreground/50">(child)</span>
+            )}
+          </span>
+          {guest.tableId && typeof guest.chairIndex === "number" && (
+            <span className="shrink-0 rounded-full bg-sidebar-accent/20 px-2 py-0.5 text-xs text-sidebar-foreground/70">
+              Seat {guest.chairIndex + 1}
+            </span>
+          )}
+        </div>
+        {(foodChoice || dietaryNotes) && (
+          <dl className="mt-1 space-y-0.5 text-xs leading-snug text-sidebar-foreground/65">
+            {foodChoice && (
+              <div className="flex min-w-0 gap-1.5">
+                <dt className="shrink-0 font-medium text-sidebar-foreground/80">Food:</dt>
+                <dd className="min-w-0 break-words">{foodChoice}</dd>
+              </div>
+            )}
+            {dietaryNotes && (
+              <div className="flex min-w-0 gap-1.5">
+                <dt className="shrink-0 font-medium text-sidebar-foreground/80">Dietary notes:</dt>
+                <dd className="min-w-0 break-words">{dietaryNotes}</dd>
+              </div>
+            )}
+          </dl>
         )}
-      </span>
-      {guest.tableId && typeof guest.chairIndex === "number" && (
-        <span className="ml-2 shrink-0 rounded-full bg-sidebar-accent/20 px-2 py-0.5 text-xs text-sidebar-foreground/70">
-          Seat {guest.chairIndex + 1}
-        </span>
-      )}
+      </div>
       {!disabled && editMode && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

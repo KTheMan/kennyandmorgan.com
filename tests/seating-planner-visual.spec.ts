@@ -1,6 +1,11 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { findDuplicateTablePosition } from "../seating-chart-app/src/lib/tablePlacement";
 import { planSeatLabels } from "../seating-chart-app/src/lib/seatLabels";
+import {
+  buildSeatingSpreadsheetCsv,
+  buildSeatingSpreadsheetRows,
+} from "../seating-chart-app/src/lib/seatingSpreadsheet";
 import {
   createVersionSnapshot,
   hydrateVersionSnapshot,
@@ -130,6 +135,8 @@ function buildVenueData(): VenueData {
         fullName: `Guest ${String(guestNumber).padStart(3, "0")}`,
         tableId: table.id,
         chairIndex,
+        mealChoice: guestNumber === 1 ? "Roasted Chicken" : null,
+        dietaryNotes: guestNumber === 1 ? "Peanut allergy" : null,
       });
       guestNumber += 1;
     }
@@ -147,7 +154,7 @@ function buildVenueData(): VenueData {
       isPlusOne: guestNumber > 97,
       isChild: false,
       mealChoice: "Dinner",
-      dietaryNotes: null,
+      dietaryNotes: guestNumber === 97 ? "Peanut allergy" : null,
     });
     guestNumber += 1;
   }
@@ -202,12 +209,12 @@ async function installMockApi(page: Page, options: { admin?: boolean } = {}) {
             groupId: "party-100",
             guests: [97, 98, 99, 100].map((number) => ({
               weddingGuestId: `accepted-${number}`,
-              fullName: `Guest ${number}`,
+              fullName: `Guest ${String(number).padStart(3, "0")}`,
               isPrimary: number === 97,
               isPlusOne: number > 97,
               isChild: false,
-              mealChoice: "Dinner",
-              dietaryNotes: null,
+              mealChoice: number === 97 ? "Salmon" : "Dinner",
+              dietaryNotes: number === 97 ? "Shellfish allergy" : null,
             })),
           },
         ],
@@ -424,6 +431,79 @@ test.describe("progressive seat labels", () => {
   });
 });
 
+test.describe("seating spreadsheet serialization", () => {
+  test("sorts numerically by table then seat and escapes spreadsheet values", () => {
+    const tables = [
+      makeTable({ id: "table-ten", number: 10, x: 0, y: 0 }),
+      makeTable({ id: "table-two", number: 2, x: 0, y: 0 }),
+    ];
+    const guests: Guest[] = [
+      {
+        id: "later-table",
+        fullName: "Morgan \"Mo\", Jr.",
+        tableId: "table-ten",
+        chairIndex: 0,
+        mealChoice: "Fish",
+        dietaryNotes: "Dairy, eggs",
+      },
+      {
+        id: "second-seat",
+        fullName: "Second Seat",
+        tableId: "table-two",
+        chairIndex: 1,
+        mealChoice: null,
+        dietaryNotes: null,
+      },
+      {
+        id: "first-seat",
+        fullName: "First Seat",
+        tableId: "table-two",
+        chairIndex: 0,
+        mealChoice: "Vegetarian",
+        dietaryNotes: "No nuts\nNo sesame",
+      },
+      {
+        id: "unassigned",
+        fullName: "Unassigned Guest",
+        tableId: "",
+        chairIndex: null,
+      },
+    ];
+
+    expect(buildSeatingSpreadsheetRows(tables, guests)).toEqual([
+      {
+        tableNumber: 2,
+        seatNumber: 1,
+        guestName: "First Seat",
+        foodChoice: "Vegetarian",
+        allergies: "No nuts\nNo sesame",
+      },
+      {
+        tableNumber: 2,
+        seatNumber: 2,
+        guestName: "Second Seat",
+        foodChoice: "",
+        allergies: "",
+      },
+      {
+        tableNumber: 10,
+        seatNumber: 1,
+        guestName: "Morgan \"Mo\", Jr.",
+        foodChoice: "Fish",
+        allergies: "Dairy, eggs",
+      },
+    ]);
+
+    const csv = buildSeatingSpreadsheetCsv(tables, guests);
+    expect(csv.startsWith(
+      "\uFEFFTable Number,Seat Number,Guest Name,Food Choice,Allergies\r\n",
+    )).toBe(true);
+    expect(csv).toContain('10,1,"Morgan ""Mo"", Jr.",Fish,"Dairy, eggs"');
+    expect(csv).toContain('2,1,First Seat,Vegetarian,"No nuts\nNo sesame"');
+    expect(csv).not.toContain("Unassigned Guest");
+  });
+});
+
 test.describe("named version serialization", () => {
   test("deduplicates large background assets across many milestones", () => {
     const venue = buildVenueData();
@@ -581,6 +661,7 @@ test.describe("Seating planner — 100 guest opposing-rectangle visual regressio
     await expect(page.getByRole("button", { name: "Lock event space" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Add background image" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sync Accepted Guests" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Export seating spreadsheet" })).toBeVisible();
     await expect(page.getByLabel("Show canvas tips")).toBeVisible();
 
     await expect(page).toHaveScreenshot("01-opposing-100-editor.png", {
@@ -687,6 +768,72 @@ test.describe("Seating planner — 100 guest opposing-rectangle visual regressio
         unique: new Set(numbers).size === numbers.length,
       };
     }).toEqual({ hasTwelve: true, unique: true });
+  });
+
+  test("shows guest food details and downloads a table-and-seat sorted spreadsheet", async ({ page }) => {
+    await openPlanner(page);
+
+    const search = page.getByRole("searchbox", { name: "Find a guest or table" });
+    await search.fill("Guest 001");
+    const guestRow = page.getByText("Guest 001", { exact: true }).locator("xpath=ancestor::li[1]");
+    await expect(guestRow.getByText("Food:", { exact: true })).toBeVisible();
+    await expect(guestRow.getByText("Roasted Chicken", { exact: true })).toBeVisible();
+    await expect(guestRow.getByText("Dietary notes:", { exact: true })).toBeVisible();
+    await expect(guestRow.getByText("Peanut allergy", { exact: true })).toBeVisible();
+
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export seating spreadsheet" }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("seating-plan.csv");
+    const downloadPath = await download.path();
+    if (!downloadPath) throw new Error("Spreadsheet download did not produce a local file");
+    const csv = (await readFile(downloadPath, "utf8")).replace(/^\uFEFF/, "");
+    const lines = csv.trimEnd().split("\r\n");
+    expect(lines[0]).toBe("Table Number,Seat Number,Guest Name,Food Choice,Allergies");
+    expect(lines[1]).toBe("1,1,Guest 001,Roasted Chicken,Peanut allergy");
+
+    const positions = lines.slice(1).map((line) => {
+      const [tableNumber, seatNumber] = line.split(",", 2).map(Number);
+      return { tableNumber, seatNumber };
+    });
+    expect(positions).toHaveLength(96);
+    for (let index = 1; index < positions.length; index += 1) {
+      const previous = positions[index - 1];
+      const current = positions[index];
+      expect(
+        current.tableNumber > previous.tableNumber ||
+          (current.tableNumber === previous.tableNumber && current.seatNumber >= previous.seatNumber),
+      ).toBe(true);
+    }
+  });
+
+  test("refreshes food details without changing an existing guest's seat", async ({ page }) => {
+    const state = await openPlanner(page, { hideToasts: false });
+    const before = state.current().guests.find((guest) => guest.weddingGuestId === "accepted-97");
+    expect(before).toMatchObject({
+      fullName: "Guest 097",
+      mealChoice: "Dinner",
+      dietaryNotes: "Peanut allergy",
+    });
+
+    await dragLocator(
+      page,
+      page.getByRole("button", { name: /Drag Guest 097's Party \(4\)/ }),
+      page.getByText("Table 1", { exact: true }).first(),
+    );
+
+    await page.getByRole("searchbox", { name: "Find a guest or table" }).fill("Guest 097");
+    const guestRow = page.getByText("Guest 097", { exact: true }).locator("xpath=ancestor::li[1]");
+    await expect(guestRow.getByText("Seat 7", { exact: true })).toBeVisible();
+    await expect(guestRow.getByText("Dinner", { exact: true })).toBeVisible();
+    await expect(guestRow.getByText("Peanut allergy", { exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Sync Accepted Guests" }).click();
+    await expect(guestRow.getByText("Salmon", { exact: true })).toBeVisible();
+    await expect(guestRow.getByText("Shellfish allergy", { exact: true })).toBeVisible();
+    await expect(guestRow.getByText("Dinner", { exact: true })).toHaveCount(0);
+    await expect(guestRow.getByText("Peanut allergy", { exact: true })).toHaveCount(0);
+    await expect(guestRow.getByText("Seat 7", { exact: true })).toBeVisible();
   });
 
   test("undoes destructive edits and restores persistent named versions", async ({ page }) => {

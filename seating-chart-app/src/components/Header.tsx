@@ -27,6 +27,7 @@ import {
   Undo2,
   Redo2,
   History,
+  FileSpreadsheet,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,7 @@ interface HeaderProps {
   onRedo: () => void;
   onOpenVersions: () => void;
   versionCount: number;
+  onExportSpreadsheet: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -137,6 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
   onRedo,
   onOpenVersions,
   versionCount,
+  onExportSpreadsheet,
 }) => {
   const [eventTitle, setEventTitle] = useAtom(eventTitleAtom);
   const editMode = useAtomValue(editModeAtom);
@@ -409,6 +412,27 @@ export const Header: React.FC<HeaderProps> = ({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Saved versions</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 shrink-0 border-accent/30 bg-accent/5 px-2.5 shadow-sm hover:border-accent/50 hover:bg-accent/15 2xl:px-3"
+                    onClick={onExportSpreadsheet}
+                    disabled={assignedGuests === 0}
+                    aria-label="Export seating spreadsheet"
+                  >
+                    <FileSpreadsheet size={17} aria-hidden="true" />
+                    <span className="ml-2 hidden 2xl:inline">Spreadsheet</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {assignedGuests === 0
+                    ? "Seat at least one guest to export"
+                    : "Download seating spreadsheet"}
+                </TooltipContent>
               </Tooltip>
 
               <div
