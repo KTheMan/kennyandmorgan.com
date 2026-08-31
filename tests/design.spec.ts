@@ -457,8 +457,8 @@ test.describe('Wedding Party Page — PartyB', () => {
 
         // Check subs
         const briefSubs = await page.locator('.brief-sub').allTextContents();
-        expect(briefSubs.some(s => /10 AM/i.test(s))).toBeTruthy();
-        expect(briefSubs.some(s => /12.*2 PM/i.test(s))).toBeTruthy();
+        expect(briefSubs.some(s => /11 AM/i.test(s))).toBeTruthy();
+        expect(briefSubs.some(s => /12.*3 PM/i.test(s))).toBeTruthy();
         expect(briefSubs.some(s => /see timeline below/i.test(s))).toBeTruthy();
         expect(briefSubs.some(s => /408.*693-4383/i.test(s))).toBeTruthy();
 
